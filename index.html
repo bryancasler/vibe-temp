@@ -90,6 +90,100 @@
             .grid, .results { grid-template-columns: 1fr; }
             }
         </style>
+    </head>
+    <body>
+        <!-- Chart.js CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+        <div class="vibe-card">
+        <header>
+            <h2>Vibe Temp</h2>
+            <p class="sub">How it actually feels in shade and sun</p>
+        </header>
+
+        <!-- Top metrics -->
+        <section class="results">
+            <div class="card">
+            <h3>Current Time</h3>
+            <div class="big" id="nowTime">—:—</div>
+            <div class="label" id="nowSubLabel">Loading sunrise/sunset…</div>
+            </div>
+            <div class="card">
+            <h3>Shade Vibe</h3>
+            <div class="big" id="shade">—</div>
+            <div class="label" id="shadeLabel">Waiting…</div>
+            </div>
+            <div class="card">
+            <h3>Sun Vibe</h3>
+            <div class="big" id="sun">—</div>
+            <div class="label" id="sunLabel">Waiting…</div>
+            </div>
+        </section>
+
+        <!-- Timeline -->
+        <section class="timeline">
+            <h3 class="timeline-title">Vibe Timeline (today + tomorrow)</h3>
+            <canvas id="vibeChart"></canvas>
+            <div class="tiny" id="chartStatus">Load your location to see the timeline.</div>
+        </section>
+
+        <!-- Advanced config (collapsed by default) -->
+        <details class="advanced">
+            <summary>Advanced Configuration</summary>
+
+            <section class="row">
+            <button id="use-location" type="button">Use my location</button>
+            <div class="status" id="status">Waiting…</div>
+            </section>
+
+            <section class="grid">
+            <label>
+                Air Temp (°F)
+                <input id="temp" type="number" step="0.1" placeholder="e.g. 78" />
+            </label>
+
+            <label>
+                Humidity (%)
+                <input id="humidity" type="number" step="1" placeholder="e.g. 60" />
+            </label>
+
+            <label>
+                Wind (mph)
+                <input id="wind" type="number" step="0.1" placeholder="e.g. 4" />
+            </label>
+
+            <label>
+                Solar exposure
+                <input id="solar" type="range" min="0" max="1" step="0.1" value="1" />
+                <small><span id="solarVal">1.0</span> — 0 shade to 1 full sun (auto from UV/clouds when available)</small>
+            </label>
+
+            <label>
+                Surface reflectivity
+                <select id="reflect">
+                <option value="0.10">Grass or soil</option>
+                <option value="0.20" selected>Sidewalk</option>
+                <option value="0.35">Asphalt</option>
+                <option value="0.40">Beach sand</option>
+                <option value="0.80">Snow or white surface</option>
+                <option value="0.00">Custom… set below</option>
+                </select>
+            </label>
+
+            <label>
+                Custom reflectivity (0–1)
+                <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.20" />
+            </label>
+            </section>
+
+            <!-- Formula always visible -->
+            <section class="formula">
+            <h4 class="formula-title">Vibe Temp Formula</h4>
+            <pre><code>ShadeVibe = T + (RH - 40) / 15 - 0.7 * Wind
+        SunVibe   = ShadeVibe + 8 * SolarExposure + 4 * Reflectivity</code></pre>
+            </section>
+        </details>
+        </div>
         <script>
             // Vibe Temp — current-time + sunrise/sunset, full-day+next-day timeline, UV/cloud-aware solar,
             // filled legend boxes, auto updates, advanced config collapsed by default
@@ -445,100 +539,5 @@
             });
 
         </script>
-    </head>
-    <body>
-        <!-- Chart.js CDN -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-        <div class="vibe-card">
-        <header>
-            <h2>Vibe Temp</h2>
-            <p class="sub">How it actually feels in shade and sun</p>
-        </header>
-
-        <!-- Top metrics -->
-        <section class="results">
-            <div class="card">
-            <h3>Current Time</h3>
-            <div class="big" id="nowTime">—:—</div>
-            <div class="label" id="nowSubLabel">Loading sunrise/sunset…</div>
-            </div>
-            <div class="card">
-            <h3>Shade Vibe</h3>
-            <div class="big" id="shade">—</div>
-            <div class="label" id="shadeLabel">Waiting…</div>
-            </div>
-            <div class="card">
-            <h3>Sun Vibe</h3>
-            <div class="big" id="sun">—</div>
-            <div class="label" id="sunLabel">Waiting…</div>
-            </div>
-        </section>
-
-        <!-- Timeline -->
-        <section class="timeline">
-            <h3 class="timeline-title">Vibe Timeline (today + tomorrow)</h3>
-            <canvas id="vibeChart"></canvas>
-            <div class="tiny" id="chartStatus">Load your location to see the timeline.</div>
-        </section>
-
-        <!-- Advanced config (collapsed by default) -->
-        <details class="advanced">
-            <summary>Advanced Configuration</summary>
-
-            <section class="row">
-            <button id="use-location" type="button">Use my location</button>
-            <div class="status" id="status">Waiting…</div>
-            </section>
-
-            <section class="grid">
-            <label>
-                Air Temp (°F)
-                <input id="temp" type="number" step="0.1" placeholder="e.g. 78" />
-            </label>
-
-            <label>
-                Humidity (%)
-                <input id="humidity" type="number" step="1" placeholder="e.g. 60" />
-            </label>
-
-            <label>
-                Wind (mph)
-                <input id="wind" type="number" step="0.1" placeholder="e.g. 4" />
-            </label>
-
-            <label>
-                Solar exposure
-                <input id="solar" type="range" min="0" max="1" step="0.1" value="1" />
-                <small><span id="solarVal">1.0</span> — 0 shade to 1 full sun (auto from UV/clouds when available)</small>
-            </label>
-
-            <label>
-                Surface reflectivity
-                <select id="reflect">
-                <option value="0.10">Grass or soil</option>
-                <option value="0.20" selected>Sidewalk</option>
-                <option value="0.35">Asphalt</option>
-                <option value="0.40">Beach sand</option>
-                <option value="0.80">Snow or white surface</option>
-                <option value="0.00">Custom… set below</option>
-                </select>
-            </label>
-
-            <label>
-                Custom reflectivity (0–1)
-                <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.20" />
-            </label>
-            </section>
-
-            <!-- Formula always visible -->
-            <section class="formula">
-            <h4 class="formula-title">Vibe Temp Formula</h4>
-            <pre><code>ShadeVibe = T + (RH - 40) / 15 - 0.7 * Wind
-        SunVibe   = ShadeVibe + 8 * SolarExposure + 4 * Reflectivity</code></pre>
-            </section>
-        </details>
-        </div>
-
     </body>
 </html>
