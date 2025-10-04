@@ -1,0 +1,544 @@
+<html>
+    <head>
+        <style>
+            :root {
+            --bg: #0e1117;
+            --card: #161b22;
+            --ink: #e6edf3;
+            --muted: #9aa4af;
+            --accent: #6ea8fe; /* shade vibe color */
+            --warm: #ffb86b;   /* sun vibe color */
+            --good: #45d483;   /* current time color */
+            }
+
+            * { box-sizing: border-box; }
+            body {
+            margin: 0; padding: 20px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+            color: var(--ink); background: radial-gradient(1200px 600px at 10% -10%, #1b2330 0%, #0e1117 60%) fixed;
+            }
+            .vibe-card {
+            max-width: 980px; margin: 0 auto; background: var(--card); border: 1px solid #263040; border-radius: 14px; padding: 16px 16px 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.35);
+            }
+            header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+            h2 { margin: 0; font-weight: 700; letter-spacing: .2px; }
+            .sub { color: var(--muted); margin: 0; }
+
+            .results {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0 8px;
+            }
+            .card {
+            background: #0f1420; border: 1px solid #263040; border-radius: 10px; padding: 12px; display: grid; gap: 6px;
+            }
+            .card h3 { margin: 0; font-size: 14px; color: var(--muted); }
+            .big { font-size: 42px; font-weight: 800; letter-spacing: .5px; }
+            #nowTime { color: var(--good); }
+            #shade { color: var(--accent); }
+            #sun { color: var(--warm); }
+            .label { font-size: 13px; color: var(--muted); min-height: 1.2em; }
+
+            .timeline {
+            margin-top: 8px;
+            background: #0f1420;
+            border: 1px solid #263040;
+            border-radius: 10px;
+            padding: 12px;
+            max-height: 260px;
+            }
+            .timeline-title { margin: 0 0 6px 0; color: #9aa4af; font-size: 14px; }
+            .timeline canvas { width: 100%; height: 100%; max-height: 260px; }
+            .tiny { color: var(--muted); font-size: 12px; text-align: right; margin: 6px 0 4px; }
+
+            /* Advanced Configuration */
+            .advanced { margin-top: 12px; }
+            .advanced > summary {
+            cursor: pointer; padding: 8px 10px; border: 1px solid #263040; border-radius: 10px; background: #0f1420; color: var(--ink);
+            list-style: none; outline: none; user-select: none;
+            display: inline-flex; align-items: center; gap: 6px; /* caret snug after text */
+            }
+            /* Hide native marker */
+            .advanced > summary::-webkit-details-marker, .advanced > summary::marker { display: none; content: ""; }
+            /* Custom caret */
+            .advanced > summary::after {
+            content: "▶"; font-size: 13px; color: var(--muted); transform-origin: center; transform: rotate(0deg);
+            transition: transform 250ms ease, color 200ms ease, opacity 200ms ease; opacity: 0.9;
+            }
+            .advanced > summary:hover::after { color: #c6d0db; opacity: 1; }
+            .advanced[open] > summary::after { transform: rotate(90deg); color: #c6d0db; opacity: 1; animation: caret-pop 250ms ease; }
+            @keyframes caret-pop { 0%{transform:rotate(90deg) scale(.92)}60%{transform:rotate(90deg) scale(1.08)}100%{transform:rotate(90deg) scale(1)} }
+
+            .advanced[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+            .advanced > *:not(summary) { border: 1px solid #263040; border-top: none; padding: 12px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; background: #0f1420; }
+
+            .grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px;
+            }
+            .row { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+            label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+            input, select, button {
+            background: #0f1420; color: var(--ink); border: 1px solid #263040; border-radius: 8px; padding: 10px 12px; font-size: 14px;
+            }
+            input[type="range"] { padding: 0; }
+            button { cursor: pointer; background: linear-gradient(180deg, #1b61ff, #1247c1); border-color: #1b61ff; }
+            button:active { transform: translateY(1px); }
+            .status { color: var(--muted); font-size: 13px; }
+
+            .formula-title { margin: 0 0 6px 0; color: var(--muted); font-weight: 600; font-size: 13px; }
+            pre { margin: 6px 0 0; padding: 8px; background: #0b0f18; border: 1px solid #1b2433; border-radius: 8px; color: #d7dde8; overflow: auto; }
+
+            @media (max-width: 880px) {
+            .grid, .results { grid-template-columns: 1fr; }
+            }
+        </style>
+        <script>
+            // Vibe Temp — current-time + sunrise/sunset, full-day+next-day timeline, UV/cloud-aware solar,
+            // filled legend boxes, auto updates, advanced config collapsed by default
+            const $ = s => document.querySelector(s);
+            const statusEl = $("#status");
+            const chartStatusEl = $("#chartStatus");
+            const els = {
+            temp: $("#temp"),
+            humidity: $("#humidity"),
+            wind: $("#wind"),
+            solar: $("#solar"),
+            solarVal: $("#solarVal"),
+            reflect: $("#reflect"),
+            reflectCustom: $("#reflectCustom"),
+            shade: $("#shade"),
+            sun: $("#sun"),
+            shadeLabel: $("#shadeLabel"),
+            sunLabel: $("#sunLabel"),
+            chartCanvas: $("#vibeChart"),
+            nowTime: $("#nowTime"),
+            nowSubLabel: $("#nowSubLabel"),
+            };
+            const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
+            const log = (...a) => { if (DEBUG) console.log("[Vibe]", ...a); };
+
+            let lastCoords = null;
+            let vibeChart = null;
+
+            // sunrise/sunset cache
+            let sunTimes = {
+            sunriseToday: null,
+            sunsetToday: null,
+            sunriseTomorrow: null,
+            sunsetTomorrow: null
+            };
+
+            // Helpers
+            function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
+            function labelFor(tempF) {
+            if (tempF < 55) return "Crisp sweater weather";
+            if (tempF < 66) return "Perfect in the sun, chilly in shade";
+            if (tempF < 76) return "Balanced, light layers";
+            if (tempF < 86) return "Warm and glowy";
+            if (tempF < 96) return "Baking in the sun";
+            return "Solar sauna mode";
+            }
+            function reflectivity() {
+            const sel = parseFloat(els.reflect.value);
+            if (sel === 0) return clamp(parseFloat(els.reflectCustom.value) || 0, 0, 1);
+            return clamp(sel, 0, 1);
+            }
+            function fmtHM(d) { return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+
+            // Core formulas
+            function shadeVibeOf(T, RH, Wind) { return T + (RH - 40) / 15 - 0.7 * Wind; }
+            function sunVibeOf(shadeV, solarExposure, R) { return shadeV + 8 * solarExposure + 4 * R; }
+
+            // Solar exposure from UV + clouds + daylight
+            function solarFromUVandCloud({ uv_index, uv_index_clear_sky, cloud_cover, is_day }) {
+            const baseUV = (typeof uv_index_clear_sky === "number" && uv_index_clear_sky > 0)
+                ? uv_index / uv_index_clear_sky
+                : uv_index / 10;
+            const cloudAtten = 1 - Math.pow((cloud_cover ?? 0) / 100, 0.7);
+            const solar = (is_day ? baseUV * cloudAtten : 0);
+            return clamp(solar, 0, 1);
+            }
+
+            function compute() {
+            const T = parseFloat(els.temp.value);
+            const RH = parseFloat(els.humidity.value);
+            const Wind = parseFloat(els.wind.value);
+            const Solar = parseFloat(els.solar.value);
+            const R = reflectivity();
+
+            if ([T, RH, Wind].some(v => Number.isNaN(v))) {
+                statusEl.textContent = "Enter temp, humidity, and wind or use your location.";
+                return;
+            }
+
+            const shadeVibe = shadeVibeOf(T, RH, Wind);
+            const sunVibe   = sunVibeOf(shadeVibe, Solar, R);
+
+            els.shade.textContent = `${shadeVibe.toFixed(1)}°`;
+            els.sun.textContent   = `${sunVibe.toFixed(1)}°`;
+
+            els.shadeLabel.textContent = labelFor(shadeVibe);
+            els.sunLabel.textContent   = labelFor(sunVibe);
+
+            statusEl.textContent = "Computed from current inputs.";
+            log({ T, RH, Wind, Solar, R, shadeVibe, sunVibe });
+            }
+
+            // Fallback solar if UV not present
+            function autoSolarFromCloudCover(cloudCoverPct) {
+            const solar = clamp(1 - cloudCoverPct / 100, 0.2, 1);
+            els.solar.value = solar.toFixed(1);
+            els.solarVal.textContent = solar.toFixed(1);
+            return solar;
+            }
+
+            // Weather fetchers
+            async function getCurrentWeather(lat, lon) {
+            const params = new URLSearchParams({
+                latitude: lat, longitude: lon,
+                current: "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+                temperature_unit: "fahrenheit", wind_speed_unit: "mph", timezone: "auto"
+            });
+            const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+            if (!r.ok) throw new Error("Weather fetch failed");
+            const data = await r.json();
+            return data.current;
+            }
+
+            async function getHourlyWeather(lat, lon) {
+            const params = new URLSearchParams({
+                latitude: lat, longitude: lon,
+                hourly: "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+                temperature_unit: "fahrenheit", wind_speed_unit: "mph", timezone: "auto"
+            });
+            const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+            if (!r.ok) throw new Error("Hourly fetch failed");
+            const data = await r.json();
+            return data.hourly;
+            }
+
+            // Sunrise/Sunset (timezone-safe: first two entries are today & tomorrow)
+            async function getDailySun(lat, lon) {
+            const params = new URLSearchParams({
+                latitude: lat, longitude: lon, daily: "sunrise,sunset", timezone: "auto"
+            });
+            const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+            if (!r.ok) throw new Error("Daily fetch failed");
+            const data = await r.json();
+            const rises = data?.daily?.sunrise?.map(t => new Date(t)) ?? [];
+            const sets  = data?.daily?.sunset?.map(t => new Date(t)) ?? [];
+            return {
+                sunriseToday:    rises[0] ?? null,
+                sunsetToday:     sets[0]  ?? null,
+                sunriseTomorrow: rises[1] ?? null,
+                sunsetTomorrow:  sets[1]  ?? null
+            };
+            }
+
+            // Timeline: full current day + full next day
+            function buildTimelineDataset(hourly, R) {
+            const now = new Date();
+            const start = new Date(now); start.setHours(0,0,0,0);     // today 00:00
+            const end = new Date(now);   end.setDate(end.getDate()+2); end.setHours(0,0,0,0); // end of tomorrow
+
+            const times = hourly.time.map(t => new Date(t));
+            const startIdx = times.findIndex(d => d >= start);
+            const endIdx   = times.findIndex(d => d >= end);
+            const s = startIdx === -1 ? 0 : startIdx;
+            const e = endIdx === -1 ? times.length : endIdx;
+
+            const labels = [];
+            const shadeVals = [];
+            const sunVals = [];
+
+            for (let i = s; i < e; i++) {
+                const T = hourly.temperature_2m[i];
+                const RH = hourly.relative_humidity_2m[i];
+                const Wind = hourly.wind_speed_10m[i];
+                const CC = hourly.cloud_cover[i];
+                const uv  = hourly.uv_index[i] ?? 0;
+                const uvc = hourly.uv_index_clear_sky[i] ?? 0;
+                const isDay = hourly.is_day[i] === 1;
+
+                const shade = shadeVibeOf(T, RH, Wind);
+                const solar = solarFromUVandCloud({ uv_index: uv, uv_index_clear_sky: uvc, cloud_cover: CC, is_day: isDay ? 1 : 0 });
+                const sun = sunVibeOf(shade, solar, R);
+
+                labels.push(times[i]);
+                shadeVals.push(parseFloat(shade.toFixed(1)));
+                sunVals.push(parseFloat(sun.toFixed(1)));
+            }
+            return { labels, shadeVals, sunVals, now };
+            }
+
+            function hourKey(d) { const k = new Date(d); k.setMinutes(0,0,0); return k.getTime(); }
+
+            function renderChart(labels, shadeVals, sunVals, now) {
+            if (!els.chartCanvas) return;
+            const ctx = els.chartCanvas.getContext("2d");
+            if (vibeChart) { vibeChart.destroy(); vibeChart = null; }
+
+            const displayLabels = labels.map(d => d.toLocaleString([], { weekday: "short", hour: "numeric" }));
+            const nowIdx = labels.findIndex(d => hourKey(d) === hourKey(now));
+
+            // Vertical "now" line plugin
+            const currentLine = {
+                id: "currentLine",
+                afterDatasetsDraw(chart) {
+                if (nowIdx === -1) return;
+                const { ctx, chartArea, scales } = chart;
+                const x = scales.x.getPixelForValue(nowIdx);
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, chartArea.top);
+                ctx.lineTo(x, chartArea.bottom);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#6ea8fe";
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.restore();
+                }
+            };
+
+            vibeChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                labels: displayLabels,
+                datasets: [
+                    { label: "Shade Vibe", data: shadeVals, borderWidth: 2, borderColor: "#6ea8fe", backgroundColor: "#6ea8fe", pointRadius: 0, tension: 0.3 },
+                    { label: "Sun Vibe",   data: sunVals,   borderWidth: 2, borderColor: "#ffb86b", backgroundColor: "#ffb86b", pointRadius: 0, tension: 0.3 }
+                ]
+                },
+                options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                scales: {
+                    x: { title: { display: true, text: "Time" }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 20 } },
+                    y: { title: { display: true, text: "°F" }, suggestedMin: Math.min(...shadeVals, ...sunVals) - 3, suggestedMax: Math.max(...shadeVals, ...sunVals) + 3 }
+                },
+                plugins: {
+                    legend: {
+                    display: true,
+                    labels: { usePointStyle: true, pointStyle: "rectRounded", boxWidth: 14, boxHeight: 8 }
+                    }
+                }
+                },
+                plugins: [currentLine]
+            });
+            }
+
+            // Current time card + next sun event
+            function chooseNextSunEvent() {
+            const now = new Date();
+            const { sunriseToday, sunsetToday, sunriseTomorrow, sunsetTomorrow } = sunTimes;
+            const candidates = [sunriseToday, sunsetToday, sunriseTomorrow, sunsetTomorrow]
+                .filter(Boolean).filter(t => t > now).sort((a,b) => a - b);
+            if (!candidates.length) return null;
+            const next = candidates[0];
+            const isSunrise = next === sunTimes.sunriseToday || next === sunTimes.sunriseTomorrow;
+            return { next, kind: isSunrise ? "Sunrise" : "Sunset" };
+            }
+            function updateClockCard() {
+            const now = new Date();
+            els.nowTime.textContent = fmtHM(now);
+            const nxt = chooseNextSunEvent();
+            els.nowSubLabel.textContent = nxt ? `${nxt.kind.toLowerCase()} at ${fmtHM(nxt.next)}` : "—";
+            }
+
+            // Location flow
+            async function useLocation() {
+            statusEl.textContent = "Getting location…";
+            if (!navigator.geolocation) { statusEl.textContent = "Geolocation unavailable. Enter values manually."; return; }
+
+            navigator.geolocation.getCurrentPosition(async pos => {
+                const { latitude, longitude } = pos.coords;
+                lastCoords = { latitude, longitude };
+                statusEl.textContent = "Getting weather…";
+                try {
+                const [cur, hourly, dailySun] = await Promise.all([
+                    getCurrentWeather(latitude, longitude),
+                    getHourlyWeather(latitude, longitude),
+                    getDailySun(latitude, longitude)
+                ]);
+                sunTimes = dailySun;
+
+                // Populate inputs
+                els.temp.value = (cur.temperature_2m ?? cur.apparent_temperature ?? "").toFixed(1);
+                els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
+                els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
+
+                // Auto solar from UV + clouds
+                if (typeof cur.uv_index === "number" && typeof cur.is_day === "number") {
+                    const solar = solarFromUVandCloud({
+                    uv_index: cur.uv_index, uv_index_clear_sky: cur.uv_index_clear_sky,
+                    cloud_cover: cur.cloud_cover ?? 0, is_day: cur.is_day
+                    });
+                    els.solar.value = solar.toFixed(1);
+                    els.solarVal.textContent = solar.toFixed(1);
+                } else if (typeof cur.cloud_cover === "number") {
+                    autoSolarFromCloudCover(cur.cloud_cover);
+                }
+
+                compute();
+                updateClockCard();
+
+                // Timeline
+                chartStatusEl.textContent = "Loading timeline…";
+                const R = reflectivity();
+                const { labels, shadeVals, sunVals, now } = buildTimelineDataset(hourly, R);
+                renderChart(labels, shadeVals, sunVals, now);
+                chartStatusEl.textContent = "Timeline based on hourly forecast.";
+                } catch (e) {
+                log(e);
+                statusEl.textContent = "Could not fetch weather. Enter values manually.";
+                chartStatusEl.textContent = "Timeline unavailable without weather.";
+                }
+            }, err => {
+                log(err);
+                statusEl.textContent = "Location denied. Enter values manually.";
+                chartStatusEl.textContent = "Timeline unavailable without location.";
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
+            }
+
+            // Update timeline if reflectivity changes
+            async function updateTimelineIfPossible() {
+            if (!lastCoords) return;
+            try {
+                chartStatusEl.textContent = "Updating timeline…";
+                const hourly = await getHourlyWeather(lastCoords.latitude, lastCoords.longitude);
+                const R = reflectivity();
+                const { labels, shadeVals, sunVals, now } = buildTimelineDataset(hourly, R);
+                renderChart(labels, shadeVals, sunVals, now);
+                chartStatusEl.textContent = "Timeline updated.";
+            } catch (e) {
+                log(e);
+                chartStatusEl.textContent = "Could not update timeline.";
+            }
+            }
+
+            // Auto-updates on input changes
+            ["input","change"].forEach(evt => {
+            ["temp","humidity","wind","solar","reflect","reflectCustom"].forEach(id => {
+                const el = els[id];
+                if (el) el.addEventListener(evt, () => {
+                compute();
+                if (id === "reflect" || id === "reflectCustom") updateTimelineIfPossible();
+                });
+            });
+            });
+            els.solar.addEventListener("input", () => {
+            els.solarVal.textContent = parseFloat(els.solar.value).toFixed(1);
+            });
+
+            // Button
+            $("#use-location").addEventListener("click", useLocation);
+
+            // Clock tick
+            setInterval(updateClockCard, 60 * 1000);
+
+            // Auto-load on page
+            window.addEventListener("DOMContentLoaded", () => {
+            setTimeout(() => {
+                statusEl.textContent = "Trying to get your local weather…";
+                updateClockCard();
+                useLocation();
+            }, 300);
+            });
+
+        </script>
+    </head>
+    <body>
+        <!-- Chart.js CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+        <div class="vibe-card">
+        <header>
+            <h2>Vibe Temp</h2>
+            <p class="sub">How it actually feels in shade and sun</p>
+        </header>
+
+        <!-- Top metrics -->
+        <section class="results">
+            <div class="card">
+            <h3>Current Time</h3>
+            <div class="big" id="nowTime">—:—</div>
+            <div class="label" id="nowSubLabel">Loading sunrise/sunset…</div>
+            </div>
+            <div class="card">
+            <h3>Shade Vibe</h3>
+            <div class="big" id="shade">—</div>
+            <div class="label" id="shadeLabel">Waiting…</div>
+            </div>
+            <div class="card">
+            <h3>Sun Vibe</h3>
+            <div class="big" id="sun">—</div>
+            <div class="label" id="sunLabel">Waiting…</div>
+            </div>
+        </section>
+
+        <!-- Timeline -->
+        <section class="timeline">
+            <h3 class="timeline-title">Vibe Timeline (today + tomorrow)</h3>
+            <canvas id="vibeChart"></canvas>
+            <div class="tiny" id="chartStatus">Load your location to see the timeline.</div>
+        </section>
+
+        <!-- Advanced config (collapsed by default) -->
+        <details class="advanced">
+            <summary>Advanced Configuration</summary>
+
+            <section class="row">
+            <button id="use-location" type="button">Use my location</button>
+            <div class="status" id="status">Waiting…</div>
+            </section>
+
+            <section class="grid">
+            <label>
+                Air Temp (°F)
+                <input id="temp" type="number" step="0.1" placeholder="e.g. 78" />
+            </label>
+
+            <label>
+                Humidity (%)
+                <input id="humidity" type="number" step="1" placeholder="e.g. 60" />
+            </label>
+
+            <label>
+                Wind (mph)
+                <input id="wind" type="number" step="0.1" placeholder="e.g. 4" />
+            </label>
+
+            <label>
+                Solar exposure
+                <input id="solar" type="range" min="0" max="1" step="0.1" value="1" />
+                <small><span id="solarVal">1.0</span> — 0 shade to 1 full sun (auto from UV/clouds when available)</small>
+            </label>
+
+            <label>
+                Surface reflectivity
+                <select id="reflect">
+                <option value="0.10">Grass or soil</option>
+                <option value="0.20" selected>Sidewalk</option>
+                <option value="0.35">Asphalt</option>
+                <option value="0.40">Beach sand</option>
+                <option value="0.80">Snow or white surface</option>
+                <option value="0.00">Custom… set below</option>
+                </select>
+            </label>
+
+            <label>
+                Custom reflectivity (0–1)
+                <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.20" />
+            </label>
+            </section>
+
+            <!-- Formula always visible -->
+            <section class="formula">
+            <h4 class="formula-title">Vibe Temp Formula</h4>
+            <pre><code>ShadeVibe = T + (RH - 40) / 15 - 0.7 * Wind
+        SunVibe   = ShadeVibe + 8 * SolarExposure + 4 * Reflectivity</code></pre>
+            </section>
+        </details>
+        </div>
+
+    </body>
+</html>
