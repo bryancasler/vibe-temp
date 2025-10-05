@@ -1,30 +1,38 @@
 <html>
     <head>
         <link rel="stylesheet" href="styles.css">
-    </head>
-    <body>
+
         <!-- Chart.js CDN -->
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+
 
         <div class="vibe-card">
-        <header>
+        <header class="vibe-header">
+            <div class="title-wrap">
             <h2>Vibe Temp</h2>
             <p class="sub">How it actually feels in shade and sun</p>
+            </div>
+            <div class="unit-toggle" role="group" aria-label="Temperature units">
+            <button id="unitF" class="unit-btn active" type="button">°F</button>
+            <button id="unitC" class="unit-btn" type="button">°C</button>
+            </div>
         </header>
 
         <!-- Top metrics -->
         <section class="results">
-            <div class="card">
-            <h3>Current Time</h3>
+            <div class="card" id="currentTimeCard">
+            <h3 id="currentTimeTitle">Current Time</h3>
             <div class="big" id="nowTime">—:—</div>
             <div class="label" id="nowSubLabel">Loading sunrise/sunset…</div>
             </div>
-            <div class="card">
+            <div class="card" id="shadeCard">
             <h3>Shade Vibe</h3>
             <div class="big" id="shade">—</div>
             <div class="label" id="shadeLabel">Waiting…</div>
             </div>
-            <div class="card">
+            <div class="card" id="sunCard">
             <h3>Sun Vibe</h3>
             <div class="big" id="sun">—</div>
             <div class="label" id="sunLabel">Waiting…</div>
@@ -35,7 +43,7 @@
         <section class="timeline">
             <h3 class="timeline-title">Vibe Timeline (today + tomorrow)</h3>
             <canvas id="vibeChart"></canvas>
-            <div class="tiny" id="chartStatus">Load your location to see the timeline.</div>
+            <div class="tiny" id="chartStatus">Load your location or set a ZIP to see the timeline. Hold “c” while hovering to simulate.</div>
         </section>
 
         <!-- Advanced config (collapsed by default) -->
@@ -45,6 +53,47 @@
             <section class="row">
             <button id="use-location" type="button">Use my location</button>
             <div class="status" id="status">Waiting…</div>
+            </section>
+
+            <section class="row">
+            <label class="inline" style="gap:8px;">
+                ZIP (US):
+                <input id="zipInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" placeholder="e.g. 20001" />
+            </label>
+            <button id="use-zip" type="button">Use ZIP</button>
+            <button id="clear-zip" type="button" title="Clear ZIP and return to device location">Clear ZIP</button>
+            <div class="status" id="zipStatus"></div>
+            </section>
+
+            <!-- Update scheduler controls -->
+            <section class="scheduler">
+            <div class="schedule-grid">
+                <div class="sched-item">
+                <div class="sched-label">Last updated</div>
+                <div class="sched-value" id="lastUpdated">—</div>
+                </div>
+                <div class="sched-item">
+                <div class="sched-label">Next update</div>
+                <div class="sched-value" id="nextUpdated">—</div>
+                </div>
+                <div class="sched-item">
+                <label class="inline">
+                    Update every
+                    <input id="updateInterval" type="number" min="0.5" step="0.5" value="1" />
+                    <span>min</span>
+                </label>
+                </div>
+                <div class="sched-item">
+                <label class="inline">
+                    <input id="updateHourlyToggle" type="checkbox" checked />
+                    <span>Refresh hourly forecast each cycle</span>
+                </label>
+                </div>
+                <div class="sched-item sched-actions">
+                <button id="updateNow" type="button">Update now</button>
+                </div>
+            </div>
+            <small class="tiny">Tip: 1 min feels realtime. Increase if multiple tabs are open.</small>
             </section>
 
             <section class="grid">
@@ -66,7 +115,7 @@
             <label>
                 Solar exposure
                 <input id="solar" type="range" min="0" max="1" step="0.1" value="1" />
-                <small><span id="solarVal">1.0</span> — 0 shade to 1 full sun (auto from UV/clouds when available)</small>
+                <small><span id="solarVal">1.0</span> — 0 shade to 1 full sun (auto from UV/clouds)</small>
             </label>
 
             <label>
@@ -95,6 +144,7 @@
             </section>
         </details>
         </div>
+
         <script src="scripts.js"></script>
     </body>
 </html>
