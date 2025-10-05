@@ -1,6 +1,11 @@
 <html>
     <head>
         <link rel="stylesheet" href="styles.css">
+        <script src="scripts.js"></script>
+        <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+/>
     </head>
     <body>
         <div class="app">
@@ -78,83 +83,101 @@
           
               <div id="advPanel" class="adv-panel" hidden>
                 <div class="adv-grid">
+                  <!-- Inputs -->
                   <div class="adv-col">
-                    <h4>Inputs</h4>
-                    <label>
-                      Air Temp (°F)
-                      <input id="temp" type="number" step="0.1" placeholder="e.g., 75" />
-                    </label>
-                    <label>
-                      Humidity (%)
-                      <input id="humidity" type="number" step="1" min="0" max="100" placeholder="e.g., 50" />
-                    </label>
-                    <label>
-                      Wind (mph)
-                      <input id="wind" type="number" step="0.1" min="0" placeholder="e.g., 5" />
-                    </label>
+                    <h4 class="adv-h4">Inputs</h4>
+                    <div class="fields-grid">
+                      <label class="field">
+                        <span class="field-label">Air Temp (<span id="airUnitLabel">°F</span>)</span>
+                        <input id="temp" type="number" step="0.1" placeholder="e.g., 75" />
+                      </label>
           
-                    <label>
-                      Solar Exposure (0–1)
-                      <input id="solar" type="range" min="0" max="1" step="0.1" value="0.5" />
-                      <div class="range-val"><span id="solarVal">0.5</span></div>
-                      <small>Auto-calculated from UV Index & cloud cover by default</small>
-                    </label>
+                      <label class="field">
+                        <span class="field-label">Humidity (%)</span>
+                        <input id="humidity" type="number" step="1" min="0" max="100" placeholder="e.g., 50" />
+                      </label>
           
-                    <label>
-                      Surface Reflectivity
-                      <select id="reflect">
-                        <option value="0.2">Grass (~0.2)</option>
-                        <option value="0.3" selected>Concrete (~0.3)</option>
-                        <option value="0.5">Sand (~0.5)</option>
-                        <option value="0.8">Snow (~0.8)</option>
-                        <option value="0">Custom…</option>
-                      </select>
-                    </label>
-                    <label>
-                      Custom Reflectivity (0–1)
-                      <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.3" />
-                    </label>
+                      <label class="field">
+                        <span class="field-label">Wind (mph)</span>
+                        <input id="wind" type="number" step="0.1" min="0" placeholder="e.g., 5" />
+                      </label>
+          
+                      <div class="field span-2">
+                        <label class="field-label">Solar Exposure (0–1)</label>
+                        <div class="range-row">
+                          <input id="solar" type="range" min="0" max="1" step="0.1" value="0.5" />
+                          <output id="solarVal" class="range-val">0.5</output>
+                        </div>
+                        <div class="hint">Auto-calculated from UV Index & cloud cover by default</div>
+                      </div>
+          
+                      <label class="field">
+                        <span class="field-label">Surface Reflectivity</span>
+                        <select id="reflect">
+                          <option value="0.2">Grass (~0.2)</option>
+                          <option value="0.3" selected>Concrete (~0.3)</option>
+                          <option value="0.5">Sand (~0.5)</option>
+                          <option value="0.8">Snow (~0.8)</option>
+                          <option value="0">Custom…</option>
+                        </select>
+                      </label>
+          
+                      <label class="field">
+                        <span class="field-label">Custom Reflectivity (0–1)</span>
+                        <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.3" />
+                      </label>
+                    </div>
                   </div>
           
+                  <!-- Location -->
                   <div class="adv-col">
-                    <h4>Location</h4>
+                    <h4 class="adv-h4">Location</h4>
                     <div class="zip-row">
                       <input id="zipInput" class="zip-input" placeholder="Enter US ZIP (e.g., 20001)" />
-                      <button id="use-zip" class="btn btn--sm" type="button">Use ZIP</button>
-                      <button id="clear-zip" class="btn btn--sm btn--ghost" type="button">Clear</button>
+                      <div class="zip-actions">
+                        <button id="use-zip" class="btn btn--sm" type="button">Use ZIP</button>
+                        <button id="clear-zip" class="btn btn--sm btn--ghost" type="button">Clear</button>
+                      </div>
                     </div>
                     <div id="zipStatus" class="hint">Using device location if allowed.</div>
           
-                    <h4>Auto Updates</h4>
-                    <label class="inline">
-                      Update every
-                      <input id="updateInterval" type="number" min="0.5" step="0.5" value="1" class="w-5ch" />
-                      minutes
-                    </label>
-                    <label class="inline">
-                      Refresh hourly forecast too
-                      <input id="updateHourlyToggle" type="checkbox" checked />
-                    </label>
-                    <button id="updateNow" class="btn btn--sm" type="button">Update Now</button>
+                    <hr class="adv-sep" />
+          
+                    <h4 class="adv-h4">Auto Updates</h4>
+                    <div class="row">
+                      <label class="inline">
+                        <span>Update every</span>
+                        <input id="updateInterval" type="number" min="0.5" step="0.5" value="1" class="w-6ch" />
+                        <span>minutes</span>
+                      </label>
+                    </div>
+                    <div class="row">
+                      <label class="inline">
+                        <input id="updateHourlyToggle" type="checkbox" checked />
+                        <span>Refresh hourly forecast too</span>
+                      </label>
+                    </div>
+                    <div class="row">
+                      <button id="updateNow" class="btn btn--sm" type="button">Update Now</button>
+                    </div>
                   </div>
           
+                  <!-- Formula -->
                   <div class="adv-col">
-                    <h4>Formula</h4>
+                    <h4 class="adv-h4">Formula</h4>
                     <pre class="formula">
           ShadeVibe(T, RH, Wind) = T + (RH - 40) / 15 - 0.7 × Wind
           
           SunVibe(ShadeVibe, Solar, Reflect) = ShadeVibe + 8 × Solar + 4 × Reflect
                     </pre>
-                    <small>
-                      Solar is auto-derived from UV Index (vs clear-sky UV) and cloud cover,
-                      and zeroed at night. Reflectivity influences how much extra radiant heat you feel.
-                    </small>
+                    <div class="hint">
+                      Solar is auto-derived from UV Index (vs clear-sky UV) and cloud cover, and zeroed at night.
+                      Reflectivity influences how much extra radiant heat you feel.
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
-          </div>                
-
-        <script src="scripts.js"></script>
+          </div>                        
     </body>
 </html>
