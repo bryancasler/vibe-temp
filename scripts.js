@@ -95,7 +95,8 @@
       let currentIsDay = null;
       let currentPlaceName = "";
   
-      let timelineState = null;
+      let timelineState = null;  // { labels, shadeVals, sunVals, solarByHour, isDayByHour, now } all in °F
+      window.timelineState = null; // expose for tooltip use
       let simActive = false;
   
       const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
@@ -368,8 +369,8 @@
           const sun = sunVibeOf(shade, solar, reflectivity());
   
           labels.push(times[i]);
-          shadeVals.push(parseFloat(shade.toFixed(1)));
-          sunVals.push(parseFloat(sun.toFixed(1)));
+          shadeVals.push(parseFloat(shade.toFixed(1))); // °F
+          sunVals.push(parseFloat(sun.toFixed(1)));     // °F
           solarByHour.push(solar);
           isDayByHour.push(isDay ? 1 : 0);
         }
@@ -414,6 +415,7 @@
         const nowIdx = labels.findIndex(d => hourKey(d) === hourKey(now));
         const markers = buildSunMarkers(labels);
   
+        // Vertical line for current time in same green as the clock
         const currentLine = {
           id: "currentLine",
           afterDatasetsDraw(chart) {
@@ -433,13 +435,14 @@
           }
         };
   
+        // ☀️ markers over the Sun Vibe line
         const sunMarkerPlugin = {
           id: "sunMarkers",
           afterDatasetsDraw(chart) {
             const { ctx, scales } = chart;
             const sunDsIndex   = chart.data.datasets.findIndex(d => d.label === "Sun Vibe");
             if (sunDsIndex === -1) return;
-            const sunData = chart.data.datasets[sunDsIndex].data;
+            const sunData = chart.data.datasets[sunDsIndex].data; // display units
   
             ctx.save();
             ctx.textAlign = "center";
@@ -483,8 +486,28 @@
               tooltip: {
                 itemSort: (a, b) => ["Sun Vibe","Shade Vibe"].indexOf(a.dataset.label) - ["Sun Vibe","Shade Vibe"].indexOf(b.dataset.label),
                 callbacks: {
-                  label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}°`,
-                  title: (items) => items[0]?.label ?? ""
+                  // Keep the time label as title
+                  title: (items) => items?.[0]?.label ?? "",
+                  // Custom label: "Sun: 84.9° Balanced, light layers"
+                  label: (ctx) => {
+                    const short = ctx.dataset.label === "Sun Vibe" ? "Sun" : "Shade";
+                    const tempDisplay = Number(ctx.parsed.y).toFixed(1); // already in current unit
+                    let desc = "";
+                    try {
+                      const i = ctx.dataIndex;
+                      const ts = window.timelineState;
+                      if (ts && Number.isFinite(i)) {
+                        const isDay  = !!ts.isDayByHour?.[i];
+                        const solar  = ts.solarByHour?.[i] ?? 0;
+                        const tempF  = ctx.dataset.label === "Sun Vibe" ? ts.sunVals?.[i] : ts.shadeVals?.[i]; // °F
+                        const context = ctx.dataset.label === "Sun Vibe" ? "sun" : "shade";
+                        if (typeof tempF === "number") {
+                          desc = vibeDescriptor(tempF, { solar, isDay, context }) || "";
+                        }
+                      }
+                    } catch {}
+                    return desc ? `${short}: ${tempDisplay}° ${desc}` : `${short}: ${tempDisplay}°`;
+                  }
                 }
               }
             }
@@ -492,7 +515,7 @@
           plugins: [currentLine, sunMarkerPlugin]
         });
   
-        // Pointer interactions
+        // Pointer interactions: hover + tap/drag simulation
         els.chartCanvas.style.touchAction = "none";
         let isPointerDown = false;
   
@@ -622,6 +645,7 @@
           if (hourlyMaybe) {
             const ds = buildTimelineDataset(hourlyMaybe);
             timelineState = ds;
+            window.timelineState = timelineState; // expose for tooltip descriptors
             await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
             chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
           }
@@ -674,6 +698,7 @@
         chartStatusEl && (chartStatusEl.textContent = "Loading timeline…");
         const ds = buildTimelineDataset(hourly);
         timelineState = ds;
+        window.timelineState = timelineState; // expose for tooltip descriptors
         await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
         chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
   
@@ -713,6 +738,7 @@
                 .then(async (hourly) => {
                   const ds = buildTimelineDataset(hourly);
                   timelineState = ds;
+                  window.timelineState = timelineState;
                   await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
                 })
                 .catch(()=>{});
@@ -738,6 +764,7 @@
               .then(async (hourly) => {
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
+                window.timelineState = timelineState;
                 await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
               })
               .catch(()=>{});
@@ -767,8 +794,9 @@
       });
   
       // Scheduler controls
-      els.updateInterval && els.updateInterval.addEventListener("change", () => restartScheduler());
-      els.updateHourlyToggle && els.updateHourlyToggle.addEventListener("change", () => restartScheduler());
+      function clearPollTimer() { if (pollTimer) clearTimeout(pollTimer); pollTimer = null; }
+      els.updateInterval && els.updateInterval.addEventListener("change", () => { clearPollTimer(); scheduleNextTick(els.updateInterval?.value || 1); });
+      els.updateHourlyToggle && els.updateHourlyToggle.addEventListener("change", () => { clearPollTimer(); scheduleNextTick(els.updateInterval?.value || 1); });
       els.updateNow && els.updateNow.addEventListener("click", () => { clearPollTimer(); runUpdateCycle(); });
   
       // ZIP actions
