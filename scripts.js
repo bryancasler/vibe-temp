@@ -26,7 +26,7 @@
       return CHART_READY;
     }
   
-    // DOM ready helper
+    // DOM ready helper (works if script loads after DOM or with defer)
     const onReady = (cb) => {
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", cb, { once: true });
@@ -117,12 +117,9 @@
         unitEls.C?.classList.toggle("active", unit === "C");
       }
       function applyUnitLabels() {
-        const airTempLabel = document.querySelector('label:has(#temp)');
-        if (airTempLabel) {
-          const nodes = Array.from(airTempLabel.childNodes);
-          const textNode = nodes.find(n => n.nodeType === Node.TEXT_NODE);
-          if (textNode) textNode.textContent = unit === "F" ? "Air Temp (°F)\n" : "Air Temp (°C)\n";
-        }
+        // Update inline Air Temp unit tag in Advanced
+        const airUnit = document.getElementById("airUnitLabel");
+        if (airUnit) airUnit.textContent = unit === "F" ? "°F" : "°C";
       }
       function convertTempInputIfPresent(toUnit) {
         const t = els.temp;
@@ -776,7 +773,7 @@
       paintUnitToggle();
       applyUnitLabels();
   
-      // Storage sync
+      // Storage sync across tabs
       window.addEventListener("storage", (e) => {
         if (e.key === UNIT_KEY) {
           const newVal = e.newValue === "C" ? "C" : "F";
