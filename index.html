@@ -1,149 +1,159 @@
 <html>
     <head>
         <link rel="stylesheet" href="styles.css">
-
-        <!-- Chart.js CDN -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <body>
-
-
-        <div class="vibe-card">
-        <header class="vibe-header">
-            <div class="title-wrap">
-            <h2>Vibe Temp</h2>
-            <p class="sub">How it actually feels in shade and sun</p>
-            </div>
-            <div class="unit-toggle" role="group" aria-label="Temperature units">
-            <button id="unitF" class="unit-btn active" type="button">°F</button>
-            <button id="unitC" class="unit-btn" type="button">°C</button>
-            </div>
-        </header>
-
-        <!-- Top metrics -->
-        <section class="results">
-            <div class="card" id="currentTimeCard">
-            <h3 id="currentTimeTitle">Current Time</h3>
-            <div class="big" id="nowTime">—:—</div>
-            <div class="label" id="nowSubLabel">Loading sunrise/sunset…</div>
-            </div>
-            <div class="card" id="shadeCard">
-            <h3>Shade Vibe</h3>
-            <div class="big" id="shade">—</div>
-            <div class="label" id="shadeLabel">Waiting…</div>
-            </div>
-            <div class="card" id="sunCard">
-            <h3>Sun Vibe</h3>
-            <div class="big" id="sun">—</div>
-            <div class="label" id="sunLabel">Waiting…</div>
-            </div>
-        </section>
-
-        <!-- Timeline -->
-        <section class="timeline">
-            <h3 class="timeline-title">Vibe Timeline (today + tomorrow)</h3>
-            <canvas id="vibeChart"></canvas>
-            <div class="tiny" id="chartStatus">Load your location or set a ZIP to see the timeline. Hold “c” while hovering to simulate.</div>
-        </section>
-
-        <!-- Advanced config (collapsed by default) -->
-        <details class="advanced">
-            <summary>Advanced Configuration</summary>
-
-            <section class="row">
-            <button id="use-location" type="button">Use my location</button>
-            <div class="status" id="status">Waiting…</div>
-            </section>
-
-            <section class="row">
-            <label class="inline" style="gap:8px;">
-                ZIP (US):
-                <input id="zipInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" placeholder="e.g. 20001" />
-            </label>
-            <button id="use-zip" type="button">Use ZIP</button>
-            <button id="clear-zip" type="button" title="Clear ZIP and return to device location">Clear ZIP</button>
-            <div class="status" id="zipStatus"></div>
-            </section>
-
-            <!-- Update scheduler controls -->
-            <section class="scheduler">
-            <div class="schedule-grid">
-                <div class="sched-item">
-                <div class="sched-label">Last updated</div>
-                <div class="sched-value" id="lastUpdated">—</div>
+        <div class="app">
+            <header class="header">
+              <div class="headline-wrap">
+                <h1 class="headline">
+                  Vibe Temp
+                  <span class="sub">How it actually feels in shade and sun</span>
+                </h1>
+              </div>
+          
+              <!-- Unit toggle (saved to localStorage and syncs across tabs) -->
+              <div class="unit-toggle" aria-label="Units">
+                <button id="unitF" class="unit-btn" type="button">°F</button>
+                <button id="unitC" class="unit-btn" type="button">°C</button>
+              </div>
+            </header>
+          
+            <!-- Three cards in one row -->
+            <section class="cards">
+              <article class="card card--now">
+                <h3 class="card-title" id="currentTimeTitle">Current Time</h3>
+                <div class="card-temp card-temp--now">
+                  <span id="nowTime">--:--</span>
                 </div>
-                <div class="sched-item">
-                <div class="sched-label">Next update</div>
-                <div class="sched-value" id="nextUpdated">—</div>
+                <div class="card-desc">
+                  <small id="nowSubLabel" class="now-time__sub">—</small>
                 </div>
-                <div class="sched-item">
-                <label class="inline">
-                    Update every
-                    <input id="updateInterval" type="number" min="0.5" step="0.5" value="1" />
-                    <span>min</span>
-                </label>
-                </div>
-                <div class="sched-item">
-                <label class="inline">
-                    <input id="updateHourlyToggle" type="checkbox" checked />
-                    <span>Refresh hourly forecast each cycle</span>
-                </label>
-                </div>
-                <div class="sched-item sched-actions">
-                <button id="updateNow" type="button">Update now</button>
-                </div>
-            </div>
-            <small class="tiny">Tip: 1 min feels realtime. Increase if multiple tabs are open.</small>
+              </article>
+          
+              <article class="card card--shade">
+                <h3 class="card-title">Shade Vibe</h3>
+                <div class="card-temp" id="shade">—</div>
+                <div class="card-desc" id="shadeLabel">Loading…</div>
+              </article>
+          
+              <article class="card card--sun" id="sunCard">
+                <h3 class="card-title">Sun Vibe</h3>
+                <div class="card-temp" id="sun">—</div>
+                <div class="card-desc" id="sunLabel">Loading…</div>
+              </article>
             </section>
-
-            <section class="grid">
-            <label>
-                Air Temp (°F)
-                <input id="temp" type="number" step="0.1" placeholder="e.g. 78" />
-            </label>
-
-            <label>
-                Humidity (%)
-                <input id="humidity" type="number" step="1" placeholder="e.g. 60" />
-            </label>
-
-            <label>
-                Wind (mph)
-                <input id="wind" type="number" step="0.1" placeholder="e.g. 4" />
-            </label>
-
-            <label>
-                Solar exposure
-                <input id="solar" type="range" min="0" max="1" step="0.1" value="1" />
-                <small><span id="solarVal">1.0</span> — 0 shade to 1 full sun (auto from UV/clouds)</small>
-            </label>
-
-            <label>
-                Surface reflectivity
-                <select id="reflect">
-                <option value="0.10">Grass or soil</option>
-                <option value="0.20" selected>Sidewalk</option>
-                <option value="0.35">Asphalt</option>
-                <option value="0.40">Beach sand</option>
-                <option value="0.80">Snow or white surface</option>
-                <option value="0.00">Custom… set below</option>
-                </select>
-            </label>
-
-            <label>
-                Custom reflectivity (0–1)
-                <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.20" />
-            </label>
+          
+            <!-- Chart -->
+            <section class="chart-wrap">
+              <div class="chart-head">
+                <div class="chart-title">Today & Tomorrow</div>
+                <div class="chart-status" id="chartStatus">Loading timeline…</div>
+              </div>
+              <div class="chart-box">
+                <canvas id="vibeChart"></canvas>
+              </div>
             </section>
-
-            <!-- Formula always visible -->
-            <section class="formula">
-            <h4 class="formula-title">Vibe Temp Formula</h4>
-            <pre><code>ShadeVibe = T + (RH - 40) / 15 - 0.7 * Wind
-        SunVibe   = ShadeVibe + 8 * SolarExposure + 4 * Reflectivity</code></pre>
+          
+            <!-- Status & quick controls -->
+            <section class="controls">
+              <div class="controls-left">
+                <button id="use-location" class="btn">Use My Location</button>
+                <div id="status" class="status">Trying to get your local weather…</div>
+              </div>
+              <div class="controls-right">
+                <div class="times">
+                  <div><strong>Last Updated:</strong> <span id="lastUpdated">—</span></div>
+                  <div><strong>Next Update:</strong> <span id="nextUpdated">—</span></div>
+                </div>
+              </div>
             </section>
-        </details>
-        </div>
+          
+            <!-- Advanced Configuration (collapsed by default) -->
+            <section class="advanced">
+              <button class="adv-toggle" type="button" aria-expanded="false" aria-controls="advPanel">
+                <span class="adv-label">Advanced Configuration</span>
+                <span class="adv-caret" aria-hidden="true"></span>
+              </button>
+          
+              <div id="advPanel" class="adv-panel" hidden>
+                <div class="adv-grid">
+                  <div class="adv-col">
+                    <h4>Inputs</h4>
+                    <label>
+                      Air Temp (°F)
+                      <input id="temp" type="number" step="0.1" placeholder="e.g., 75" />
+                    </label>
+                    <label>
+                      Humidity (%)
+                      <input id="humidity" type="number" step="1" min="0" max="100" placeholder="e.g., 50" />
+                    </label>
+                    <label>
+                      Wind (mph)
+                      <input id="wind" type="number" step="0.1" min="0" placeholder="e.g., 5" />
+                    </label>
+          
+                    <label>
+                      Solar Exposure (0–1)
+                      <input id="solar" type="range" min="0" max="1" step="0.1" value="0.5" />
+                      <div class="range-val"><span id="solarVal">0.5</span></div>
+                      <small>Auto-calculated from UV Index & cloud cover by default</small>
+                    </label>
+          
+                    <label>
+                      Surface Reflectivity
+                      <select id="reflect">
+                        <option value="0.2">Grass (~0.2)</option>
+                        <option value="0.3" selected>Concrete (~0.3)</option>
+                        <option value="0.5">Sand (~0.5)</option>
+                        <option value="0.8">Snow (~0.8)</option>
+                        <option value="0">Custom…</option>
+                      </select>
+                    </label>
+                    <label>
+                      Custom Reflectivity (0–1)
+                      <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.3" />
+                    </label>
+                  </div>
+          
+                  <div class="adv-col">
+                    <h4>Location</h4>
+                    <div class="zip-row">
+                      <input id="zipInput" class="zip-input" placeholder="Enter US ZIP (e.g., 20001)" />
+                      <button id="use-zip" class="btn btn--sm" type="button">Use ZIP</button>
+                      <button id="clear-zip" class="btn btn--sm btn--ghost" type="button">Clear</button>
+                    </div>
+                    <div id="zipStatus" class="hint">Using device location if allowed.</div>
+          
+                    <h4>Auto Updates</h4>
+                    <label class="inline">
+                      Update every
+                      <input id="updateInterval" type="number" min="0.5" step="0.5" value="1" class="w-5ch" />
+                      minutes
+                    </label>
+                    <label class="inline">
+                      Refresh hourly forecast too
+                      <input id="updateHourlyToggle" type="checkbox" checked />
+                    </label>
+                    <button id="updateNow" class="btn btn--sm" type="button">Update Now</button>
+                  </div>
+          
+                  <div class="adv-col">
+                    <h4>Formula</h4>
+                    <pre class="formula">
+          ShadeVibe(T, RH, Wind) = T + (RH - 40) / 15 - 0.7 × Wind
+          
+          SunVibe(ShadeVibe, Solar, Reflect) = ShadeVibe + 8 × Solar + 4 × Reflect
+                    </pre>
+                    <small>
+                      Solar is auto-derived from UV Index (vs clear-sky UV) and cloud cover,
+                      and zeroed at night. Reflectivity influences how much extra radiant heat you feel.
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>          
 
         <script src="scripts.js"></script>
     </body>

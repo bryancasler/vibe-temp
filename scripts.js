@@ -1,5 +1,32 @@
 (() => {
-    // Run after DOM is ready, but immediately if it's already parsed
+    // Load Chart.js dynamically
+    const CHART_JS_URL = "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js";
+    let CHART_READY = null;
+  
+    function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        const existing = Array.from(document.scripts).find(s => s.src === src);
+        if (existing) {
+          if (window.Chart) return resolve();
+          existing.addEventListener("load", () => resolve());
+          existing.addEventListener("error", (e) => reject(e));
+          return;
+        }
+        const s = document.createElement("script");
+        s.src = src;
+        s.async = true;
+        s.defer = true;
+        s.onload = () => resolve();
+        s.onerror = (e) => reject(e);
+        document.head.appendChild(s);
+      });
+    }
+    function ensureChartJs() {
+      if (!CHART_READY) CHART_READY = loadScriptOnce(CHART_JS_URL);
+      return CHART_READY;
+    }
+  
+    // DOM ready helper
     const onReady = (cb) => {
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", cb, { once: true });
@@ -9,7 +36,7 @@
     };
   
     onReady(() => {
-      // --- Shortcuts & elements ---
+      // Elements
       const $ = (s) => document.querySelector(s);
       const statusEl = $("#status");
       const chartStatusEl = $("#chartStatus");
@@ -38,16 +65,24 @@
         sunCard: $("#sunCard"),
       };
   
-      // Units & ZIP controls
-      const unitEls = { F: $("#unitF"), C: $("#unitC") };
-      const zipEls = {
-        input: $("#zipInput"),
-        btn: $("#use-zip"),
-        clear: $("#clear-zip"),
-        status: $("#zipStatus"),
-      };
+      // Advanced toggle
+      const advToggle = document.querySelector(".adv-toggle");
+      const advPanel  = document.getElementById("advPanel");
+      if (advToggle && advPanel) {
+        advToggle.addEventListener("click", () => {
+          const expanded = advToggle.getAttribute("aria-expanded") === "true";
+          advToggle.setAttribute("aria-expanded", String(!expanded));
+          advPanel.hidden = expanded;
+        });
+        advToggle.setAttribute("aria-expanded", "false");
+        advPanel.hidden = true;
+      }
   
-      // --- State ---
+      // Units & ZIP
+      const unitEls = { F: $("#unitF"), C: $("#unitC") };
+      const zipEls = { input: $("#zipInput"), btn: $("#use-zip"), clear: $("#clear-zip"), status: $("#zipStatus") };
+  
+      // State
       const UNIT_KEY = "vibeUnit";
       const ZIP_KEY  = "vibeZip";
       let unit = (localStorage.getItem(UNIT_KEY) === "C") ? "C" : "F";
@@ -57,21 +92,22 @@
       let nextUpdateAt = null;
   
       let sunTimes = { sunriseToday: null, sunsetToday: null, sunriseTomorrow: null, sunsetTomorrow: null };
-      let currentIsDay = null; // track from API
-      let currentPlaceName = ""; // human-readable place
+      let currentIsDay = null;
+      let currentPlaceName = "";
   
-      let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, now }
-      let simActive = false;    // true while hovering the chart
+      let timelineState = null;
+      let simActive = false;
   
       const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
       const log = (...a) => { if (DEBUG) console.log("[Vibe]", ...a); };
   
-      // --- Utils ---
+      // Utils
       function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
       const fToC = f => (f - 32) * 5/9;
       const cToF = c => (c * 9/5) + 32;
       const toUserTemp = f => unit === "F" ? f : fToC(f);
-      const sym = () => unit === "F" ? "°F" : "°C";
+      const unitSuffix = () => unit === "F" ? "°F" : "°C";
+  
       function fmtHM(d) { return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
       function fmtHMS(d) { return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }); }
   
@@ -129,12 +165,10 @@
         } catch { return ""; }
       }
       function paintCurrentTimeTitle() {
-        if (!els.nowTitle) return;
         const place = currentPlaceName || (zipEls?.input?.value ? `ZIP ${zipEls.input.value}` : "your location");
-        els.nowTitle.textContent = `Current Time at ${place}`;
+        els.nowTitle && (els.nowTitle.textContent = `Current Time at ${place}`);
       }
   
-      // Daylight inference
       function isDaylightNow() {
         if (currentIsDay === 0 || currentIsDay === 1) return !!currentIsDay;
         const now = new Date();
@@ -145,56 +179,69 @@
         return s > 0.2;
       }
   
-      // --- Day/Night aware descriptors ---
-      function baseDescriptorDay(tempF, context = "shade") {
-        if (tempF < -10) return "Brutally frigid; risk of frostbite";
-        if (tempF < 0)   return "Bitter cold; limit time outside";
-        if (tempF < 10)  return "Arctic chill; heavy layers";
-        if (tempF < 20)  return "Freezing; thick coat + gloves";
-        if (tempF < 32)  return "Cold; winter layers";
-        if (tempF < 45)  return "Chilly; coat recommended";
+      // Descriptors
+      function describeDay(tempF, context = "shade") {
+        if (tempF < -10) return "Brutally frigid; frostbite risk";
+        if (tempF < -5)  return "Bitter, painfully cold";
+        if (tempF < 0)   return "Bitter cold";
+        if (tempF < 5)   return "Arctic chill";
+        if (tempF < 10)  return "Frigid; heavy layers";
+        if (tempF < 15)  return "Freezing; very cold";
+        if (tempF < 20)  return "Freezing; thick coat";
+        if (tempF < 25)  return "Very cold; winter layers";
+        if (tempF < 30)  return "Cold; winter layers";
+        if (tempF < 35)  return "Cold; coat + hat";
+        if (tempF < 40)  return "Chilly; warm layers";
+        if (tempF < 45)  return "Chilly; light coat";
+        if (tempF < 50)  return "Cool; jacket";
         if (tempF < 55)  return "Crisp sweater weather";
-        if (tempF < 66)  {
-          return context === "sun" ? "Perfect in the sun, cool in shade"
-               : context === "shade" ? "Cool in shade, perfect in the sun"
-               : "Perfect in the sun, cool in shade";
-        }
-        if (tempF < 76)  return "Balanced, light layers";
-        if (tempF < 86)  return "Warm and glowy";
-        if (tempF < 96)  return "Baking in the sun";
+        if (tempF < 60)  return context === "sun" ? "Great in sun, cool in shade" : "Cool in shade, warm in sun";
+        if (tempF < 65)  return context === "sun" ? "Perfect in sun, cool otherwise" : "Cool; find sun";
+        if (tempF < 70)  return "Balanced, light layers";
+        if (tempF < 75)  return "Mild and comfy";
+        if (tempF < 80)  return "Warm and glowy";
+        if (tempF < 85)  return "Quite warm; shade helps";
+        if (tempF < 90)  return "Hot; hydrate";
+        if (tempF < 95)  return "Baking in the sun";
+        if (tempF < 100) return "Very hot; limit exertion";
         if (tempF < 105) return "Oppressive heat; take it easy";
         return "Extreme heat alert";
       }
-      function baseDescriptorNight(tempF) {
-        if (tempF < -10) return "Brutally frigid night; frostbite risk";
+      function describeNight(tempF) {
+        if (tempF < -10) return "Brutally frigid night";
+        if (tempF < -5)  return "Bitter, painfully cold night";
         if (tempF < 0)   return "Bitter cold night";
-        if (tempF < 10)  return "Arctic night air";
-        if (tempF < 20)  return "Freezing night; bundle up";
-        if (tempF < 32)  return "Cold night; winter layers";
-        if (tempF < 45)  return "Chilly night; coat helps";
+        if (tempF < 5)   return "Arctic night air";
+        if (tempF < 10)  return "Frigid night; heavy layers";
+        if (tempF < 15)  return "Freezing night; very cold";
+        if (tempF < 20)  return "Freezing night; thick coat";
+        if (tempF < 25)  return "Very cold night";
+        if (tempF < 30)  return "Cold night; winter layers";
+        if (tempF < 35)  return "Cold night; coat + hat";
+        if (tempF < 40)  return "Chilly night; warm layers";
+        if (tempF < 45)  return "Chilly night; light coat";
+        if (tempF < 50)  return "Cool evening; jacket";
         if (tempF < 55)  return "Crisp night air";
-        if (tempF < 66)  return "Cool evening";
-        if (tempF < 76)  return "Mild evening";
-        if (tempF < 86)  return "Warm evening";
-        if (tempF < 96)  return "Hot evening; lingering heat";
-        if (tempF < 105) return "Oppressive heat even at night";
+        if (tempF < 60)  return "Cool evening";
+        if (tempF < 65)  return "Mild evening, light layer";
+        if (tempF < 70)  return "Mild evening";
+        if (tempF < 75)  return "Warm evening";
+        if (tempF < 80)  return "Very warm evening";
+        if (tempF < 85)  return "Hot evening";
+        if (tempF < 90)  return "Hot evening; hydrate";
+        if (tempF < 95)  return "Stifling night heat";
+        if (tempF < 100) return "Oppressive night heat";
+        if (tempF < 105) return "Dangerously hot night";
         return "Extreme heat night";
       }
-      function vibeDescriptor(
-        tempF,
-        { solar = parseFloat(els.solar?.value ?? "0") || 0, isDay = isDaylightNow(), context = "shade" } = {}
-      ) {
-        const base = isDay ? baseDescriptorDay(tempF, context) : baseDescriptorNight(tempF);
+      function vibeDescriptor(tempF, { solar = parseFloat(els.solar?.value ?? "0") || 0, isDay = isDaylightNow(), context = "shade" } = {}) {
+        const base = isDay ? describeDay(tempF, context) : describeNight(tempF);
         if (!isDay) return base;
         const s = clamp(Number.isFinite(solar) ? solar : 0, 0, 1);
         let suffix = "";
-        if (s < 0.20) {
-          suffix = context === "sun" ? "clouds mute the sun" : "overcast";
-        } else if (s < 0.40) {
-          suffix = "mostly cloudy";
-        } else if (s < 0.70) {
-          suffix = "partly sunny";
-        }
+        if (s < 0.20) suffix = context === "sun" ? "clouds mute the sun" : "overcast";
+        else if (s < 0.40) suffix = "mostly cloudy";
+        else if (s < 0.70) suffix = "partly sunny";
         return suffix ? `${base} (${suffix})` : base;
       }
   
@@ -207,7 +254,7 @@
         return clamp(sel, 0, 1);
       }
   
-      // Solar exposure calc
+      // Solar exposure
       function solarFromUVandCloud({ uv_index, uv_index_clear_sky, cloud_cover, is_day }) {
         const baseUV = (typeof uv_index_clear_sky === "number" && uv_index_clear_sky > 0)
           ? uv_index / uv_index_clear_sky
@@ -217,36 +264,32 @@
         return clamp(solar, 0, 1);
       }
   
-      // Compute cards
+      // Compute card values (cards show °F/°C)
       function compute() {
         const Traw = parseFloat(els.temp?.value ?? "NaN");
         const RH   = parseFloat(els.humidity?.value ?? "NaN");
         const Wind = parseFloat(els.wind?.value ?? "NaN");
         const Solar= parseFloat(els.solar?.value ?? "NaN");
-        const R    = reflectivity();
         if ([Traw, RH, Wind].some(v => Number.isNaN(v))) {
           statusEl && (statusEl.textContent = "Enter temp, humidity, and wind or use your location/ZIP.");
           return;
         }
-        // convert user input to Fahrenheit for internal math
         const tempF = unit === "F" ? Traw : cToF(Traw);
         const shadeF = shadeVibeOf(tempF, RH, Wind);
-        const sunF   = sunVibeOf(shadeF, Solar, R);
+        const sunF   = sunVibeOf(shadeF, Solar, reflectivity());
   
         const shadeDisplay = toUserTemp(shadeF);
         const sunDisplay   = toUserTemp(sunF);
   
-        els.shade && (els.shade.textContent = `${shadeDisplay.toFixed(1)}${sym()}`);
-        els.sun   && (els.sun.textContent   = `${sunDisplay.toFixed(1)}${sym()}`);
+        els.shade && (els.shade.textContent = `${shadeDisplay.toFixed(1)}${unitSuffix()}`);
+        els.sun   && (els.sun.textContent   = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
   
         els.shadeLabel && (els.shadeLabel.textContent = vibeDescriptor(shadeF, { solar: Solar, isDay: isDaylightNow(), context: "shade" }));
         els.sunLabel   && (els.sunLabel.textContent   = vibeDescriptor(sunF,   { solar: Solar, isDay: isDaylightNow(), context: "sun" }));
   
-        // Hide/show Sun card in realtime (not during simulation)
         if (!simActive && els.sunCard) {
           els.sunCard.style.display = isDaylightNow() ? "" : "none";
         }
-  
         statusEl && (statusEl.textContent = "Computed from current inputs.");
       }
   
@@ -257,7 +300,7 @@
         return solar;
       }
   
-      // API calls
+      // API
       async function getCurrentWeather(lat, lon) {
         const params = new URLSearchParams({
           latitude: lat, longitude: lon,
@@ -297,8 +340,8 @@
         };
       }
   
-      // Timeline prep (returns arrays in °F internally)
-      function buildTimelineDataset(hourly, R) {
+      // Timeline
+      function buildTimelineDataset(hourly) {
         const now = new Date();
         const start = new Date(now); start.setHours(0,0,0,0);
         const end = new Date(now);   end.setDate(end.getDate()+2); end.setHours(0,0,0,0);
@@ -334,7 +377,6 @@
       }
       function hourKey(d) { const k = new Date(d); k.setMinutes(0,0,0); return k.getTime(); }
   
-      // Sunrise/Sunset markers helpers (☀️ for both)
       function nearestLabelIndex(labelDates, target) {
         if (!target) return -1;
         const tg = new Date(target); tg.setMinutes(0,0,0);
@@ -359,28 +401,26 @@
         }).filter(e => e.idx >= 0);
       }
   
-      // Chart render (converts to display units)
-      function renderChart(labels, shadeValsF, sunValsFF, now) {
+      async function renderChart(labels, shadeValsF, sunValsFF, now) {
         if (!els.chartCanvas) return;
+        await ensureChartJs();
         const ctx = els.chartCanvas.getContext("2d");
-        if (window.Chart == null) { console.warn("Chart.js not found."); return; }
+        if (!window.Chart) { console.warn("Chart.js failed to load."); return; }
         if (vibeChart) { vibeChart.destroy(); vibeChart = null; }
   
         const shadeVals = shadeValsF.map(v => toUserTemp(v));
         const sunVals   = sunValsFF.map(v => toUserTemp(v));
         const displayLabels = labels.map(d => d.toLocaleString([], { weekday: "short", hour: "numeric" }));
         const nowIdx = labels.findIndex(d => hourKey(d) === hourKey(now));
-  
         const markers = buildSunMarkers(labels);
   
-        // Vertical line for "current time" — same green as the time label's computed color
         const currentLine = {
           id: "currentLine",
           afterDatasetsDraw(chart) {
             if (nowIdx === -1) return;
             const { ctx, chartArea, scales } = chart;
             const x = scales.x.getPixelForValue(nowIdx);
-            const timeColor = (els.nowTime && getComputedStyle(els.nowTime).color) || "#22c55e"; // fallback green
+            const timeColor = (els.nowTime && getComputedStyle(els.nowTime).color) || "#22c55e";
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(x, chartArea.top);
@@ -393,16 +433,13 @@
           }
         };
   
-        // Draw ☀️ placed over the Sun Vibe line (no vertical centering)
         const sunMarkerPlugin = {
           id: "sunMarkers",
           afterDatasetsDraw(chart) {
             const { ctx, scales } = chart;
-  
             const sunDsIndex   = chart.data.datasets.findIndex(d => d.label === "Sun Vibe");
             if (sunDsIndex === -1) return;
-  
-            const sunData = chart.data.datasets[sunDsIndex].data; // display units
+            const sunData = chart.data.datasets[sunDsIndex].data;
   
             ctx.save();
             ctx.textAlign = "center";
@@ -411,11 +448,8 @@
   
             markers.forEach(m => {
               if (m.idx < 0 || m.idx >= sunData.length) return;
-  
               const x = scales.x.getPixelForValue(m.idx);
               const ySun = scales.y.getPixelForValue(sunData[m.idx]);
-  
-              // Nudge up a hair so the emoji isn't obscured by the line stroke
               ctx.fillText(m.emoji, x, ySun - 8);
             });
   
@@ -428,8 +462,8 @@
           data: {
             labels: displayLabels,
             datasets: [
-              { label: "Shade Vibe", data: shadeVals, borderWidth: 2, borderColor: "#6ea8fe", backgroundColor: "#6ea8fe", pointRadius: 0, tension: 0.3 },
-              { label: "Sun Vibe",   data: sunVals,   borderWidth: 2, borderColor: "#ffb86b", backgroundColor: "#ffb86b", pointRadius: 0, tension: 0.3 }
+              { label: "Sun Vibe",   data: sunVals,   borderWidth: 2, borderColor: "#ffb86b", backgroundColor: "#ffb86b", pointRadius: 0, tension: 0.3 },
+              { label: "Shade Vibe", data: shadeVals, borderWidth: 2, borderColor: "#6ea8fe", backgroundColor: "#6ea8fe", pointRadius: 0, tension: 0.3 }
             ]
           },
           options: {
@@ -437,32 +471,65 @@
             maintainAspectRatio: false,
             interaction: { mode: "index", intersect: false },
             scales: {
-              x: { title: { display: true, text: "Time" }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 20 } },
-              y: { title: { display: true, text: sym() }, suggestedMin: Math.min(...shadeVals, ...sunVals) - 3, suggestedMax: Math.max(...shadeVals, ...sunVals) + 3 }
+              x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 20 } },
+              y: {
+                ticks: { callback: (val) => `${typeof val === "number" ? val : Number(val)}°` },
+                suggestedMin: Math.min(...shadeVals, ...sunVals) - 3,
+                suggestedMax: Math.max(...shadeVals, ...sunVals) + 3
+              }
             },
             plugins: {
-              legend: { display: true, labels: { usePointStyle: true, pointStyle: "rectRounded", boxWidth: 14, boxHeight: 8 } }
+              legend: { display: true, labels: { usePointStyle: true, pointStyle: "rectRounded", boxWidth: 14, boxHeight: 8 } },
+              tooltip: {
+                itemSort: (a, b) => ["Sun Vibe","Shade Vibe"].indexOf(a.dataset.label) - ["Sun Vibe","Shade Vibe"].indexOf(b.dataset.label),
+                callbacks: {
+                  label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}°`,
+                  title: (items) => items[0]?.label ?? ""
+                }
+              }
             }
           },
           plugins: [currentLine, sunMarkerPlugin]
         });
   
-        // Hover simulation: always updates displays while hovering (no key needed)
-        els.chartCanvas.addEventListener("mousemove", (evt) => {
+        // Pointer interactions
+        els.chartCanvas.style.touchAction = "none";
+        let isPointerDown = false;
+  
+        function updateFromClientX(clientX) {
           if (!vibeChart || !timelineState) return;
-          const points = vibeChart.getElementsAtEventForMode(evt, 'index', { intersect: false }, false);
-          if (!points || !points.length) return;
-          const idx = points[0].index;
-          simActive = true;
-          paintSimulatedIndex(idx);
+          const rect = els.chartCanvas.getBoundingClientRect();
+          const x = clientX - rect.left;
+          const idxFloat = vibeChart.scales.x.getValueForPixel(x);
+          const idx = Math.round(idxFloat);
+          if (Number.isFinite(idx) && idx >= 0 && idx < timelineState.labels.length) {
+            simActive = true;
+            paintSimulatedIndex(idx);
+          }
+        }
+  
+        els.chartCanvas.addEventListener("pointerdown", (e) => {
+          isPointerDown = true;
+          try { els.chartCanvas.setPointerCapture(e.pointerId); } catch {}
+          updateFromClientX(e.clientX);
         });
-        els.chartCanvas.addEventListener("mouseleave", () => {
+        els.chartCanvas.addEventListener("pointermove", (e) => {
+          const isMouse = e.pointerType === "mouse";
+          if (isMouse || isPointerDown) updateFromClientX(e.clientX);
+        });
+        function endPointer(e){
+          isPointerDown = false;
+          try { els.chartCanvas.releasePointerCapture(e.pointerId); } catch {}
+        }
+        els.chartCanvas.addEventListener("pointerup", endPointer);
+        els.chartCanvas.addEventListener("pointercancel", endPointer);
+        els.chartCanvas.addEventListener("pointerleave", () => {
           if (simActive) paintRealtimeCards();
           simActive = false;
         });
       }
   
-      // Current time & next sun event
+      // Current time + next sun event
       function chooseNextSunEvent() {
         const now = new Date();
         const { sunriseToday, sunsetToday, sunriseTomorrow, sunsetTomorrow } = sunTimes;
@@ -477,7 +544,6 @@
         const now = new Date();
         els.nowTime && (els.nowTime.textContent = fmtHM(now));
         const nxt = chooseNextSunEvent();
-        // Capitalized label
         els.nowSubLabel && (els.nowSubLabel.textContent = nxt ? `${nxt.kind} at ${fmtHM(nxt.next)}` : "—");
       }
   
@@ -503,8 +569,8 @@
         const shadeDisp = toUserTemp(shadeVals[i]);
         const sunDisp   = toUserTemp(sunVals[i]);
   
-        els.shade && (els.shade.textContent = `${shadeDisp.toFixed(1)}${sym()}`);
-        if (isDay && els.sun) els.sun.textContent = `${sunDisp.toFixed(1)}${sym()}`;
+        els.shade && (els.shade.textContent = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
+        if (isDay && els.sun) els.sun.textContent = `${sunDisp.toFixed(1)}${unitSuffix()}`;
   
         const simSolar = solarByHour[i];
         els.shadeLabel && (els.shadeLabel.textContent = vibeDescriptor(shadeVals[i], { solar: simSolar, isDay, context: "shade" }));
@@ -554,9 +620,9 @@
           paintCurrentTimeTitle();
   
           if (hourlyMaybe) {
-            const ds = buildTimelineDataset(hourlyMaybe, reflectivity());
+            const ds = buildTimelineDataset(hourlyMaybe);
             timelineState = ds;
-            renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+            await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
             chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
           }
   
@@ -570,7 +636,7 @@
       }
       function restartScheduler() { clearPollTimer(); scheduleNextTick(els.updateInterval?.value || 1); }
   
-      // Shared prime (for both geolocation and ZIP)
+      // Prime weather
       async function primeWeatherForCoords(latitude, longitude, sourceLabel = "") {
         statusEl && (statusEl.textContent = sourceLabel ? `Getting weather for ${sourceLabel}…` : "Getting weather…");
         const [cur, hourly, dailySun] = await Promise.all([
@@ -606,9 +672,9 @@
         paintCurrentTimeTitle();
   
         chartStatusEl && (chartStatusEl.textContent = "Loading timeline…");
-        const ds = buildTimelineDataset(hourly, reflectivity());
+        const ds = buildTimelineDataset(hourly);
         timelineState = ds;
-        renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+        await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
         chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
   
         const nowTime = new Date();
@@ -617,15 +683,14 @@
         restartScheduler();
       }
   
-      // Geolocation bootstrap
-      async function useLocation() {
+      // Geolocation
+      function useLocation() {
         statusEl && (statusEl.textContent = "Getting location…");
         if (!navigator.geolocation) { statusEl && (statusEl.textContent = "Geolocation unavailable. Enter values manually."); return; }
         navigator.geolocation.getCurrentPosition(async pos => {
           const { latitude, longitude } = pos.coords;
-          try {
-            await primeWeatherForCoords(latitude, longitude, "device location");
-          } catch (e) {
+          try { await primeWeatherForCoords(latitude, longitude, "device location"); }
+          catch (e) {
             log(e);
             statusEl && (statusEl.textContent = "Could not fetch weather. Enter values manually.");
             chartStatusEl && (chartStatusEl.textContent = "Timeline unavailable without weather.");
@@ -637,7 +702,7 @@
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
       }
   
-      // Events: inputs
+      // Inputs auto-update
       ["input","change"].forEach(evt => {
         ["temp","humidity","wind","solar","reflect","reflectCustom"].forEach(id => {
           const el = els[id];
@@ -645,10 +710,10 @@
             compute();
             if ((id === "reflect" || id === "reflectCustom") && lastCoords) {
               getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
-                .then(hourly => {
-                  const ds = buildTimelineDataset(hourly, reflectivity());
+                .then(async (hourly) => {
+                  const ds = buildTimelineDataset(hourly);
                   timelineState = ds;
-                  renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+                  await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
                 })
                 .catch(()=>{});
             }
@@ -670,10 +735,10 @@
           compute();
           if (lastCoords) {
             getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
-              .then(hourly => {
-                const ds = buildTimelineDataset(hourly, reflectivity());
+              .then(async (hourly) => {
+                const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
-                renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
               })
               .catch(()=>{});
           }
@@ -684,7 +749,7 @@
       paintUnitToggle();
       applyUnitLabels();
   
-      // Cross-tab sync
+      // Storage sync
       window.addEventListener("storage", (e) => {
         if (e.key === UNIT_KEY) {
           const newVal = e.newValue === "C" ? "C" : "F";
@@ -735,7 +800,7 @@
       // Clock tick
       setInterval(updateClockCard, 60 * 1000);
   
-      // Boot: prefer saved ZIP, else geolocation
+      // Boot
       setTimeout(() => {
         statusEl && (statusEl.textContent = "Trying to get your local weather…");
         updateClockCard();
@@ -751,4 +816,5 @@
         }
       }, 300);
     });
-  })();  
+  })();
+  
