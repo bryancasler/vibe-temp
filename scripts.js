@@ -48,6 +48,9 @@
       const summaryTextEl = $("#summaryText");
       const summaryTimeRangeEl = $("#summaryTimeRange");
       const summaryTitleEl = $("#weatherSummary .summary-title");
+      const expiredModalEl = $("#expiredModal");
+      const keepCustomBtn = $("#keepCustomBtn");
+      const useDefaultsBtn = $("#useDefaultsBtn");
       
       function updateChartTitle() {
         if (chartTitleEl) {
@@ -142,6 +145,79 @@
         }, duration);
       }
 
+      // Expired selection modal
+      function showExpiredSelectionModal() {
+        if (!expiredModalEl) return;
+        expiredModalEl.style.display = "flex";
+        // Focus first button for accessibility
+        if (keepCustomBtn) keepCustomBtn.focus();
+      }
+
+      function hideExpiredSelectionModal() {
+        if (!expiredModalEl) return;
+        expiredModalEl.style.display = "none";
+      }
+
+      function handleKeepCustomSettings() {
+        // Clear the selection but keep other URL params
+        selectionRange = null;
+        if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
+        if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+        
+        // Remove start and end from URL but keep other params
+        const params = new URLSearchParams(location.search);
+        params.delete("start");
+        params.delete("end");
+        const newUrl = params.toString() 
+          ? `${location.pathname}?${params.toString()}`
+          : location.pathname;
+        history.replaceState({}, "", newUrl);
+        
+        // Update chart
+        if (vibeChart) {
+          vibeChart.update('none');
+        }
+        
+        hideExpiredSelectionModal();
+      }
+
+      function handleUseDefaults() {
+        // Reset everything to app defaults
+        // Clear selection
+        selectionRange = null;
+        if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
+        if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+        
+        // Reset unit to F (ignore localStorage)
+        unit = "F";
+        if (unitEls.F) unitEls.F.classList.add("active");
+        if (unitEls.C) unitEls.C.classList.remove("active");
+        applyUnitLabels();
+        
+        // Reset days ahead to 2 (ignore localStorage)
+        daysAhead = 2;
+        if (els.daysAhead) els.daysAhead.value = 2;
+        updateChartTitle();
+        
+        // Clear location from URL and state
+        lastCoords = null;
+        if (zipEls.input) zipEls.input.value = "";
+        if (zipEls.status) zipEls.status.textContent = "Cleared. Using device location when available.";
+        
+        // Remove all URL params
+        history.replaceState({}, "", location.pathname);
+        
+        // Trigger device location if available
+        useLocation();
+        
+        // Update chart
+        if (vibeChart) {
+          vibeChart.update('none');
+        }
+        
+        hideExpiredSelectionModal();
+      }
+
       // URL generation helper
       function generateShareURL(startTime, endTime) {
         const params = new URLSearchParams();
@@ -228,6 +304,16 @@
         const dayHours = dataPoints.filter(d => d.isDay).length;
         const nightHours = dataPoints.length - dayHours;
         
+        // Calculate weighted average vibe based on day/night hours
+        // During day, people are more likely in sun, so weight sun vibe more
+        // During night, use shade vibe (sun doesn't matter)
+        const totalHours = dataPoints.length;
+        const dayWeight = dayHours / totalHours;
+        const nightWeight = nightHours / totalHours;
+        // For daytime, assume 70% sun vibe, 30% shade vibe (people move between sun/shade)
+        // For nighttime, use 100% shade vibe
+        const avgRepresentative = (dayWeight * (avgSun * 0.7 + avgShade * 0.3)) + (nightWeight * avgShade);
+        
         return {
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
@@ -236,7 +322,8 @@
           stats: {
             minShade, maxShade, avgShade,
             minSun, maxSun, avgSun,
-            dayHours, nightHours
+            dayHours, nightHours,
+            avgRepresentative // More representative average for the period
           }
         };
       }
@@ -247,19 +334,41 @@
           return "No weather data available for this time range.";
         }
 
-        const { stats, duration, startTime, endTime } = weatherData;
+        const { stats, duration, startTime, endTime, dataPoints } = weatherData;
         const start = new Date(startTime);
         const end = new Date(endTime);
         
-        // Format the prompt
-        const prompt = `Summarize the weather conditions for a ${duration.toFixed(1)}-hour period from ${start.toLocaleString()} to ${end.toLocaleString()}.
+        // Get vibe descriptions for key points
+        const vibeDescriptions = [];
+        const samplePoints = [
+          dataPoints[0], // First point
+          dataPoints[Math.floor(dataPoints.length / 2)], // Middle point
+          dataPoints[dataPoints.length - 1] // Last point
+        ].filter(Boolean);
+        
+        samplePoints.forEach(point => {
+          if (point.description) {
+            vibeDescriptions.push(point.description);
+          }
+        });
+        
+        // Calculate representative temperature for the prompt
+        const repTemp = stats.avgRepresentative || stats.avgShade;
+        const maxRep = Math.max(stats.maxSun, stats.maxShade);
+        const minRep = stats.minShade;
+        
+        // Format the prompt focusing on vibe temperatures
+        const prompt = `Summarize how the weather will feel for a ${duration.toFixed(1)}-hour period from ${start.toLocaleString()} to ${end.toLocaleString()}.
 
-Weather data:
-- Shade temperature: ${stats.avgShade.toFixed(1)}${unitSuffix()} (range: ${stats.minShade.toFixed(1)}-${stats.maxShade.toFixed(1)}${unitSuffix()})
-- Sun temperature: ${stats.avgSun.toFixed(1)}${unitSuffix()} (range: ${stats.minSun.toFixed(1)}-${stats.maxSun.toFixed(1)}${unitSuffix()})
+Vibe temperature data (how it actually feels):
+- Representative vibe: ${repTemp.toFixed(1)}${unitSuffix()} (typical feel during this period)
+- Shade vibe: ${stats.avgShade.toFixed(1)}${unitSuffix()} (range: ${stats.minShade.toFixed(1)}-${stats.maxShade.toFixed(1)}${unitSuffix()})
+- Sun vibe: ${stats.avgSun.toFixed(1)}${unitSuffix()} (range: ${stats.minSun.toFixed(1)}-${stats.maxSun.toFixed(1)}${unitSuffix()})
+- Overall range: ${minRep.toFixed(1)}${unitSuffix()} to ${maxRep.toFixed(1)}${unitSuffix()}
 - Daytime hours: ${stats.dayHours}, Nighttime hours: ${stats.nightHours}
+${vibeDescriptions.length > 0 ? `- Sample descriptions: ${vibeDescriptions.slice(0, 3).join(", ")}` : ""}
 
-Provide a brief, conversational summary (2-3 sentences) describing how it will feel during this time period. Focus on comfort, what to wear, and any notable changes.`;
+Provide a brief, conversational summary (2-3 sentences) describing how it will FEEL during this time period based on the vibe temperatures. Use the representative vibe as the primary temperature reference. Focus on comfort, what to wear, and how the conditions will change. Ignore actual air temperature - only use the vibe temperatures which represent how it actually feels.`;
 
         try {
           // Use Hugging Face Inference API with a free model
@@ -325,26 +434,27 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will f
         }
       }
 
-      // Generate fallback summary without AI
+      // Generate fallback summary without AI (based on vibe temps)
       function generateFallbackSummary(weatherData) {
-        const { stats, duration, startTime, endTime } = weatherData;
+        const { stats, duration, startTime, endTime, dataPoints } = weatherData;
         const start = new Date(startTime);
         const end = new Date(endTime);
         
         const sentences = [];
         
-        // Temperature description with day/night mix
+        // Use representative vibe temperature (weighted average) for description
+        const repTemp = stats.avgRepresentative || stats.avgShade;
         let firstSentence = "";
-        if (stats.avgShade < 50) {
-          firstSentence = "It will be quite cold";
-        } else if (stats.avgShade < 65) {
-          firstSentence = "It will be cool";
-        } else if (stats.avgShade < 75) {
-          firstSentence = "It will be mild and comfortable";
-        } else if (stats.avgShade < 85) {
-          firstSentence = "It will be warm";
+        if (repTemp < 50) {
+          firstSentence = "It will feel quite cold";
+        } else if (repTemp < 65) {
+          firstSentence = "It will feel cool";
+        } else if (repTemp < 75) {
+          firstSentence = "It will feel mild and comfortable";
+        } else if (repTemp < 85) {
+          firstSentence = "It will feel warm";
         } else {
-          firstSentence = "It will be hot";
+          firstSentence = "It will feel hot";
         }
         
         // Add day/night context to first sentence
@@ -357,19 +467,22 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will f
         }
         sentences.push(firstSentence);
         
-        // Temperature range
-        const range = stats.maxShade - stats.minShade;
+        // Vibe temperature range (how it feels)
+        // Use max of sun/shade for max, min of shade for min (more representative)
+        const maxRep = Math.max(stats.maxSun, stats.maxShade);
+        const minRep = stats.minShade; // Min is typically in shade
+        const range = maxRep - minRep;
         if (range > 10) {
-          sentences.push(`temperatures will vary significantly, from ${stats.minShade.toFixed(1)}${unitSuffix()} to ${stats.maxShade.toFixed(1)}${unitSuffix()}`);
+          sentences.push(`The vibe will vary significantly, from ${minRep.toFixed(1)}${unitSuffix()} to ${maxRep.toFixed(1)}${unitSuffix()}`);
         } else {
-          sentences.push(`temperatures will be relatively steady around ${stats.avgShade.toFixed(1)}${unitSuffix()}`);
+          sentences.push(`The vibe will be relatively steady around ${repTemp.toFixed(1)}${unitSuffix()}`);
         }
         
-        // Sun vs shade
+        // Sun vs shade vibe difference
         if (stats.avgSun - stats.avgShade > 15) {
-          sentences.push(`In the sun, it will feel much warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()}), so seek shade if it gets too hot`);
+          sentences.push(`In the sun, it will feel much warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()} vibe), so seek shade if it gets too hot`);
         } else if (stats.avgSun - stats.avgShade > 8) {
-          sentences.push(`In the sun, it will feel noticeably warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()})`);
+          sentences.push(`In the sun, it will feel noticeably warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()} vibe)`);
         }
         
         return sentences.join(". ") + ".";
@@ -1608,6 +1721,16 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will f
       }
       async function runUpdateCycle() {
         if (!lastCoords) { scheduleNextTick(els.updateInterval?.value || 1); return; }
+        
+        // Check if current selection has expired (before updating weather)
+        if (selectionRange) {
+          const now = new Date();
+          if (selectionRange.endTime < now) {
+            // Selection has expired, show modal
+            showExpiredSelectionModal();
+          }
+        }
+        
         const { latitude, longitude } = lastCoords;
   
         try {
@@ -1778,8 +1901,22 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will f
                 timelineState = ds;
                 window.timelineState = timelineState;
                 await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+                // Update weather summary if there's a selection
+                if (selectionRange) {
+                  updateWeatherSummary();
+                }
               })
               .catch(()=>{});
+          } else {
+            // Even without coords, update summary if there's a selection (for manual input mode)
+            if (selectionRange && timelineState) {
+              updateWeatherSummary();
+            }
+          }
+        } else {
+          // Even if not rerendering, update summary if there's a selection (unit change affects displayed temps)
+          if (selectionRange && timelineState) {
+            updateWeatherSummary();
           }
         }
       }
@@ -1882,6 +2019,24 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will f
         // Hide summary
         if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
       });
+
+      // Expired selection modal buttons
+      keepCustomBtn && keepCustomBtn.addEventListener("click", handleKeepCustomSettings);
+      useDefaultsBtn && useDefaultsBtn.addEventListener("click", handleUseDefaults);
+      
+      // Close modal on ESC key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && expiredModalEl && expiredModalEl.style.display !== "none") {
+          hideExpiredSelectionModal();
+        }
+      });
+      
+      // Close modal on overlay click
+      expiredModalEl && expiredModalEl.addEventListener("click", (e) => {
+        if (e.target === expiredModalEl) {
+          hideExpiredSelectionModal();
+        }
+      });
   
       // Clock tick
       setInterval(updateClockCard, 60 * 1000);
@@ -1940,9 +2095,11 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will f
             
             // Check if time has passed
             if (endTime < now) {
-              showNotification("The highlighted time range has passed.", "error", 5000);
+              // Show modal instead of setting selectionRange
+              showExpiredSelectionModal();
+              return; // Don't set selectionRange if expired
             }
-            // Still show the highlight even if passed
+            // Still show the highlight if not expired
             selectionRange = { startTime, endTime };
             if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
             // Update chart if it already exists

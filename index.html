@@ -206,6 +206,18 @@
               </div>
             </section>
           </div>
-          <div id="notification" class="notification" style="display: none;"></div>                        
+          <div id="notification" class="notification" style="display: none;"></div>
+          
+          <!-- Expired Selection Modal -->
+          <div id="expiredModal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
+            <div class="modal-dialog">
+              <h3 id="modalTitle" class="modal-title">Time Range Expired</h3>
+              <p class="modal-message">The highlighted time range has passed.</p>
+              <div class="modal-buttons">
+                <button id="keepCustomBtn" class="modal-btn modal-btn-primary" type="button">Keep Custom Settings</button>
+                <button id="useDefaultsBtn" class="modal-btn" type="button">Use Defaults</button>
+              </div>
+            </div>
+          </div>
     </body>
 </html>
