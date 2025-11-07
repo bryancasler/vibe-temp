@@ -40,6 +40,27 @@
       const $ = (s) => document.querySelector(s);
       const statusEl = $("#status");
       const chartStatusEl = $("#chartStatus");
+      const chartTitleEl = $(".chart-title");
+      const chartBox = $("#chartBox");
+      const clearHighlightBtn = $("#clearHighlight");
+      const notificationEl = $("#notification");
+      const weatherSummaryEl = $("#weatherSummary");
+      const summaryTextEl = $("#summaryText");
+      const summaryTimeRangeEl = $("#summaryTimeRange");
+      const summaryTitleEl = $("#weatherSummary .summary-title");
+      
+      function updateChartTitle() {
+        if (chartTitleEl) {
+          if (daysAhead === 1) {
+            chartTitleEl.textContent = "Today";
+          } else if (daysAhead === 2) {
+            chartTitleEl.textContent = "Today & Tomorrow";
+          } else {
+            chartTitleEl.textContent = `Next ${daysAhead} Days`;
+          }
+        }
+      }
+      
       const els = {
         temp: $("#temp"),
         humidity: $("#humidity"),
@@ -61,6 +82,8 @@
         updateInterval: $("#updateInterval"),
         updateHourlyToggle: $("#updateHourlyToggle"),
         updateNow: $("#updateNow"),
+        daysAhead: $("#daysAhead"),
+        nightShadingToggle: $("#nightShadingToggle"),
         useLocationBtn: $("#use-location"),
         sunCard: $("#sunCard"),
       };
@@ -85,22 +108,422 @@
       // State
       const UNIT_KEY = "vibeUnit";
       const ZIP_KEY  = "vibeZip";
+      const DAYS_AHEAD_KEY = "vibeDaysAhead";
+      const NIGHT_SHADING_KEY = "vibeNightShading";
       let unit = (localStorage.getItem(UNIT_KEY) === "C") ? "C" : "F";
+      let daysAhead = parseInt(localStorage.getItem(DAYS_AHEAD_KEY) || "2", 10);
+      let nightShadingEnabled = localStorage.getItem(NIGHT_SHADING_KEY) === "true";
       let lastCoords = null;
       let vibeChart = null;
       let pollTimer = null;
       let nextUpdateAt = null;
   
-      let sunTimes = { sunriseToday: null, sunsetToday: null, sunriseTomorrow: null, sunsetTomorrow: null };
+      let sunTimes = { sunrises: [], sunsets: [] }; // Arrays of all sunrise/sunset times for visible range
       let currentIsDay = null;
       let currentPlaceName = "";
   
       let timelineState = null;  // { labels, shadeVals, sunVals, solarByHour, isDayByHour, now } all in °F
       window.timelineState = null; // expose for tooltip use
       let simActive = false;
+      let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
+      let summaryGenerationInProgress = false;
   
       const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
       const log = (...a) => { if (DEBUG) console.log("[Vibe]", ...a); };
+
+      // Notification helper
+      function showNotification(message, type = "success", duration = 3000) {
+        if (!notificationEl) return;
+        notificationEl.textContent = message;
+        notificationEl.className = `notification ${type}`;
+        notificationEl.style.display = "block";
+        setTimeout(() => {
+          notificationEl.style.display = "none";
+        }, duration);
+      }
+
+      // URL generation helper
+      function generateShareURL(startTime, endTime) {
+        const params = new URLSearchParams();
+        
+        // Add settings
+        if (unit) params.set("unit", unit);
+        if (daysAhead) params.set("days", String(daysAhead));
+        if (lastCoords) {
+          params.set("lat", String(lastCoords.latitude));
+          params.set("lon", String(lastCoords.longitude));
+        }
+        const savedZip = localStorage.getItem(ZIP_KEY);
+        if (savedZip) params.set("zip", savedZip);
+        
+        // Add time range (ISO strings)
+        params.set("start", startTime.toISOString());
+        params.set("end", endTime.toISOString());
+        
+        return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+      }
+
+      // Copy to clipboard helper
+      async function copyToClipboard(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (err) {
+          // Fallback for older browsers
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+            return true;
+          } catch (e) {
+            document.body.removeChild(textarea);
+            return false;
+          }
+        }
+      }
+
+      // Extract weather data for selected time range
+      function extractWeatherDataForRange(startTime, endTime) {
+        if (!timelineState) return null;
+        
+        const { labels, shadeVals, sunVals, solarByHour, isDayByHour } = timelineState;
+        const dataPoints = [];
+        
+        for (let i = 0; i < labels.length; i++) {
+          const time = new Date(labels[i]);
+          if (time >= startTime && time <= endTime) {
+            const shadeF = shadeVals[i];
+            const sunF = sunVals[i];
+            const solar = solarByHour[i] ?? 0;
+            const isDay = !!isDayByHour[i];
+            
+            dataPoints.push({
+              time: time.toISOString(),
+              hour: time.getHours(),
+              shadeVibe: toUserTemp(shadeF),
+              sunVibe: toUserTemp(sunF),
+              solar: solar,
+              isDay: isDay,
+              description: vibeDescriptor(shadeF, { solar, isDay, context: "shade" })
+            });
+          }
+        }
+        
+        if (dataPoints.length === 0) return null;
+        
+        // Calculate statistics
+        const shadeTemps = dataPoints.map(d => d.shadeVibe);
+        const sunTemps = dataPoints.map(d => d.sunVibe);
+        const minShade = Math.min(...shadeTemps);
+        const maxShade = Math.max(...shadeTemps);
+        const minSun = Math.min(...sunTemps);
+        const maxSun = Math.max(...sunTemps);
+        const avgShade = shadeTemps.reduce((a, b) => a + b, 0) / shadeTemps.length;
+        const avgSun = sunTemps.reduce((a, b) => a + b, 0) / sunTemps.length;
+        const dayHours = dataPoints.filter(d => d.isDay).length;
+        const nightHours = dataPoints.length - dayHours;
+        
+        return {
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          duration: Math.round((endTime - startTime) / (1000 * 60 * 60) * 10) / 10, // hours
+          dataPoints,
+          stats: {
+            minShade, maxShade, avgShade,
+            minSun, maxSun, avgSun,
+            dayHours, nightHours
+          }
+        };
+      }
+
+      // Generate AI summary using free public API
+      async function generateWeatherSummary(weatherData) {
+        if (!weatherData || !weatherData.dataPoints || weatherData.dataPoints.length === 0) {
+          return "No weather data available for this time range.";
+        }
+
+        const { stats, duration, startTime, endTime } = weatherData;
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        
+        // Format the prompt
+        const prompt = `Summarize the weather conditions for a ${duration.toFixed(1)}-hour period from ${start.toLocaleString()} to ${end.toLocaleString()}.
+
+Weather data:
+- Shade temperature: ${stats.avgShade.toFixed(1)}${unitSuffix()} (range: ${stats.minShade.toFixed(1)}-${stats.maxShade.toFixed(1)}${unitSuffix()})
+- Sun temperature: ${stats.avgSun.toFixed(1)}${unitSuffix()} (range: ${stats.minSun.toFixed(1)}-${stats.maxSun.toFixed(1)}${unitSuffix()})
+- Daytime hours: ${stats.dayHours}, Nighttime hours: ${stats.nightHours}
+
+Provide a brief, conversational summary (2-3 sentences) describing how it will feel during this time period. Focus on comfort, what to wear, and any notable changes.`;
+
+        try {
+          // Use Hugging Face Inference API with a free model
+          // Try using a smaller, faster model that's more likely to be available
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          
+          const response = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-base", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              inputs: prompt,
+              parameters: {
+                max_length: 200,
+                temperature: 0.7
+              }
+            }),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            // If model is loading, wait a bit and try fallback
+            if (response.status === 503) {
+              throw new Error("Model is loading, using fallback");
+            }
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const result = await response.json();
+          
+          // Handle different response formats
+          let summary = "";
+          if (Array.isArray(result) && result[0]?.generated_text) {
+            summary = result[0].generated_text.trim();
+          } else if (result.generated_text) {
+            summary = result.generated_text.trim();
+          } else if (typeof result === "string") {
+            summary = result.trim();
+          } else if (Array.isArray(result) && result[0]?.summary_text) {
+            summary = result[0].summary_text.trim();
+          } else {
+            // Fallback: generate a simple summary
+            return generateFallbackSummary(weatherData);
+          }
+
+          // Clean up the summary (remove prompt if included)
+          summary = summary.replace(prompt, "").trim();
+          // Remove any leading/trailing quotes or formatting
+          summary = summary.replace(/^["']|["']$/g, "").trim();
+          if (summary.length === 0 || summary.length < 20) {
+            return generateFallbackSummary(weatherData);
+          }
+
+          return summary;
+        } catch (error) {
+          console.warn("AI summary generation failed:", error);
+          // Fallback to a simple generated summary
+          return generateFallbackSummary(weatherData);
+        }
+      }
+
+      // Generate fallback summary without AI
+      function generateFallbackSummary(weatherData) {
+        const { stats, duration, startTime, endTime } = weatherData;
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        
+        const sentences = [];
+        
+        // Temperature description with day/night mix
+        let firstSentence = "";
+        if (stats.avgShade < 50) {
+          firstSentence = "It will be quite cold";
+        } else if (stats.avgShade < 65) {
+          firstSentence = "It will be cool";
+        } else if (stats.avgShade < 75) {
+          firstSentence = "It will be mild and comfortable";
+        } else if (stats.avgShade < 85) {
+          firstSentence = "It will be warm";
+        } else {
+          firstSentence = "It will be hot";
+        }
+        
+        // Add day/night context to first sentence
+        if (stats.dayHours > 0 && stats.nightHours > 0) {
+          firstSentence += " with a mix of day and night conditions";
+        } else if (stats.dayHours > 0) {
+          firstSentence += " during daytime hours";
+        } else {
+          firstSentence += " during nighttime hours";
+        }
+        sentences.push(firstSentence);
+        
+        // Temperature range
+        const range = stats.maxShade - stats.minShade;
+        if (range > 10) {
+          sentences.push(`temperatures will vary significantly, from ${stats.minShade.toFixed(1)}${unitSuffix()} to ${stats.maxShade.toFixed(1)}${unitSuffix()}`);
+        } else {
+          sentences.push(`temperatures will be relatively steady around ${stats.avgShade.toFixed(1)}${unitSuffix()}`);
+        }
+        
+        // Sun vs shade
+        if (stats.avgSun - stats.avgShade > 15) {
+          sentences.push(`In the sun, it will feel much warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()}), so seek shade if it gets too hot`);
+        } else if (stats.avgSun - stats.avgShade > 8) {
+          sentences.push(`In the sun, it will feel noticeably warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()})`);
+        }
+        
+        return sentences.join(". ") + ".";
+      }
+
+      // Generate smart title for highlighted range
+      function generateHighlightTitle(startTime, endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        
+        const startDay = start.toLocaleDateString([], { weekday: "long" });
+        const endDay = end.toLocaleDateString([], { weekday: "long" });
+        const startHour = start.getHours();
+        const endHour = end.getHours();
+        
+        // Helper to get time of day
+        function getTimeOfDay(hour) {
+          if (hour >= 5 && hour < 12) return "Morning";
+          if (hour >= 12 && hour < 17) return "Afternoon";
+          if (hour >= 17 && hour < 21) return "Evening";
+          return "Night";
+        }
+        
+        const startTimeOfDay = getTimeOfDay(startHour);
+        const endTimeOfDay = getTimeOfDay(endHour);
+        
+        // Check if same day
+        const isSameDay = start.toDateString() === end.toDateString();
+        
+        if (isSameDay) {
+          // Single day
+          if (startTimeOfDay === endTimeOfDay) {
+            // Same time of day - show the time period
+            return `Highlighted Vibes For ${startDay} ${startTimeOfDay}`;
+          } else {
+            // Different times of day on same day - show transition
+            return `Highlighted Vibes For ${startDay} ${startTimeOfDay} into ${endTimeOfDay}`;
+          }
+        } else {
+          // Multiple days
+          const startDate = start.getDate();
+          const endDate = end.getDate();
+          const startMonth = start.getMonth();
+          const endMonth = end.getMonth();
+          const startYear = start.getFullYear();
+          const endYear = end.getFullYear();
+          
+          // Check if consecutive days (same calendar date difference)
+          const startDayOnly = new Date(startYear, startMonth, startDate);
+          const endDayOnly = new Date(endYear, endMonth, endDate);
+          const daysDiff = Math.round((endDayOnly - startDayOnly) / (1000 * 60 * 60 * 24));
+          
+          if (daysDiff === 1) {
+            // Consecutive days - check for night into morning transition
+            if (startTimeOfDay === "Night" && endTimeOfDay === "Morning") {
+              return `Highlighted Vibes For ${startDay} Night into ${endDay} Morning`;
+            }
+            // Consecutive days - use "to"
+            return `Highlighted Vibes For ${startDay} to ${endDay}`;
+          } else if (daysDiff > 1) {
+            // Multiple consecutive days - use "to"
+            return `Highlighted Vibes For ${startDay} to ${endDay}`;
+          } else {
+            // Non-consecutive days or same day (shouldn't happen but handle it)
+            if (startDay === endDay) {
+              // Same day name but different dates (shouldn't happen with toDateString check, but handle)
+              return `Highlighted Vibes For ${startDay}`;
+            }
+            // Non-consecutive days - use "and"
+            return `Highlighted Vibes For ${startDay} and ${endDay}`;
+          }
+        }
+      }
+
+      // Update weather summary
+      async function updateWeatherSummary() {
+        if (!selectionRange || !timelineState || summaryGenerationInProgress) return;
+        
+        summaryGenerationInProgress = true;
+        
+        if (weatherSummaryEl) weatherSummaryEl.style.display = "block";
+        
+        // Update title with smart description
+        if (summaryTitleEl && selectionRange) {
+          const smartTitle = generateHighlightTitle(selectionRange.startTime, selectionRange.endTime);
+          summaryTitleEl.textContent = smartTitle;
+        }
+        
+        // Update time range display
+        if (summaryTimeRangeEl && selectionRange) {
+          const start = new Date(selectionRange.startTime);
+          const end = new Date(selectionRange.endTime);
+          const startStr = start.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+          const endStr = end.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+          summaryTimeRangeEl.textContent = `${startStr} → ${endStr}`;
+        }
+        
+        if (summaryTextEl) {
+          summaryTextEl.textContent = "Generating summary...";
+          summaryTextEl.className = "summary-text loading";
+        }
+        
+        try {
+          const weatherData = extractWeatherDataForRange(selectionRange.startTime, selectionRange.endTime);
+          if (!weatherData) {
+            if (summaryTextEl) {
+              summaryTextEl.textContent = "No weather data available for this time range.";
+              summaryTextEl.className = "summary-text";
+            }
+            return;
+          }
+          
+          const summary = await generateWeatherSummary(weatherData);
+          
+          if (summaryTextEl) {
+            summaryTextEl.textContent = summary;
+            summaryTextEl.className = "summary-text";
+          }
+        } catch (error) {
+          console.warn("Failed to generate summary:", error);
+          if (summaryTextEl) {
+            summaryTextEl.textContent = "Unable to generate summary at this time.";
+            summaryTextEl.className = "summary-text";
+          }
+        } finally {
+          summaryGenerationInProgress = false;
+        }
+      }
+
+      // Helper to convert pixel to time
+      function pixelToTime(x, labels, scales) {
+        const chartArea = vibeChart.chartArea;
+        if (x < chartArea.left || x > chartArea.right) return null;
+        
+        // Find the two nearest hour indices
+        const value = scales.x.getValueForPixel(x);
+        const idx = Math.round(value);
+        
+        if (idx < 0 || idx >= labels.length) return null;
+        
+        // Interpolate between indices if needed
+        const beforeIdx = Math.floor(value);
+        const afterIdx = Math.ceil(value);
+        
+        if (beforeIdx === afterIdx || beforeIdx < 0 || afterIdx >= labels.length) {
+          return new Date(labels[idx]);
+        }
+        
+        const beforeTime = new Date(labels[beforeIdx]);
+        const afterTime = new Date(labels[afterIdx]);
+        const fraction = value - beforeIdx;
+        
+        return new Date(beforeTime.getTime() + (afterTime.getTime() - beforeTime.getTime()) * fraction);
+      }
   
       // Utils
       function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
@@ -321,28 +744,33 @@
         const data = await r.json();
         return data.hourly;
       }
-      async function getDailySun(lat, lon) {
+      async function getDailySun(lat, lon, daysAheadParam = daysAhead) {
         const params = new URLSearchParams({
-          latitude: lat, longitude: lon, daily: "sunrise,sunset", timezone: "auto"
+          latitude: lat, longitude: lon, daily: "sunrise,sunset", timezone: "auto",
+          forecast_days: Math.max(daysAheadParam, 7) // Request at least 7 days to ensure we have enough
         });
         const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
         if (!r.ok) throw new Error("Daily fetch failed");
         const data = await r.json();
         const rises = data?.daily?.sunrise?.map(t => new Date(t)) ?? [];
         const sets  = data?.daily?.sunset?.map(t => new Date(t)) ?? [];
+        // Return arrays of all sunrise/sunset times for the visible range
         return {
-          sunriseToday:    rises[0] ?? null,
-          sunsetToday:     sets[0]  ?? null,
+          sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
+          sunsets: sets.slice(0, daysAheadParam + 1),
+          // Keep legacy properties for backward compatibility
+          sunriseToday: rises[0] ?? null,
+          sunsetToday: sets[0] ?? null,
           sunriseTomorrow: rises[1] ?? null,
-          sunsetTomorrow:  sets[1]  ?? null
+          sunsetTomorrow: sets[1] ?? null
         };
       }
   
       // Timeline
-      function buildTimelineDataset(hourly) {
+      function buildTimelineDataset(hourly, daysAheadParam = daysAhead) {
         const now = new Date();
         const start = new Date(now); start.setHours(0,0,0,0);
-        const end = new Date(now);   end.setDate(end.getDate()+2); end.setHours(0,0,0,0);
+        const end = new Date(now);   end.setDate(end.getDate() + daysAheadParam); end.setHours(0,0,0,0);
   
         const times = hourly.time.map(t => new Date(t));
         const startIdx = times.findIndex(d => d >= start);
@@ -387,20 +815,46 @@
         return bestIdx;
       }
       function buildSunMarkers(labelDates) {
-        const evts = [
-          { t: sunTimes.sunriseToday,    emoji: "☀️", label: "Sunrise" },
-          { t: sunTimes.sunsetToday,     emoji: "☀️", label: "Sunset"  },
-          { t: sunTimes.sunriseTomorrow, emoji: "☀️", label: "Sunrise" },
-          { t: sunTimes.sunsetTomorrow,  emoji: "☀️", label: "Sunset"  },
-        ].filter(e => e.t);
-        return evts.map(e => {
-          const idx = nearestLabelIndex(labelDates, e.t);
-          return { idx, emoji: e.emoji, label: e.label, when: e.t };
-        }).filter(e => e.idx >= 0);
+        const evts = [];
+        // Add all sunrise/sunset events from the arrays
+        if (sunTimes.sunrises && sunTimes.sunrises.length > 0) {
+          sunTimes.sunrises.forEach(t => {
+            if (t) evts.push({ t, emoji: "☀️", label: "Sunrise" });
+          });
+        }
+        if (sunTimes.sunsets && sunTimes.sunsets.length > 0) {
+          sunTimes.sunsets.forEach(t => {
+            if (t) evts.push({ t, emoji: "☀️", label: "Sunset" });
+          });
+        }
+        // Fallback to legacy properties if arrays are empty
+        if (evts.length === 0) {
+          const legacy = [
+            { t: sunTimes.sunriseToday,    emoji: "☀️", label: "Sunrise" },
+            { t: sunTimes.sunsetToday,     emoji: "☀️", label: "Sunset"  },
+            { t: sunTimes.sunriseTomorrow, emoji: "☀️", label: "Sunrise" },
+            { t: sunTimes.sunsetTomorrow,  emoji: "☀️", label: "Sunset"  },
+          ].filter(e => e.t);
+          evts.push(...legacy);
+        }
+        // Return markers with actual time, filter to only those in visible range
+        const firstLabel = new Date(labelDates[0]);
+        const lastLabel = new Date(labelDates[labelDates.length - 1]);
+        return evts
+          .map(e => {
+            const timeDate = new Date(e.t);
+            // Only include if within visible range
+            if (timeDate >= firstLabel && timeDate <= lastLabel) {
+              return { time: timeDate, emoji: e.emoji, label: e.label, when: e.t };
+            }
+            return null;
+          })
+          .filter(e => e !== null);
       }
   
       async function renderChart(labels, shadeValsF, sunValsFF, now) {
         if (!els.chartCanvas) return;
+        updateChartTitle();
         await ensureChartJs();
         const ctx = els.chartCanvas.getContext("2d");
         if (!window.Chart) { console.warn("Chart.js failed to load."); return; }
@@ -411,7 +865,328 @@
         const displayLabels = labels.map(d => d.toLocaleString([], { weekday: "short", hour: "numeric" }));
         const nowIdx = labels.findIndex(d => hourKey(d) === hourKey(now));
         const markers = buildSunMarkers(labels);
-  
+
+        // Helper to format time (e.g., "4am", "12pm")
+        function formatTime(date) {
+          const hour = date.getHours();
+          const minute = date.getMinutes();
+          if (minute !== 0) return ""; // Only show labels on the hour
+          const period = hour >= 12 ? "pm" : "am";
+          const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+          return `${displayHour}${period}`;
+        }
+
+        // Helper to format day (e.g., "Fri")
+        function formatDay(date) {
+          return date.toLocaleDateString([], { weekday: "short" });
+        }
+
+        // Day separator plugin - vertical lines at midnight boundaries
+        const daySeparatorPlugin = {
+          id: "daySeparator",
+          beforeDatasetsDraw(chart) {
+            const { ctx, chartArea, scales } = chart;
+            const midnightIndices = [];
+            for (let i = 1; i < labels.length; i++) {
+              const prevDate = new Date(labels[i - 1]);
+              const currDate = new Date(labels[i]);
+              if (prevDate.getDate() !== currDate.getDate()) {
+                midnightIndices.push(i);
+              }
+            }
+            
+            if (midnightIndices.length === 0) return;
+            
+            ctx.save();
+            ctx.strokeStyle = "rgba(31, 42, 59, 0.5)"; // var(--border) with reduced opacity
+            ctx.lineWidth = 1;
+            ctx.setLineDash([]);
+            
+            midnightIndices.forEach(idx => {
+              const x = scales.x.getPixelForValue(idx);
+              if (x >= chartArea.left && x <= chartArea.right) {
+                ctx.beginPath();
+                ctx.moveTo(x, chartArea.top);
+                ctx.lineTo(x, chartArea.bottom);
+                ctx.stroke();
+              }
+            });
+            
+            ctx.restore();
+          }
+        };
+
+        // Day/night shading plugin
+        const dayNightShadingPlugin = {
+          id: "dayNightShading",
+          beforeDatasetsDraw(chart) {
+            // Check if night shading is enabled
+            if (!nightShadingEnabled) return;
+            
+            const { ctx, chartArea, scales } = chart;
+            if (!sunTimes.sunrises || sunTimes.sunrises.length === 0) {
+              // Fallback to legacy properties
+              if (!sunTimes.sunriseToday || !sunTimes.sunsetToday) return;
+            }
+            
+            ctx.save();
+            
+            // Helper to get exact pixel position for a Date (interpolates between hour markers)
+            function getPixelForExactTime(targetTime) {
+              const target = new Date(targetTime);
+              // Find the two nearest hour indices
+              let beforeIdx = -1;
+              let afterIdx = -1;
+              let beforeTime = null;
+              let afterTime = null;
+              
+              for (let i = 0; i < labels.length; i++) {
+                const labelTime = new Date(labels[i]);
+                if (labelTime <= target) {
+                  beforeIdx = i;
+                  beforeTime = labelTime;
+                }
+                if (labelTime >= target && afterIdx === -1) {
+                  afterIdx = i;
+                  afterTime = labelTime;
+                  break;
+                }
+              }
+              
+              // If exact match or at boundaries
+              if (beforeIdx === afterIdx) {
+                return scales.x.getPixelForValue(beforeIdx >= 0 ? beforeIdx : afterIdx);
+              }
+              
+              // If before first label
+              if (beforeIdx === -1) {
+                return scales.x.getPixelForValue(0);
+              }
+              
+              // If after last label
+              if (afterIdx === -1) {
+                return scales.x.getPixelForValue(labels.length - 1);
+              }
+              
+              // Interpolate between the two hour positions
+              const beforePixel = scales.x.getPixelForValue(beforeIdx);
+              const afterPixel = scales.x.getPixelForValue(afterIdx);
+              const timeDiff = afterTime - beforeTime;
+              const targetDiff = target - beforeTime;
+              const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
+              
+              return beforePixel + (afterPixel - beforePixel) * fraction;
+            }
+            
+            // Get all sunrise/sunset events in the visible range
+            const events = [];
+            
+            // Use arrays if available, otherwise fall back to legacy properties
+            const sunrises = sunTimes.sunrises && sunTimes.sunrises.length > 0 
+              ? sunTimes.sunrises 
+              : (sunTimes.sunriseToday ? [sunTimes.sunriseToday] : []).concat(sunTimes.sunriseTomorrow ? [sunTimes.sunriseTomorrow] : []);
+            const sunsets = sunTimes.sunsets && sunTimes.sunsets.length > 0
+              ? sunTimes.sunsets
+              : (sunTimes.sunsetToday ? [sunTimes.sunsetToday] : []).concat(sunTimes.sunsetTomorrow ? [sunTimes.sunsetTomorrow] : []);
+            
+            // Add all sunrise/sunset events with their actual times
+            sunrises.forEach(time => {
+              if (time) {
+                const timeDate = new Date(time);
+                // Only include if within the visible range
+                const firstLabel = new Date(labels[0]);
+                const lastLabel = new Date(labels[labels.length - 1]);
+                if (timeDate >= firstLabel && timeDate <= lastLabel) {
+                  events.push({ time: timeDate, type: 'sunrise' });
+                }
+              }
+            });
+            sunsets.forEach(time => {
+              if (time) {
+                const timeDate = new Date(time);
+                // Only include if within the visible range
+                const firstLabel = new Date(labels[0]);
+                const lastLabel = new Date(labels[labels.length - 1]);
+                if (timeDate >= firstLabel && timeDate <= lastLabel) {
+                  events.push({ time: timeDate, type: 'sunset' });
+                }
+              }
+            });
+            
+            // Sort events by time
+            events.sort((a, b) => a.time - b.time);
+            
+            if (events.length === 0) {
+              ctx.restore();
+              return;
+            }
+            
+            // Draw night shading rectangles
+            // Night is from sunset to sunrise
+            ctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // Darker background for night
+            
+            // Get the start and end times of the visible range
+            const chartStartTime = new Date(labels[0]);
+            const chartEndTime = new Date(labels[labels.length - 1]);
+            
+            // Determine if we start in night (before first sunrise)
+            const firstEvent = events[0];
+            if (firstEvent && firstEvent.type === 'sunrise' && firstEvent.time > chartStartTime) {
+              // Night from start to first sunrise
+              let xStart = getPixelForExactTime(chartStartTime);
+              let xEnd = getPixelForExactTime(firstEvent.time);
+              if (xStart < chartArea.right && xEnd > chartArea.left) {
+                const rectX = Math.max(xStart, chartArea.left);
+                const rectWidth = Math.min(xEnd, chartArea.right) - rectX;
+                if (rectWidth > 0) {
+                  ctx.fillRect(
+                    rectX,
+                    chartArea.top,
+                    rectWidth,
+                    chartArea.bottom - chartArea.top
+                  );
+                }
+              }
+            }
+            
+            // Process all sunset->sunrise pairs
+            for (let i = 0; i < events.length; i++) {
+              const event = events[i];
+              if (event.type === 'sunset') {
+                // Start of night period - use exact sunset time
+                let xStart = getPixelForExactTime(event.time);
+                // Find next sunrise
+                let xEnd = getPixelForExactTime(chartEndTime);
+                for (let j = i + 1; j < events.length; j++) {
+                  if (events[j].type === 'sunrise') {
+                    xEnd = getPixelForExactTime(events[j].time);
+                    break;
+                  }
+                }
+                // Draw rectangle aligned exactly with sunrise/sunset times
+                if (xStart < chartArea.right && xEnd > chartArea.left) {
+                  const rectX = Math.max(xStart, chartArea.left);
+                  const rectWidth = Math.min(xEnd, chartArea.right) - rectX;
+                  if (rectWidth > 0) {
+                    ctx.fillRect(
+                      rectX,
+                      chartArea.top,
+                      rectWidth,
+                      chartArea.bottom - chartArea.top
+                    );
+                  }
+                }
+              }
+            }
+            
+            ctx.restore();
+          }
+        };
+
+        // Selection highlight plugin
+        const selectionHighlightPlugin = {
+          id: "selectionHighlight",
+          afterDatasetsDraw(chart) {
+            if (!selectionRange) return;
+            const { ctx, chartArea, scales } = chart;
+            
+            // Helper to get exact pixel position for a Date (same as in day/night shading)
+            function getPixelForExactTime(targetTime) {
+              const target = new Date(targetTime);
+              let beforeIdx = -1;
+              let afterIdx = -1;
+              let beforeTime = null;
+              let afterTime = null;
+              
+              for (let i = 0; i < labels.length; i++) {
+                const labelTime = new Date(labels[i]);
+                if (labelTime <= target) {
+                  beforeIdx = i;
+                  beforeTime = labelTime;
+                }
+                if (labelTime >= target && afterIdx === -1) {
+                  afterIdx = i;
+                  afterTime = labelTime;
+                  break;
+                }
+              }
+              
+              if (beforeIdx === afterIdx) {
+                return scales.x.getPixelForValue(beforeIdx >= 0 ? beforeIdx : afterIdx);
+              }
+              if (beforeIdx === -1) return scales.x.getPixelForValue(0);
+              if (afterIdx === -1) return scales.x.getPixelForValue(labels.length - 1);
+              
+              const beforePixel = scales.x.getPixelForValue(beforeIdx);
+              const afterPixel = scales.x.getPixelForValue(afterIdx);
+              const timeDiff = afterTime - beforeTime;
+              const targetDiff = target - beforeTime;
+              const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
+              
+              return beforePixel + (afterPixel - beforePixel) * fraction;
+            }
+            
+            const xStart = getPixelForExactTime(selectionRange.startTime);
+            const xEnd = getPixelForExactTime(selectionRange.endTime);
+            
+            if (xStart >= chartArea.right || xEnd <= chartArea.left) return;
+            
+            ctx.save();
+            ctx.fillStyle = "rgba(34, 197, 94, 0.15)"; // Green highlight with transparency
+            ctx.fillRect(
+              Math.max(xStart, chartArea.left),
+              chartArea.top,
+              Math.min(xEnd, chartArea.right) - Math.max(xStart, chartArea.left),
+              chartArea.bottom - chartArea.top
+            );
+            ctx.restore();
+          }
+        };
+
+        // Custom timeline labels plugin - two-line format (times on top, days below)
+        const timelineLabelsPlugin = {
+          id: "timelineLabels",
+          afterDraw(chart) {
+            const { ctx, scales, chartArea } = chart;
+            const xScale = scales.x;
+            
+            // Get the default tick positions
+            const ticks = xScale.ticks;
+            if (!ticks || ticks.length === 0) return;
+            
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--muted") || "#8aa0b6";
+            
+            ticks.forEach((tick) => {
+              const tickValue = tick.value;
+              if (typeof tickValue !== "number" || tickValue < 0 || tickValue >= labels.length) return;
+              
+              const date = new Date(labels[tickValue]);
+              const x = xScale.getPixelForValue(tickValue);
+              
+              // Only draw if within chart area
+              if (x < chartArea.left || x > chartArea.right) return;
+              
+              // Draw time on top line
+              const timeStr = formatTime(date);
+              if (timeStr) {
+                const timeY = chartArea.bottom + 8;
+                ctx.fillText(timeStr, x, timeY);
+                
+                // Draw day on bottom line, centered under the time
+                const dayStr = formatDay(date);
+                const dayY = chartArea.bottom + 24;
+                ctx.fillText(dayStr, x, dayY);
+              }
+            });
+            
+            ctx.restore();
+          }
+        };
+
         // Vertical line for current time in same green as the clock
         const currentLine = {
           id: "currentLine",
@@ -436,42 +1211,187 @@
         const sunMarkerPlugin = {
           id: "sunMarkers",
           afterDatasetsDraw(chart) {
-            const { ctx, scales } = chart;
+            const { ctx, scales, chartArea } = chart;
             const sunDsIndex   = chart.data.datasets.findIndex(d => d.label === "Sun Vibe");
             if (sunDsIndex === -1) return;
             const sunData = chart.data.datasets[sunDsIndex].data; // display units
-  
+
+            // Helper to get exact pixel position for a Date (same as in day/night shading)
+            function getPixelForExactTime(targetTime) {
+              const target = new Date(targetTime);
+              // Find the two nearest hour indices
+              let beforeIdx = -1;
+              let afterIdx = -1;
+              let beforeTime = null;
+              let afterTime = null;
+              
+              for (let i = 0; i < labels.length; i++) {
+                const labelTime = new Date(labels[i]);
+                if (labelTime <= target) {
+                  beforeIdx = i;
+                  beforeTime = labelTime;
+                }
+                if (labelTime >= target && afterIdx === -1) {
+                  afterIdx = i;
+                  afterTime = labelTime;
+                  break;
+                }
+              }
+              
+              // If exact match or at boundaries
+              if (beforeIdx === afterIdx) {
+                return scales.x.getPixelForValue(beforeIdx >= 0 ? beforeIdx : afterIdx);
+              }
+              
+              // If before first label
+              if (beforeIdx === -1) {
+                return scales.x.getPixelForValue(0);
+              }
+              
+              // If after last label
+              if (afterIdx === -1) {
+                return scales.x.getPixelForValue(labels.length - 1);
+              }
+              
+              // Interpolate between the two hour positions
+              const beforePixel = scales.x.getPixelForValue(beforeIdx);
+              const afterPixel = scales.x.getPixelForValue(afterIdx);
+              const timeDiff = afterTime - beforeTime;
+              const targetDiff = target - beforeTime;
+              const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
+              
+              return beforePixel + (afterPixel - beforePixel) * fraction;
+            }
+
             ctx.save();
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-  
+
             markers.forEach(m => {
-              if (m.idx < 0 || m.idx >= sunData.length) return;
-              const x = scales.x.getPixelForValue(m.idx);
-              const ySun = scales.y.getPixelForValue(sunData[m.idx]);
+              // Get exact x position for the sunrise/sunset time
+              const x = getPixelForExactTime(m.time);
+              
+              // Only draw if within chart area
+              if (x < chartArea.left || x > chartArea.right) return;
+              
+              // Find the two nearest data points to interpolate y position
+              let beforeIdx = -1;
+              let afterIdx = -1;
+              let beforeTime = null;
+              let afterTime = null;
+              
+              for (let i = 0; i < labels.length; i++) {
+                const labelTime = new Date(labels[i]);
+                if (labelTime <= m.time) {
+                  beforeIdx = i;
+                  beforeTime = labelTime;
+                }
+                if (labelTime >= m.time && afterIdx === -1) {
+                  afterIdx = i;
+                  afterTime = labelTime;
+                  break;
+                }
+              }
+              
+              let ySun;
+              if (beforeIdx === afterIdx && beforeIdx >= 0 && beforeIdx < sunData.length) {
+                // Exact match
+                ySun = scales.y.getPixelForValue(sunData[beforeIdx]);
+              } else if (beforeIdx >= 0 && afterIdx >= 0 && beforeIdx < sunData.length && afterIdx < sunData.length) {
+                // Interpolate between two points
+                const beforeY = scales.y.getPixelForValue(sunData[beforeIdx]);
+                const afterY = scales.y.getPixelForValue(sunData[afterIdx]);
+                const timeDiff = afterTime - beforeTime;
+                const targetDiff = m.time - beforeTime;
+                const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
+                ySun = beforeY + (afterY - beforeY) * fraction;
+              } else if (beforeIdx >= 0 && beforeIdx < sunData.length) {
+                // Use before point
+                ySun = scales.y.getPixelForValue(sunData[beforeIdx]);
+              } else if (afterIdx >= 0 && afterIdx < sunData.length) {
+                // Use after point
+                ySun = scales.y.getPixelForValue(sunData[afterIdx]);
+              } else {
+                return; // Can't determine position
+              }
+              
               ctx.fillText(m.emoji, x, ySun - 8);
             });
-  
+
             ctx.restore();
           }
         };
   
+        // Create highlight dataset if selection exists (for legend only)
+        const highlightDataset = selectionRange ? (() => {
+          // Create a dataset for the legend (plugin handles actual drawing)
+          // Use a minimal visible area so it shows in legend but doesn't interfere
+          const minVal = Math.min(...shadeVals, ...sunVals);
+          const highlightData = labels.map((labelTime) => {
+            const time = new Date(labelTime);
+            // Show data in the highlighted range at the bottom of the chart
+            if (time >= selectionRange.startTime && time <= selectionRange.endTime) {
+              return minVal - 2; // Just below the minimum, still visible
+            }
+            return null;
+          });
+          
+          return {
+            label: "Highlighted Vibes",
+            data: highlightData,
+            type: "line",
+            borderWidth: 0,
+            borderColor: "rgba(34, 197, 94, 0.3)",
+            backgroundColor: "rgba(34, 197, 94, 0.15)",
+            pointRadius: 0,
+            fill: true,
+            tension: 0,
+            order: -1, // Draw behind other datasets
+            hidden: false
+          };
+        })() : null;
+
+        const datasets = [
+          { label: "Sun Vibe",   data: sunVals,   borderWidth: 2, borderColor: "#ffb86b", backgroundColor: "#ffb86b", pointRadius: 0, tension: 0.3 },
+          { label: "Shade Vibe", data: shadeVals, borderWidth: 2, borderColor: "#6ea8fe", backgroundColor: "#6ea8fe", pointRadius: 0, tension: 0.3 }
+        ];
+        
+        // Add highlight dataset if it exists (at the end for legend order)
+        if (highlightDataset) {
+          datasets.push(highlightDataset); // Add at end so it appears last in legend
+        }
+
         vibeChart = new Chart(ctx, {
           type: "line",
           data: {
             labels: displayLabels,
-            datasets: [
-              { label: "Sun Vibe",   data: sunVals,   borderWidth: 2, borderColor: "#ffb86b", backgroundColor: "#ffb86b", pointRadius: 0, tension: 0.3 },
-              { label: "Shade Vibe", data: shadeVals, borderWidth: 2, borderColor: "#6ea8fe", backgroundColor: "#6ea8fe", pointRadius: 0, tension: 0.3 }
-            ]
+            datasets: datasets
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { mode: "index", intersect: false },
+            layout: {
+              padding: {
+                bottom: 40 // Extra space for two-line labels
+              }
+            },
             scales: {
-              x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 20 } },
+              x: { 
+                ticks: { 
+                  maxRotation: 0, 
+                  autoSkip: true, 
+                  maxTicksLimit: 20,
+                  callback: function(value, index) {
+                    // Return empty string to hide default labels (we'll draw custom ones)
+                    return "";
+                  }
+                },
+                grid: {
+                  drawOnChartArea: true
+                }
+              },
               y: {
                 ticks: { callback: (val) => `${typeof val === "number" ? val : Number(val)}°` },
                 suggestedMin: Math.min(...shadeVals, ...sunVals) - 3,
@@ -481,12 +1401,17 @@
             plugins: {
               legend: { display: true, labels: { usePointStyle: true, pointStyle: "rectRounded", boxWidth: 14, boxHeight: 8 } },
               tooltip: {
-                itemSort: (a, b) => ["Sun Vibe","Shade Vibe"].indexOf(a.dataset.label) - ["Sun Vibe","Shade Vibe"].indexOf(b.dataset.label),
+                itemSort: (a, b) => {
+                  const order = ["Sun Vibe", "Shade Vibe", "Highlighted Vibes"];
+                  return order.indexOf(a.dataset.label) - order.indexOf(b.dataset.label);
+                },
+                filter: (item) => item.dataset.label !== "Highlighted Vibes", // Hide highlight from tooltip
                 callbacks: {
                   // Keep the time label as title
                   title: (items) => items?.[0]?.label ?? "",
                   // Custom label: "Sun: 84.9° Balanced, light layers"
                   label: (ctx) => {
+                    if (ctx.dataset.label === "Highlighted Vibes") return null; // Don't show in tooltip
                     const short = ctx.dataset.label === "Sun Vibe" ? "Sun" : "Shade";
                     const tempDisplay = Number(ctx.parsed.y).toFixed(1); // already in current unit
                     let desc = "";
@@ -509,13 +1434,16 @@
               }
             }
           },
-          plugins: [currentLine, sunMarkerPlugin]
+          plugins: [dayNightShadingPlugin, selectionHighlightPlugin, currentLine, sunMarkerPlugin, timelineLabelsPlugin]
         });
   
-        // Pointer interactions: hover + tap/drag simulation
+        // Pointer interactions: hover + tap/drag simulation + drag selection
         els.chartCanvas.style.touchAction = "none";
         let isPointerDown = false;
-  
+        let isSelecting = false;
+        let selectionStartX = null;
+        let selectionStartTime = null;
+
         function updateFromClientX(clientX) {
           if (!vibeChart || !timelineState) return;
           const rect = els.chartCanvas.getBoundingClientRect();
@@ -527,25 +1455,97 @@
             paintSimulatedIndex(idx);
           }
         }
-  
-        els.chartCanvas.addEventListener("pointerdown", (e) => {
-          isPointerDown = true;
-          try { els.chartCanvas.setPointerCapture(e.pointerId); } catch {}
-          updateFromClientX(e.clientX);
-        });
-        els.chartCanvas.addEventListener("pointermove", (e) => {
-          const isMouse = e.pointerType === "mouse";
-          if (isMouse || isPointerDown) updateFromClientX(e.clientX);
-        });
-        function endPointer(e){
-          isPointerDown = false;
-          try { els.chartCanvas.releasePointerCapture(e.pointerId); } catch {}
+
+        function getTimeFromClientX(clientX) {
+          if (!vibeChart || !timelineState) return null;
+          const rect = els.chartCanvas.getBoundingClientRect();
+          const x = clientX - rect.left;
+          return pixelToTime(x, timelineState.labels, vibeChart.scales);
         }
+
+        els.chartCanvas.addEventListener("pointerdown", (e) => {
+          // Check if shift key is held for selection mode
+          if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            isSelecting = true;
+            selectionStartX = e.clientX;
+            selectionStartTime = getTimeFromClientX(e.clientX);
+            try { els.chartCanvas.setPointerCapture(e.pointerId); } catch {}
+            e.preventDefault();
+          } else {
+            isPointerDown = true;
+            try { els.chartCanvas.setPointerCapture(e.pointerId); } catch {}
+            updateFromClientX(e.clientX);
+          }
+        });
+        
+        els.chartCanvas.addEventListener("pointermove", (e) => {
+          if (isSelecting && selectionStartTime) {
+            const currentTime = getTimeFromClientX(e.clientX);
+            if (currentTime && selectionStartTime) {
+              const startTime = currentTime < selectionStartTime ? currentTime : selectionStartTime;
+              const endTime = currentTime > selectionStartTime ? currentTime : selectionStartTime;
+              selectionRange = { startTime, endTime };
+              vibeChart.update('none');
+            }
+          } else {
+            const isMouse = e.pointerType === "mouse";
+            if (isMouse || isPointerDown) updateFromClientX(e.clientX);
+          }
+        });
+        
+        function endPointer(e){
+          if (isSelecting && selectionStartTime) {
+            const endTime = getTimeFromClientX(e.clientX);
+            if (endTime && selectionStartTime) {
+              const startTime = endTime < selectionStartTime ? endTime : selectionStartTime;
+              const finalEndTime = endTime > selectionStartTime ? endTime : selectionStartTime;
+              
+              // Only create selection if it's meaningful (at least 5 minutes)
+              const duration = Math.abs(finalEndTime - startTime);
+              if (duration >= 5 * 60 * 1000) {
+                selectionRange = { startTime, endTime: finalEndTime };
+                vibeChart.update('none');
+                
+                // Show clear button
+                if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
+                
+                // Copy URL to clipboard
+                const url = generateShareURL(startTime, finalEndTime);
+                (async () => {
+                  const success = await copyToClipboard(url);
+                  if (success) {
+                    showNotification("Link copied to clipboard! Share this URL to show this time range.", "success");
+                  } else {
+                    showNotification("Failed to copy to clipboard. URL: " + url, "error", 5000);
+                  }
+                })();
+                
+                // Generate weather summary
+                updateWeatherSummary();
+              } else {
+                selectionRange = null;
+                vibeChart.update('none');
+              }
+            }
+            isSelecting = false;
+            selectionStartX = null;
+            selectionStartTime = null;
+            try { els.chartCanvas.releasePointerCapture(e.pointerId); } catch {}
+          } else {
+            isPointerDown = false;
+            try { els.chartCanvas.releasePointerCapture(e.pointerId); } catch {}
+          }
+        }
+        
         els.chartCanvas.addEventListener("pointerup", endPointer);
         els.chartCanvas.addEventListener("pointercancel", endPointer);
-        els.chartCanvas.addEventListener("pointerleave", () => {
-          if (simActive) paintRealtimeCards();
-          simActive = false;
+        els.chartCanvas.addEventListener("pointerleave", (e) => {
+          if (isSelecting) {
+            endPointer(e);
+          } else {
+            if (simActive) paintRealtimeCards();
+            simActive = false;
+          }
         });
       }
   
@@ -640,11 +1640,22 @@
           paintCurrentTimeTitle();
   
           if (hourlyMaybe) {
+            // Refetch sunrise/sunset data if needed (in case days ahead changed)
+            try {
+              const dailySun = await getDailySun(latitude, longitude, daysAhead);
+              sunTimes = dailySun;
+            } catch (e) {
+              // If fetch fails, continue with existing sunTimes
+            }
             const ds = buildTimelineDataset(hourlyMaybe);
             timelineState = ds;
             window.timelineState = timelineState; // expose for tooltip descriptors
             await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
             chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
+            // Update summary if selection exists (weather data may have changed)
+            if (selectionRange) {
+              updateWeatherSummary();
+            }
           }
   
           const nowTime = new Date();
@@ -663,7 +1674,7 @@
         const [cur, hourly, dailySun] = await Promise.all([
           getCurrentWeather(latitude, longitude),
           getHourlyWeather(latitude, longitude),
-          getDailySun(latitude, longitude)
+          getDailySun(latitude, longitude, daysAhead)
         ]);
         sunTimes = dailySun;
         lastCoords = { latitude, longitude };
@@ -698,6 +1709,10 @@
         window.timelineState = timelineState; // expose for tooltip descriptors
         await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
         chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
+        // Update summary if selection exists (weather data may have changed)
+        if (selectionRange) {
+          updateWeatherSummary();
+        }
   
         const nowTime = new Date();
         els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
@@ -795,6 +1810,43 @@
       els.updateInterval && els.updateInterval.addEventListener("change", () => { clearPollTimer(); scheduleNextTick(els.updateInterval?.value || 1); });
       els.updateHourlyToggle && els.updateHourlyToggle.addEventListener("change", () => { clearPollTimer(); scheduleNextTick(els.updateInterval?.value || 1); });
       els.updateNow && els.updateNow.addEventListener("click", () => { clearPollTimer(); runUpdateCycle(); });
+      
+      // Days ahead setting
+      els.daysAhead && (els.daysAhead.value = daysAhead);
+      updateChartTitle(); // Set initial title
+      els.daysAhead && els.daysAhead.addEventListener("change", () => {
+        const newValue = parseInt(els.daysAhead.value, 10);
+        if (newValue >= 1 && newValue <= 7) {
+          daysAhead = newValue;
+          localStorage.setItem(DAYS_AHEAD_KEY, String(daysAhead));
+          updateChartTitle();
+          if (lastCoords) {
+            Promise.all([
+              getHourlyWeather(lastCoords.latitude, lastCoords.longitude),
+              getDailySun(lastCoords.latitude, lastCoords.longitude, daysAhead)
+            ])
+              .then(async ([hourly, dailySun]) => {
+                sunTimes = dailySun;
+                const ds = buildTimelineDataset(hourly);
+                timelineState = ds;
+                window.timelineState = timelineState;
+                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+              })
+              .catch(() => {});
+          }
+        }
+      });
+      
+      // Night shading toggle
+      els.nightShadingToggle && (els.nightShadingToggle.checked = nightShadingEnabled);
+      els.nightShadingToggle && els.nightShadingToggle.addEventListener("change", () => {
+        nightShadingEnabled = els.nightShadingToggle.checked;
+        localStorage.setItem(NIGHT_SHADING_KEY, String(nightShadingEnabled));
+        // Update chart if it exists
+        if (vibeChart) {
+          vibeChart.update('none');
+        }
+      });
   
       // ZIP actions
       zipEls.btn && zipEls.btn.addEventListener("click", async () => {
@@ -821,23 +1873,111 @@
   
       // Buttons
       els.useLocationBtn && els.useLocationBtn.addEventListener("click", useLocation);
+      
+      // Clear highlight button
+      clearHighlightBtn && clearHighlightBtn.addEventListener("click", () => {
+        selectionRange = null;
+        if (vibeChart) vibeChart.update('none');
+        clearHighlightBtn.style.display = "none";
+        // Hide summary
+        if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+      });
   
       // Clock tick
       setInterval(updateClockCard, 60 * 1000);
   
+      // Parse URL parameters and apply settings
+      function applyURLParameters() {
+        const params = new URLSearchParams(location.search);
+        
+        // Apply unit
+        const urlUnit = params.get("unit");
+        if (urlUnit === "C" || urlUnit === "F") {
+          setUnit(urlUnit, { persist: false, rerender: false });
+        }
+        
+        // Apply days ahead
+        const urlDays = params.get("days");
+        if (urlDays) {
+          const days = parseInt(urlDays, 10);
+          if (days >= 1 && days <= 7) {
+            daysAhead = days;
+            localStorage.setItem(DAYS_AHEAD_KEY, String(daysAhead));
+            if (els.daysAhead) els.daysAhead.value = daysAhead;
+            updateChartTitle();
+          }
+        }
+        
+        // Apply location (lat/lon or zip)
+        const urlLat = params.get("lat");
+        const urlLon = params.get("lon");
+        const urlZip = params.get("zip");
+        
+        if (urlLat && urlLon) {
+          const lat = parseFloat(urlLat);
+          const lon = parseFloat(urlLon);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            primeWeatherForCoords(lat, lon, "shared location");
+          }
+        } else if (urlZip) {
+          const zip5 = normalizeZip(urlZip);
+          if (zip5) {
+            if (zipEls.input) zipEls.input.value = zip5;
+            getCoordsForZip(zip5)
+              .then(({ latitude, longitude, place }) => primeWeatherForCoords(latitude, longitude, `ZIP ${zip5} (${place})`))
+              .catch(() => {});
+          }
+        }
+        
+        // Apply time range selection
+        const urlStart = params.get("start");
+        const urlEnd = params.get("end");
+        if (urlStart && urlEnd) {
+          try {
+            const startTime = new Date(urlStart);
+            const endTime = new Date(urlEnd);
+            const now = new Date();
+            
+            // Check if time has passed
+            if (endTime < now) {
+              showNotification("The highlighted time range has passed.", "error", 5000);
+            }
+            // Still show the highlight even if passed
+            selectionRange = { startTime, endTime };
+            if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
+            // Update chart if it already exists
+            if (vibeChart) {
+              vibeChart.update('none');
+            }
+            // Generate weather summary (will wait for timelineState if not ready)
+            if (timelineState) {
+              updateWeatherSummary();
+            }
+          } catch (e) {
+            console.warn("Failed to parse time range from URL", e);
+          }
+        }
+      }
+
       // Boot
       setTimeout(() => {
         statusEl && (statusEl.textContent = "Trying to get your local weather…");
         updateClockCard();
-  
-        const savedZip = localStorage.getItem(ZIP_KEY);
-        if (savedZip && zipEls.input) {
-          zipEls.input.value = savedZip;
-          getCoordsForZip(savedZip)
-            .then(({ latitude, longitude, place }) => primeWeatherForCoords(latitude, longitude, `ZIP ${savedZip} (${place})`))
-            .catch(() => useLocation());
-        } else {
-          useLocation();
+
+        // Apply URL parameters first
+        applyURLParameters();
+        
+        // If no location was set from URL, use saved ZIP or device location
+        if (!lastCoords) {
+          const savedZip = localStorage.getItem(ZIP_KEY);
+          if (savedZip && zipEls.input) {
+            zipEls.input.value = savedZip;
+            getCoordsForZip(savedZip)
+              .then(({ latitude, longitude, place }) => primeWeatherForCoords(latitude, longitude, `ZIP ${savedZip} (${place})`))
+              .catch(() => useLocation());
+          } else {
+            useLocation();
+          }
         }
       }, 300);
     });

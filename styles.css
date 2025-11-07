@@ -56,6 +56,22 @@
   }
   .now-time__sub{color:var(--muted);font-size:12px}
   
+  /* Weather Summary */
+  .weather-summary{
+    background:rgba(34, 197, 94, 0.08);border:1px solid rgba(34, 197, 94, 0.3);border-radius:16px;
+    margin:10px 0 16px;padding:16px
+  }
+  .summary-title{
+    margin:0 0 8px 0;font-size:18px;font-weight:600;color:var(--good)
+  }
+  .summary-time-range{
+    color:var(--muted);font-size:12px;margin-bottom:12px;font-weight:500
+  }
+  .summary-text{
+    color:var(--text);font-size:14px;line-height:1.6
+  }
+  .summary-text.loading{color:var(--muted);font-style:italic}
+  
   /* Chart */
   .chart-wrap{
     background:var(--card);border:1px solid var(--border);border-radius:16px;
@@ -68,6 +84,24 @@
   .chart-status{color:var(--muted);font-size:12px}
   .chart-box{position:relative;height:260px;max-height:260px}
   #vibeChart{width:100%;height:100%;display:block;touch-action:none}
+  .chart-note{
+    margin-top:8px;color:var(--muted);font-size:12px;text-align:center
+  }
+  .chart-note small{opacity:0.8}
+  .clear-highlight-btn{
+    position:absolute;top:8px;right:8px;z-index:10;
+    background:var(--card);border:1px solid var(--border);color:var(--text);
+    padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px
+  }
+  .clear-highlight-btn:hover{background:#1a2332}
+  .notification{
+    position:fixed;top:20px;right:20px;z-index:1000;
+    background:var(--card);border:1px solid var(--border);color:var(--text);
+    padding:12px 16px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);
+    max-width:300px;font-size:13px;line-height:1.4
+  }
+  .notification.error{border-color:#ef4444;background:#1a0f0f}
+  .notification.success{border-color:var(--good);background:#0a1a0f}
   
   /* Controls */
   .controls{

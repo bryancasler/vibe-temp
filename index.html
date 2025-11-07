@@ -49,14 +49,27 @@
               </article>
             </section>
           
+            <!-- Weather Summary -->
+            <section id="weatherSummary" class="weather-summary" style="display: none;">
+              <div class="summary-content">
+                <h3 class="summary-title">Highlighted Vibes</h3>
+                <div id="summaryTimeRange" class="summary-time-range"></div>
+                <div id="summaryText" class="summary-text">Generating summary...</div>
+              </div>
+            </section>
+          
             <!-- Chart -->
             <section class="chart-wrap">
               <div class="chart-head">
                 <div class="chart-title">Today & Tomorrow</div>
                 <div class="chart-status" id="chartStatus">Loading timeline…</div>
               </div>
-              <div class="chart-box">
+              <div class="chart-box" id="chartBox">
                 <canvas id="vibeChart"></canvas>
+                <button id="clearHighlight" class="clear-highlight-btn" style="display: none;" type="button">Clear Highlight</button>
+              </div>
+              <div class="chart-note">
+                <small>💡 Tip: Hold Shift (or Ctrl/Cmd) and drag on the graph to select a time range and share it</small>
               </div>
             </section>
           
@@ -160,6 +173,20 @@
                     <div class="row">
                       <button id="updateNow" class="btn btn--sm" type="button">Update Now</button>
                     </div>
+                    <hr class="adv-sep" />
+                    <h4 class="adv-h4">Graph Display</h4>
+                    <div class="row">
+                      <label class="inline">
+                        <span>Days ahead</span>
+                        <input id="daysAhead" type="number" min="1" max="7" step="1" value="2" class="w-6ch" />
+                      </label>
+                    </div>
+                    <div class="row">
+                      <label class="inline">
+                        <input id="nightShadingToggle" type="checkbox" />
+                        <span>Show night shading</span>
+                      </label>
+                    </div>
                   </div>
           
                   <!-- Formula -->
@@ -178,6 +205,7 @@
                 </div>
               </div>
             </section>
-          </div>                        
+          </div>
+          <div id="notification" class="notification" style="display: none;"></div>                        
     </body>
 </html>
