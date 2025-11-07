@@ -443,15 +443,20 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         const sentences = [];
         
         // Use representative vibe temperature (weighted average) for description
+        // Note: stats values are already in user's unit (C or F), so we need to use appropriate thresholds
         const repTemp = stats.avgRepresentative || stats.avgShade;
+        
+        // Convert to Fahrenheit for threshold comparisons (descriptors use F thresholds)
+        const repTempF = unit === "F" ? repTemp : cToF(repTemp);
+        
         let firstSentence = "";
-        if (repTemp < 50) {
+        if (repTempF < 50) {
           firstSentence = "It will feel quite cold";
-        } else if (repTemp < 65) {
+        } else if (repTempF < 65) {
           firstSentence = "It will feel cool";
-        } else if (repTemp < 75) {
+        } else if (repTempF < 75) {
           firstSentence = "It will feel mild and comfortable";
-        } else if (repTemp < 85) {
+        } else if (repTempF < 85) {
           firstSentence = "It will feel warm";
         } else {
           firstSentence = "It will feel hot";
@@ -472,16 +477,23 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         const maxRep = Math.max(stats.maxSun, stats.maxShade);
         const minRep = stats.minShade; // Min is typically in shade
         const range = maxRep - minRep;
-        if (range > 10) {
+        // Convert threshold based on unit (10°F = 5.6°C)
+        const significantRangeThreshold = unit === "F" ? 10 : 5.6;
+        if (range > significantRangeThreshold) {
           sentences.push(`The vibe will vary significantly, from ${minRep.toFixed(1)}${unitSuffix()} to ${maxRep.toFixed(1)}${unitSuffix()}`);
         } else {
           sentences.push(`The vibe will be relatively steady around ${repTemp.toFixed(1)}${unitSuffix()}`);
         }
         
         // Sun vs shade vibe difference
-        if (stats.avgSun - stats.avgShade > 15) {
+        // Convert thresholds based on unit (15°F = 8.3°C, 8°F = 4.4°C)
+        const muchWarmerThreshold = unit === "F" ? 15 : 8.3;
+        const noticeablyWarmerThreshold = unit === "F" ? 8 : 4.4;
+        const sunShadeDiff = stats.avgSun - stats.avgShade;
+        
+        if (sunShadeDiff > muchWarmerThreshold) {
           sentences.push(`In the sun, it will feel much warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()} vibe), so seek shade if it gets too hot`);
-        } else if (stats.avgSun - stats.avgShade > 8) {
+        } else if (sunShadeDiff > noticeablyWarmerThreshold) {
           sentences.push(`In the sun, it will feel noticeably warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()} vibe)`);
         }
         
