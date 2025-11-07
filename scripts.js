@@ -171,7 +171,7 @@
         const newUrl = params.toString() 
           ? `${location.pathname}?${params.toString()}`
           : location.pathname;
-        history.replaceState({}, "", newUrl);
+        history.pushState({}, "", newUrl);
         
         // Update chart
         if (vibeChart) {
@@ -1438,7 +1438,7 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
   
         // Create highlight dataset if selection exists (for legend only)
         const highlightDataset = selectionRange ? (() => {
-          // Create a dataset for the legend (plugin handles actual drawing)
+          // Create a dataset for the legend only (plugin handles actual drawing on chart)
           // Use a minimal visible area so it shows in legend but doesn't interfere
           const minVal = Math.min(...shadeVals, ...sunVals);
           const highlightData = labels.map((labelTime) => {
@@ -1458,10 +1458,11 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             borderColor: "rgba(34, 197, 94, 0.3)",
             backgroundColor: "rgba(34, 197, 94, 0.15)",
             pointRadius: 0,
-            fill: true,
+            fill: false, // Don't fill - plugin handles the visual highlight
+            showLine: false, // Don't draw line - plugin handles the visual highlight
             tension: 0,
             order: -1, // Draw behind other datasets
-            hidden: false
+            hidden: false // Visible in legend but won't draw on chart
           };
         })() : null;
 
@@ -1622,8 +1623,13 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
                 // Show clear button
                 if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
                 
-                // Copy URL to clipboard
+                // Copy URL to clipboard and update browser URL
                 const url = generateShareURL(startTime, finalEndTime);
+                
+                // Update browser URL without page refresh
+                const urlObj = new URL(url);
+                history.pushState({}, "", urlObj.pathname + urlObj.search);
+                
                 (async () => {
                   const success = await copyToClipboard(url);
                   if (success) {
@@ -2018,6 +2024,15 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         clearHighlightBtn.style.display = "none";
         // Hide summary
         if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+        
+        // Remove start and end from URL but keep other params
+        const params = new URLSearchParams(location.search);
+        params.delete("start");
+        params.delete("end");
+        const newUrl = params.toString() 
+          ? `${location.pathname}?${params.toString()}`
+          : location.pathname;
+        history.pushState({}, "", newUrl);
       });
 
       // Expired selection modal buttons
