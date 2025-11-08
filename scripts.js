@@ -456,43 +456,43 @@
       expiredModalEl.style.display = "none";
     }
 
-    function handleKeepCustomSettings() {
-      // Clear the selection but keep other URL params
+    // Helper function to clear highlight and strip URL parameters
+    function clearHighlight() {
+      if (!selectionRange) return; // Nothing to clear
+
       selectionRange = null;
       isSelectingActive = false;
       lastSummaryRange = null; // Reset tracking when clearing selection
       lastSummaryTimelineHash = null;
       if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
       if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+      if (copySummaryBtn) copySummaryBtn.style.display = "none";
       updateCardVisibility();
+      if (vibeChart) vibeChart.update("none");
 
-      // Remove start and end from URL but keep other params
+      // Remove start, end, lat, lon, and zip from URL but keep other params
       const params = new URLSearchParams(location.search);
       params.delete("start");
       params.delete("end");
+      params.delete("lat");
+      params.delete("lon");
+      params.delete("zip");
       const newUrl = params.toString()
         ? `${location.pathname}?${params.toString()}`
         : location.pathname;
       history.pushState({}, "", newUrl);
+    }
 
-      // Update chart
-      if (vibeChart) {
-        vibeChart.update("none");
-      }
-
+    function handleKeepCustomSettings() {
+      // Clear the selection but keep other URL params
+      clearHighlight();
       hideExpiredSelectionModal();
     }
 
     function handleUseDefaults() {
       // Reset everything to app defaults
       // Clear selection
-      selectionRange = null;
-      isSelectingActive = false;
-      lastSummaryRange = null; // Reset tracking when clearing selection
-      lastSummaryTimelineHash = null;
-      if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
-      if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
-      updateCardVisibility();
+      clearHighlight();
 
       // Reset unit to F (ignore localStorage)
       unit = "F";
@@ -3905,10 +3905,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               // Generate weather summary
               updateWeatherSummary();
             } else {
-              selectionRange = null;
-              lastSummaryRange = null; // Reset tracking when clearing selection
-              lastSummaryTimelineHash = null;
-              vibeChart.update("none");
+              // Selection too short, clear it
+              clearHighlight();
             }
           }
           isSelecting = false;
@@ -4422,9 +4420,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         async (pos) => {
           const { latitude, longitude } = pos.coords;
           try {
+            // Force fresh weather data fetch for the new location
             await primeWeatherForCoords(latitude, longitude, "device location");
             hideError();
-            // Ensure location display is updated
+            // Ensure location display is updated (primeWeatherForCoords already calls this, but ensure it's current)
             updateChartTitle();
             updateAdvStats();
           } catch (e) {
@@ -5242,6 +5241,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             `ZIP ${zip5} (${place})`
           );
           hideError();
+
+          // Clear highlighted vibe selection when ZIP code results are returned
+          clearHighlight();
+
           updateChartTitle();
         } catch (e) {
           console.warn(e);
@@ -5309,8 +5312,42 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         });
 
         zipEls.input.addEventListener("blur", () => {
-          // Only submit if value changed
           const currentValue = zipEls.input.value.trim();
+
+          // If ZIP code is deleted (empty), strip zip from URL and get user's current location
+          if (currentValue === "") {
+            // Clear saved ZIP from storage
+            storageCacheRemove(ZIP_KEY);
+            currentPlaceName = null;
+
+            // Clear API cache to force fresh data fetch for new location
+            apiRequestCache.clear();
+            pendingRequests.clear();
+
+            // Strip zip parameter from URL
+            const params = new URLSearchParams(location.search);
+            params.delete("zip");
+            const newUrl = params.toString()
+              ? `${location.pathname}?${params.toString()}`
+              : location.pathname;
+            history.pushState({}, "", newUrl);
+
+            // Clear highlighted vibe selection
+            clearHighlight();
+
+            // Get user's current location based on browser
+            // This will update chart title, stats, and weather data via primeWeatherForCoords
+            if (navigator.geolocation) {
+              useLocation();
+            } else {
+              // If geolocation not available, still update the display
+              updateChartTitle();
+              updateAdvStats();
+            }
+            return;
+          }
+
+          // Only submit if value changed
           const savedZip = storageCacheGet(ZIP_KEY);
           if (currentValue !== savedZip && currentValue !== currentPlaceName) {
             if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
@@ -5345,25 +5382,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       // Clear highlight button
       clearHighlightBtn &&
         clearHighlightBtn.addEventListener("click", () => {
-          selectionRange = null;
-          isSelectingActive = false;
-          lastSummaryRange = null; // Reset tracking when clearing selection
-          lastSummaryTimelineHash = null;
-          updateCardVisibility();
-          if (vibeChart) vibeChart.update("none");
-          clearHighlightBtn.style.display = "none";
-          // Hide summary
-          if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
-          if (copySummaryBtn) copySummaryBtn.style.display = "none";
-
-          // Remove start and end from URL but keep other params
-          const params = new URLSearchParams(location.search);
-          params.delete("start");
-          params.delete("end");
-          const newUrl = params.toString()
-            ? `${location.pathname}?${params.toString()}`
-            : location.pathname;
-          history.pushState({}, "", newUrl);
+          clearHighlight();
 
           // If we don't have location yet, request it now
           if (!lastCoords) {
@@ -5558,25 +5577,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       // Clear highlight button
       clearHighlightBtn &&
         clearHighlightBtn.addEventListener("click", () => {
-          selectionRange = null;
-          isSelectingActive = false;
-          lastSummaryRange = null; // Reset tracking when clearing selection
-          lastSummaryTimelineHash = null;
-          updateCardVisibility();
-          if (vibeChart) vibeChart.update("none");
-          clearHighlightBtn.style.display = "none";
-          // Hide summary
-          if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
-          if (copySummaryBtn) copySummaryBtn.style.display = "none";
-
-          // Remove start and end from URL but keep other params
-          const params = new URLSearchParams(location.search);
-          params.delete("start");
-          params.delete("end");
-          const newUrl = params.toString()
-            ? `${location.pathname}?${params.toString()}`
-            : location.pathname;
-          history.pushState({}, "", newUrl);
+          clearHighlight();
 
           // If we don't have location yet, request it now
           if (!lastCoords) {
@@ -5693,43 +5694,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             if (expiredModalEl && expiredModalEl.style.display !== "none") {
               hideExpiredSelectionModal();
             }
-            if (selectionRange) {
-              selectionRange = null;
-              isSelectingActive = false;
-              lastSummaryRange = null; // Reset tracking when clearing selection
-              lastSummaryTimelineHash = null;
-              if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
-              if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
-              if (copySummaryBtn) copySummaryBtn.style.display = "none";
-              if (exportCSVBtn) exportCSVBtn.style.display = "none";
-              if (exportJSONBtn) exportJSONBtn.style.display = "none";
-              if (vibeChart) vibeChart.update("none");
-            }
+            clearHighlight();
           }
           return;
         }
 
         // C - Clear highlight
         if (e.key === "c" || e.key === "C") {
-          if (selectionRange) {
-            selectionRange = null;
-            isSelectingActive = false;
-            if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
-            if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
-            if (copySummaryBtn) copySummaryBtn.style.display = "none";
-            if (exportCSVBtn) exportCSVBtn.style.display = "none";
-            if (exportJSONBtn) exportJSONBtn.style.display = "none";
-            if (vibeChart) vibeChart.update("none");
-
-            // Remove start and end from URL
-            const params = new URLSearchParams(location.search);
-            params.delete("start");
-            params.delete("end");
-            const newUrl = params.toString()
-              ? `${location.pathname}?${params.toString()}`
-              : location.pathname;
-            history.pushState({}, "", newUrl);
-          }
+          clearHighlight();
         }
 
         // S - Share/copy selection URL
