@@ -273,10 +273,31 @@ body {
   gap: 4px;
   flex: 1;
 }
-.chart-location {
+.chart-location-input {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--text);
   font-weight: 500;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  width: 120px;
+  text-align: right;
+  transition: all 0.2s;
+}
+.chart-location-input:focus {
+  outline: none;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text);
+}
+.chart-location-input::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+[data-theme="light"] .chart-location-input:focus {
+  background: var(--bg);
+  border-color: var(--border);
 }
 .chart-shading-toggles {
   display: flex;

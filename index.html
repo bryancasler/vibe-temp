@@ -171,7 +171,14 @@
         <div class="chart-head">
           <div class="chart-title">Today and Tomorrow</div>
           <div class="chart-head-right">
-            <div class="chart-location" id="chartLocation"></div>
+            <input
+              type="text"
+              id="chartLocation"
+              class="chart-location-input"
+              placeholder="Enter ZIP"
+              maxlength="10"
+              title="Enter ZIP code to change location"
+            />
             <div class="chart-status" id="chartStatus"></div>
           </div>
         </div>
@@ -280,6 +287,26 @@
             />
             <span class="toggle-switch"></span>
             <span>Rain</span>
+          </label>
+          <label class="shading-toggle-label">
+            <input
+              id="snowIconsToggle"
+              type="checkbox"
+              checked
+              title="Show snow icons on the chart"
+            />
+            <span class="toggle-switch"></span>
+            <span>Snow</span>
+          </label>
+          <label class="shading-toggle-label">
+            <input
+              id="iceIconsToggle"
+              type="checkbox"
+              checked
+              title="Show ice icons on the chart"
+            />
+            <span class="toggle-switch"></span>
+            <span>Ice</span>
           </label>
         </div>
       </section>
@@ -426,35 +453,7 @@
             <!-- Location -->
             <div class="adv-col">
               <h4 class="adv-h4">Location</h4>
-              <div class="zip-row">
-                <input
-                  id="zipInput"
-                  class="zip-input"
-                  placeholder="Enter US ZIP (e.g., 20001)"
-                />
-                <div class="zip-actions">
-                  <button id="use-zip" class="btn btn--sm" type="button">
-                    Use ZIP
-                  </button>
-                  <button
-                    id="clear-zip"
-                    class="btn btn--sm btn--ghost"
-                    type="button"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              <div id="zipStatus" class="hint">
-                Using device location if allowed.
-              </div>
-
-              <hr class="adv-sep" />
-
-              <h4 class="adv-h4">Status</h4>
-              <div id="status" class="adv-status">
-                Trying to get your local weather…
-              </div>
+              <div class="adv-status" id="status">Trying to get your local weather…</div>
 
               <hr class="adv-sep" />
 
@@ -546,6 +545,114 @@
               <div class="row">
                 <button id="resetColors" class="btn btn--sm" type="button">
                   Reset to Defaults
+                </button>
+              </div>
+              <hr class="adv-sep" />
+              <h4 class="adv-h4">Formula Calibration</h4>
+              <div class="hint" style="margin-bottom: 16px;">
+                Adjust these coefficients to fine-tune the vibe temperature calculations based on your personal experience.
+              </div>
+              <div class="fields-grid">
+                <div class="field span-2">
+                  <label class="field-label">Humidity Impact</label>
+                  <div class="range-row">
+                    <input
+                      id="calibHumidityCoeff"
+                      type="range"
+                      min="0.01"
+                      max="0.2"
+                      step="0.001"
+                      value="0.0667"
+                      title="How much humidity affects the feel (default: 0.0667 = 1/15)"
+                    />
+                    <output id="calibHumidityCoeffVal" class="range-val">0.0667</output>
+                  </div>
+                  <div class="hint">Higher values = humidity has more impact</div>
+                </div>
+                <div class="field span-2">
+                  <label class="field-label">Humidity Baseline</label>
+                  <div class="range-row">
+                    <input
+                      id="calibHumidityBaseline"
+                      type="range"
+                      min="20"
+                      max="60"
+                      step="1"
+                      value="40"
+                      title="Reference humidity level (default: 40%)"
+                    />
+                    <output id="calibHumidityBaselineVal" class="range-val">40</output>
+                  </div>
+                  <div class="hint">Humidity level where there's no adjustment</div>
+                </div>
+                <div class="field span-2">
+                  <label class="field-label">Wind Cooling Effect</label>
+                  <div class="range-row">
+                    <input
+                      id="calibWindCoeff"
+                      type="range"
+                      min="0.1"
+                      max="2.0"
+                      step="0.1"
+                      value="0.7"
+                      title="How much wind cools (default: 0.7)"
+                    />
+                    <output id="calibWindCoeffVal" class="range-val">0.7</output>
+                  </div>
+                  <div class="hint">Higher values = wind cools more</div>
+                </div>
+                <div class="field span-2">
+                  <label class="field-label">Solar Warming Effect</label>
+                  <div class="range-row">
+                    <input
+                      id="calibSolarCoeff"
+                      type="range"
+                      min="2"
+                      max="15"
+                      step="0.5"
+                      value="8"
+                      title="How much sun warms (default: 8)"
+                    />
+                    <output id="calibSolarCoeffVal" class="range-val">8</output>
+                  </div>
+                  <div class="hint">Higher values = sun warms more</div>
+                </div>
+                <div class="field span-2">
+                  <label class="field-label">Reflectivity Effect</label>
+                  <div class="range-row">
+                    <input
+                      id="calibReflectCoeff"
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="0.5"
+                      value="4"
+                      title="How much surface reflection warms (default: 4)"
+                    />
+                    <output id="calibReflectCoeffVal" class="range-val">4</output>
+                  </div>
+                  <div class="hint">Higher values = reflective surfaces warm more</div>
+                </div>
+                <div class="field span-2">
+                  <label class="field-label">Cloud Attenuation</label>
+                  <div class="range-row">
+                    <input
+                      id="calibCloudExp"
+                      type="range"
+                      min="0.3"
+                      max="1.2"
+                      step="0.1"
+                      value="0.7"
+                      title="How clouds reduce solar exposure (default: 0.7)"
+                    />
+                    <output id="calibCloudExpVal" class="range-val">0.7</output>
+                  </div>
+                  <div class="hint">Higher values = clouds block more sun</div>
+                </div>
+              </div>
+              <div class="row">
+                <button id="resetCalibration" class="btn btn--sm" type="button">
+                  Reset Calibration to Defaults
                 </button>
               </div>
             </div>
