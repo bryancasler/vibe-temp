@@ -371,6 +371,8 @@
     let simActive = false;
     let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
     let summaryGenerationInProgress = false;
+    let lastSummaryRange = null; // Track last selectionRange that summary was generated for
+    let lastSummaryTimelineHash = null; // Track hash of timelineState to detect data changes
 
     const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
     const log = (...a) => {
@@ -404,6 +406,8 @@
     function handleKeepCustomSettings() {
       // Clear the selection but keep other URL params
       selectionRange = null;
+      lastSummaryRange = null; // Reset tracking when clearing selection
+      lastSummaryTimelineHash = null;
       if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
       if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
       updateCardVisibility();
@@ -429,6 +433,8 @@
       // Reset everything to app defaults
       // Clear selection
       selectionRange = null;
+      lastSummaryRange = null; // Reset tracking when clearing selection
+      lastSummaryTimelineHash = null;
       if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
       if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
       updateCardVisibility();
@@ -939,10 +945,49 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
     }
 
+    // Helper to create a hash of timelineState for the selected range
+    function getTimelineHashForRange(startTime, endTime) {
+      if (!timelineState) return null;
+      const { labels, shadeVals, sunVals } = timelineState;
+      if (!labels || !shadeVals || !sunVals) return null;
+
+      // Find indices for the range
+      const startIdx = labels.findIndex((d) => d >= startTime);
+      const endIdx = labels.findIndex((d) => d >= endTime);
+      if (startIdx === -1 || endIdx === -1) return null;
+
+      // Create a simple hash from the data in this range
+      const rangeData = {
+        start: startIdx,
+        end: endIdx,
+        shade: shadeVals.slice(startIdx, endIdx).join(","),
+        sun: sunVals.slice(startIdx, endIdx).join(","),
+      };
+      return JSON.stringify(rangeData);
+    }
+
     // Update weather summary
     async function updateWeatherSummary() {
       if (!selectionRange || !timelineState || summaryGenerationInProgress)
         return;
+
+      // Check if we've already generated a summary for this exact selectionRange and data
+      const currentHash = getTimelineHashForRange(
+        selectionRange.startTime,
+        selectionRange.endTime
+      );
+      const rangeKey = `${selectionRange.startTime.getTime()}-${selectionRange.endTime.getTime()}`;
+
+      if (
+        lastSummaryRange === rangeKey &&
+        lastSummaryTimelineHash === currentHash
+      ) {
+        // Already generated summary for this exact range and data, skip
+        // But ensure summary section is visible
+        if (weatherSummaryEl) weatherSummaryEl.style.display = "block";
+        if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
+        return;
+      }
 
       summaryGenerationInProgress = true;
 
@@ -1011,6 +1056,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
         // Show copy and export buttons when summary is ready
         if (copySummaryBtn) copySummaryBtn.style.display = "block";
+
+        // Track that we've generated summary for this range and data
+        lastSummaryRange = rangeKey;
+        lastSummaryTimelineHash = currentHash;
       } catch (error) {
         console.warn("Failed to generate summary:", error);
         if (summaryTextEl) {
@@ -3690,6 +3739,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               updateWeatherSummary();
             } else {
               selectionRange = null;
+              lastSummaryRange = null; // Reset tracking when clearing selection
+              lastSummaryTimelineHash = null;
               vibeChart.update("none");
             }
           }
@@ -5137,6 +5188,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       clearHighlightBtn &&
         clearHighlightBtn.addEventListener("click", () => {
           selectionRange = null;
+          lastSummaryRange = null; // Reset tracking when clearing selection
+          lastSummaryTimelineHash = null;
           updateCardVisibility();
           if (vibeChart) vibeChart.update("none");
           clearHighlightBtn.style.display = "none";
@@ -5347,6 +5400,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       clearHighlightBtn &&
         clearHighlightBtn.addEventListener("click", () => {
           selectionRange = null;
+          lastSummaryRange = null; // Reset tracking when clearing selection
+          lastSummaryTimelineHash = null;
           updateCardVisibility();
           if (vibeChart) vibeChart.update("none");
           clearHighlightBtn.style.display = "none";
@@ -5480,6 +5535,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             }
             if (selectionRange) {
               selectionRange = null;
+              lastSummaryRange = null; // Reset tracking when clearing selection
+              lastSummaryTimelineHash = null;
               if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
               if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
               if (copySummaryBtn) copySummaryBtn.style.display = "none";
