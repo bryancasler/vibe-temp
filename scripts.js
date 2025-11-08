@@ -5151,6 +5151,28 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             ? `${location.pathname}?${params.toString()}`
             : location.pathname;
           history.pushState({}, "", newUrl);
+
+          // If we don't have location yet, request it now
+          if (!lastCoords) {
+            const savedZip = localStorage.getItem(ZIP_KEY);
+            if (savedZip && zipEls.input) {
+              getCoordsForZip(savedZip)
+                .then(({ latitude, longitude, place }) =>
+                  primeWeatherForCoords(
+                    latitude,
+                    longitude,
+                    `ZIP ${savedZip} (${place})`
+                  )
+                )
+                .then(() => {
+                  hideError();
+                  updateChartTitle();
+                })
+                .catch(() => useLocation());
+            } else {
+              useLocation();
+            }
+          }
         });
 
       // Copy summary button
@@ -5339,6 +5361,28 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             ? `${location.pathname}?${params.toString()}`
             : location.pathname;
           history.pushState({}, "", newUrl);
+
+          // If we don't have location yet, request it now
+          if (!lastCoords) {
+            const savedZip = localStorage.getItem(ZIP_KEY);
+            if (savedZip && zipEls.input) {
+              getCoordsForZip(savedZip)
+                .then(({ latitude, longitude, place }) =>
+                  primeWeatherForCoords(
+                    latitude,
+                    longitude,
+                    `ZIP ${savedZip} (${place})`
+                  )
+                )
+                .then(() => {
+                  hideError();
+                  updateChartTitle();
+                })
+                .catch(() => useLocation());
+            } else {
+              useLocation();
+            }
+          }
         });
 
       // Copy summary button
@@ -5545,6 +5589,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const urlLat = params.get("lat");
         const urlLon = params.get("lon");
         const urlZip = params.get("zip");
+        const urlStart = params.get("start");
+        const urlEnd = params.get("end");
+        const hasHighlight = urlStart && urlEnd;
 
         if (urlLat && urlLon) {
           const lat = parseFloat(urlLat);
@@ -5555,23 +5602,28 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         } else if (urlZip) {
           const zip5 = normalizeZip(urlZip);
           if (zip5) {
+            // Populate ZIP in input field
             if (zipEls.input) zipEls.input.value = zip5;
-            getCoordsForZip(zip5)
-              .then(({ latitude, longitude, place }) =>
-                primeWeatherForCoords(
-                  latitude,
-                  longitude,
-                  `ZIP ${zip5} (${place})`
+            // Save ZIP to localStorage
+            localStorage.setItem(ZIP_KEY, zip5);
+
+            // Only fetch weather if there's no highlight (highlight will wait for location)
+            if (!hasHighlight) {
+              getCoordsForZip(zip5)
+                .then(({ latitude, longitude, place }) =>
+                  primeWeatherForCoords(
+                    latitude,
+                    longitude,
+                    `ZIP ${zip5} (${place})`
+                  )
                 )
-              )
-              .catch(() => {});
+                .catch(() => {});
+            }
           }
         }
 
         // Apply time range selection
-        const urlStart = params.get("start");
-        const urlEnd = params.get("end");
-        if (urlStart && urlEnd) {
+        if (hasHighlight) {
           try {
             const startTime = new Date(urlStart);
             const endTime = new Date(urlEnd);
@@ -5590,6 +5642,23 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             if (vibeChart) {
               vibeChart.update("none");
             }
+
+            // If we have a ZIP in URL, fetch weather for it now
+            if (urlZip) {
+              const zip5 = normalizeZip(urlZip);
+              if (zip5) {
+                getCoordsForZip(zip5)
+                  .then(({ latitude, longitude, place }) =>
+                    primeWeatherForCoords(
+                      latitude,
+                      longitude,
+                      `ZIP ${zip5} (${place})`
+                    )
+                  )
+                  .catch(() => {});
+              }
+            }
+
             // Generate weather summary (will wait for timelineState if not ready)
             if (timelineState) {
               updateWeatherSummary();
@@ -5606,10 +5675,23 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           (statusEl.textContent = "Trying to get your local weather…");
 
         // Apply URL parameters first
+        const params = new URLSearchParams(location.search);
+        const urlZip = params.get("zip");
+        const urlStart = params.get("start");
+        const urlEnd = params.get("end");
+        const hasUrlHighlight = urlStart && urlEnd;
+
         applyURLParameters();
 
-        // If no location was set from URL, use saved ZIP or prompt for browser location
-        if (!lastCoords) {
+        // If there's a ZIP in URL with a highlight, skip location request
+        // Location will be requested when highlight is cleared
+        if (hasUrlHighlight && urlZip) {
+          // Don't request location yet - wait for highlight to be cleared
+          if (lastCoords) {
+            updateChartTitle();
+          }
+        } else if (!lastCoords) {
+          // If no location was set from URL, use saved ZIP or prompt for browser location
           const savedZip = localStorage.getItem(ZIP_KEY);
           if (savedZip && zipEls.input) {
             zipEls.input.value = savedZip;
