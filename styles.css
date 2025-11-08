@@ -144,7 +144,8 @@ body {
   gap: 8px;
   flex-shrink: 0;
 }
-.copy-summary-btn {
+.copy-summary-btn,
+.export-btn {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -155,7 +156,8 @@ body {
   font-weight: 500;
   white-space: nowrap;
 }
-.copy-summary-btn:hover {
+.copy-summary-btn:hover,
+.export-btn:hover {
   background: #1a2332;
 }
 .summary-time-range {
@@ -464,6 +466,12 @@ body {
   gap: 12px;
   margin: 8px 0 4px;
 }
+.controls-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .btn {
   background: #213149;
   border: 1px solid var(--border);
@@ -471,6 +479,84 @@ body {
   padding: 8px 12px;
   border-radius: 12px;
   cursor: pointer;
+}
+.btn-secondary {
+  background: #1a2332;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn-secondary:hover {
+  background: #243041;
+}
+.favorites-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.favorites-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.favorites-list.show {
+  display: block;
+}
+.favorite-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.favorite-item:last-child {
+  border-bottom: none;
+}
+.favorite-item:hover {
+  background: #1a2332;
+}
+.favorite-name {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 14px;
+}
+.favorite-name:hover {
+  color: var(--accent);
+}
+.favorite-delete {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.favorite-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 .btn--sm {
   padding: 6px 10px;

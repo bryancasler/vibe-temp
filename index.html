@@ -84,6 +84,24 @@
             <h3 class="summary-title">Highlighted Vibes</h3>
             <div class="summary-actions">
               <button
+                id="exportCSVBtn"
+                class="export-btn"
+                type="button"
+                title="Export selected range as CSV"
+                style="display: none"
+              >
+                📥 CSV
+              </button>
+              <button
+                id="exportJSONBtn"
+                class="export-btn"
+                type="button"
+                title="Export selected range as JSON"
+                style="display: none"
+              >
+                📥 JSON
+              </button>
+              <button
                 id="copySummaryBtn"
                 class="copy-summary-btn"
                 type="button"
@@ -171,6 +189,30 @@
       <section class="controls">
         <div class="controls-left">
           <button id="use-location" class="btn">Use My Location</button>
+          <div
+            id="favoritesDropdown"
+            class="favorites-dropdown"
+            style="display: none"
+          >
+            <button
+              id="favoritesToggle"
+              class="btn btn-secondary"
+              type="button"
+              title="Favorite locations"
+            >
+              ⭐ Favorites
+            </button>
+            <div id="favoritesList" class="favorites-list"></div>
+          </div>
+          <button
+            id="notificationsBtn"
+            class="btn btn-secondary"
+            type="button"
+            title="Enable notifications for vibe conditions"
+            style="display: none"
+          >
+            🔔 Notifications
+          </button>
           <div id="status" class="status">
             Trying to get your local weather…
           </div>

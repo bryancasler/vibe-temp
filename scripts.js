@@ -58,12 +58,18 @@
       const errorSuggestionEl = $(".error-suggestion");
       const errorRetryBtn = $("#errorRetryBtn");
       const copySummaryBtn = $("#copySummaryBtn");
+      const exportCSVBtn = $("#exportCSVBtn");
+      const exportJSONBtn = $("#exportJSONBtn");
       const shortcutsModalEl = $("#shortcutsModal");
       const closeShortcutsBtn = $("#closeShortcutsBtn");
       const presetTodayBtn = $("#presetToday");
       const presetTomorrowBtn = $("#presetTomorrow");
       const preset3DaysBtn = $("#preset3Days");
       const presetWeekBtn = $("#presetWeek");
+      const favoritesDropdown = $("#favoritesDropdown");
+      const favoritesToggle = $("#favoritesToggle");
+      const favoritesList = $("#favoritesList");
+      const notificationsBtn = $("#notificationsBtn");
       
       function updateChartTitle() {
         if (chartTitleEl) {
@@ -126,10 +132,12 @@
       const ZIP_KEY  = "vibeZip";
       const DAYS_AHEAD_KEY = "vibeDaysAhead";
       const NIGHT_SHADING_KEY = "vibeNightShading";
+      const FAVORITES_KEY = "vibeFavorites";
       let unit = (localStorage.getItem(UNIT_KEY) === "C") ? "C" : "F";
       let daysAhead = parseInt(localStorage.getItem(DAYS_AHEAD_KEY) || "2", 10);
       let nightShadingEnabled = localStorage.getItem(NIGHT_SHADING_KEY) === "true";
       let lastCoords = null;
+      let favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
       let vibeChart = null;
       let pollTimer = null;
       let nextUpdateAt = null;
@@ -138,7 +146,7 @@
       let currentIsDay = null;
       let currentPlaceName = "";
   
-      let timelineState = null;  // { labels, shadeVals, sunVals, solarByHour, isDayByHour, now } all in °F
+      let timelineState = null;  // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, now } all in °F
       window.timelineState = null; // expose for tooltip use
       let simActive = false;
       let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
@@ -276,6 +284,98 @@
         }
       }
 
+      // Export functions
+      function exportToCSV() {
+        if (!selectionRange || !timelineState) return;
+        const weatherData = extractWeatherDataForRange(selectionRange.startTime, selectionRange.endTime);
+        if (!weatherData || !weatherData.dataPoints.length) return;
+        
+        // CSV header
+        const headers = ["Time", "Hour", "Shade Vibe (°" + unit + ")", "Sun Vibe (°" + unit + ")", "Solar", "Is Day", "Description"];
+        const rows = [headers.join(",")];
+        
+        // CSV rows
+        weatherData.dataPoints.forEach(dp => {
+          const time = new Date(dp.time);
+          const timeStr = time.toLocaleString();
+          rows.push([
+            `"${timeStr}"`,
+            time.getHours(),
+            dp.shadeVibe.toFixed(1),
+            dp.sunVibe.toFixed(1),
+            dp.solar.toFixed(2),
+            dp.isDay ? "Yes" : "No",
+            `"${dp.description}"`
+          ].join(","));
+        });
+        
+        // Add stats section
+        rows.push([]);
+        rows.push(["Statistics"]);
+        rows.push(["Min Shade Vibe", weatherData.stats.minShade.toFixed(1)]);
+        rows.push(["Max Shade Vibe", weatherData.stats.maxShade.toFixed(1)]);
+        rows.push(["Avg Shade Vibe", weatherData.stats.avgShade.toFixed(1)]);
+        rows.push(["Min Sun Vibe", weatherData.stats.minSun.toFixed(1)]);
+        rows.push(["Max Sun Vibe", weatherData.stats.maxSun.toFixed(1)]);
+        rows.push(["Avg Sun Vibe", weatherData.stats.avgSun.toFixed(1)]);
+        rows.push(["Day Hours", weatherData.stats.dayHours]);
+        rows.push(["Night Hours", weatherData.stats.nightHours]);
+        rows.push(["Duration (hours)", weatherData.duration.toFixed(1)]);
+        
+        const csv = rows.join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `vibe-temp-export-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showNotification("CSV exported successfully!", "success");
+      }
+
+      function exportToJSON() {
+        if (!selectionRange || !timelineState) return;
+        const weatherData = extractWeatherDataForRange(selectionRange.startTime, selectionRange.endTime);
+        if (!weatherData || !weatherData.dataPoints.length) return;
+        
+        const exportData = {
+          exportDate: new Date().toISOString(),
+          location: currentPlaceName || (lastCoords ? `${lastCoords.latitude}, ${lastCoords.longitude}` : "Unknown"),
+          unit: unit,
+          timeRange: {
+            start: weatherData.startTime,
+            end: weatherData.endTime,
+            durationHours: weatherData.duration
+          },
+          statistics: {
+            shadeVibe: {
+              min: weatherData.stats.minShade,
+              max: weatherData.stats.maxShade,
+              avg: weatherData.stats.avgShade
+            },
+            sunVibe: {
+              min: weatherData.stats.minSun,
+              max: weatherData.stats.maxSun,
+              avg: weatherData.stats.avgSun
+            },
+            dayHours: weatherData.stats.dayHours,
+            nightHours: weatherData.stats.nightHours,
+            avgRepresentative: weatherData.stats.avgRepresentative
+          },
+          dataPoints: weatherData.dataPoints
+        };
+        
+        const json = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `vibe-temp-export-${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showNotification("JSON exported successfully!", "success");
+      }
+
       // Extract weather data for selected time range
       function extractWeatherDataForRange(startTime, endTime) {
         if (!timelineState) return null;
@@ -381,7 +481,12 @@ Vibe temperature data (how it actually feels):
 - Daytime hours: ${stats.dayHours}, Nighttime hours: ${stats.nightHours}
 ${vibeDescriptions.length > 0 ? `- Sample descriptions: ${vibeDescriptions.slice(0, 3).join(", ")}` : ""}
 
-Provide a brief, conversational summary (2-3 sentences) describing how it will FEEL during this time period based on the vibe temperatures. Use the representative vibe as the primary temperature reference. Focus on comfort, what to wear, and how the conditions will change. Ignore actual air temperature - only use the vibe temperatures which represent how it actually feels.`;
+Provide a brief, conversational summary (3-4 sentences) describing:
+1. How it will FEEL during this time period based on the vibe temperatures
+2. Clothing recommendations (what to wear for comfort)
+3. Activity suggestions (what activities are suitable - e.g., hiking, staying indoors, outdoor sports)
+
+Use the representative vibe as the primary temperature reference. Focus on comfort, what to wear, and suitable activities. Ignore actual air temperature - only use the vibe temperatures which represent how it actually feels.`;
 
         try {
           // Use Hugging Face Inference API with a free model
@@ -510,6 +615,46 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           sentences.push(`In the sun, it will feel noticeably warmer (around ${stats.avgSun.toFixed(1)}${unitSuffix()} vibe)`);
         }
         
+        // Clothing recommendations
+        const clothingRecs = [];
+        if (repTempF < 50) {
+          clothingRecs.push("dress warmly with layers, a coat, and warm accessories");
+        } else if (repTempF < 65) {
+          clothingRecs.push("wear a light jacket or sweater");
+        } else if (repTempF < 75) {
+          clothingRecs.push("light clothing is comfortable");
+        } else if (repTempF < 85) {
+          clothingRecs.push("wear light, breathable clothing");
+        } else {
+          clothingRecs.push("wear minimal, light-colored clothing and stay hydrated");
+        }
+        if (stats.dayHours > 0 && sunShadeDiff > noticeablyWarmerThreshold) {
+          clothingRecs.push("consider sun protection if spending time outdoors");
+        }
+        if (clothingRecs.length > 0) {
+          sentences.push(`For clothing, ${clothingRecs.join(", ")}`);
+        }
+        
+        // Activity suggestions
+        const activityRecs = [];
+        if (repTempF < 50) {
+          activityRecs.push("indoor activities are most comfortable");
+        } else if (repTempF < 65) {
+          activityRecs.push("outdoor activities like walking or light exercise are pleasant");
+        } else if (repTempF < 75) {
+          activityRecs.push("great conditions for outdoor activities like hiking, biking, or sports");
+        } else if (repTempF < 85) {
+          activityRecs.push("good for outdoor activities, but take breaks in shade and stay hydrated");
+        } else {
+          activityRecs.push("limit strenuous outdoor activities, seek shade, and stay well-hydrated");
+        }
+        if (stats.nightHours > stats.dayHours) {
+          activityRecs.push("better suited for evening activities");
+        }
+        if (activityRecs.length > 0) {
+          sentences.push(`For activities, ${activityRecs.join(", ")}`);
+        }
+        
         return sentences.join(". ") + ".";
       }
 
@@ -591,8 +736,10 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         if (weatherSummaryEl) weatherSummaryEl.style.display = "block";
         showSummaryLoading();
         
-        // Show copy button and clear button
+        // Show/hide buttons
         if (copySummaryBtn) copySummaryBtn.style.display = "none";
+        if (exportCSVBtn) exportCSVBtn.style.display = "none";
+        if (exportJSONBtn) exportJSONBtn.style.display = "none";
         if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
         
         // Update title with smart description
@@ -632,16 +779,20 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             summaryTextEl.className = "summary-text";
           }
           
-          // Show copy button when summary is ready
+          // Show copy and export buttons when summary is ready
           if (copySummaryBtn) copySummaryBtn.style.display = "block";
+          if (exportCSVBtn) exportCSVBtn.style.display = "block";
+          if (exportJSONBtn) exportJSONBtn.style.display = "block";
           } catch (error) {
             console.warn("Failed to generate summary:", error);
             if (summaryTextEl) {
               summaryTextEl.textContent = "Unable to generate summary at this time.";
               summaryTextEl.className = "summary-text";
             }
-            // Hide copy button on error
+            // Hide buttons on error
             if (copySummaryBtn) copySummaryBtn.style.display = "none";
+            if (exportCSVBtn) exportCSVBtn.style.display = "none";
+            if (exportJSONBtn) exportJSONBtn.style.display = "none";
           } finally {
             summaryGenerationInProgress = false;
           }
@@ -995,7 +1146,7 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         const s = startIdx === -1 ? 0 : startIdx;
         const e = endIdx === -1 ? times.length : endIdx;
   
-        const labels = [], shadeVals = [], sunVals = [], solarByHour = [], isDayByHour = [];
+        const labels = [], shadeVals = [], sunVals = [], solarByHour = [], isDayByHour = [], windByHour = [], humidityByHour = [];
   
         for (let i = s; i < e; i++) {
           const T = hourly.temperature_2m[i];
@@ -1015,8 +1166,10 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           sunVals.push(parseFloat(sun.toFixed(1)));     // °F
           solarByHour.push(solar);
           isDayByHour.push(isDay ? 1 : 0);
+          windByHour.push(Wind ?? 0);
+          humidityByHour.push(RH ?? 0);
         }
-        return { labels, shadeVals, sunVals, solarByHour, isDayByHour, now };
+        return { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, now };
       }
       function hourKey(d) { const k = new Date(d); k.setMinutes(0,0,0); return k.getTime(); }
   
@@ -1595,7 +1748,86 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             ctx.restore();
           }
         };
-  
+
+        // Wind chill indicator plugin - shows when wind significantly affects feel
+        const windChillPlugin = {
+          id: "windChill",
+          afterDatasetsDraw(chart) {
+            if (!timelineState || !timelineState.windByHour) return;
+            const { ctx, chartArea, scales } = chart;
+            const { labels, shadeVals, windByHour } = timelineState;
+            
+            ctx.save();
+            ctx.strokeStyle = "rgba(100, 150, 255, 0.4)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 3]);
+            
+            // Draw wind indicators where wind speed > 15 mph (significant impact)
+            for (let i = 0; i < labels.length; i++) {
+              if (windByHour[i] > 15) {
+                const x = scales.x.getPixelForValue(i);
+                if (x < chartArea.left || x > chartArea.right) continue;
+                const y = scales.y.getPixelForValue(shadeVals[i]);
+                ctx.beginPath();
+                ctx.moveTo(x, chartArea.top);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                // Add wind icon
+                ctx.fillStyle = "rgba(100, 150, 255, 0.6)";
+                ctx.font = "12px system-ui";
+                ctx.textAlign = "center";
+                ctx.fillText("💨", x, chartArea.top - 8);
+              }
+            }
+            ctx.restore();
+          }
+        };
+
+        // Humidity impact visualization plugin
+        const humidityPlugin = {
+          id: "humidity",
+          beforeDatasetsDraw(chart) {
+            if (!timelineState || !timelineState.humidityByHour) return;
+            const { ctx, chartArea, scales } = chart;
+            const { labels, humidityByHour } = timelineState;
+            
+            ctx.save();
+            
+            // Draw humidity impact as background gradient
+            // High humidity (>70%) makes it feel warmer, low humidity (<30%) makes it feel cooler
+            for (let i = 0; i < labels.length - 1; i++) {
+              const x1 = scales.x.getPixelForValue(i);
+              const x2 = scales.x.getPixelForValue(i + 1);
+              if (x2 < chartArea.left || x1 > chartArea.right) continue;
+              
+              const humidity = humidityByHour[i];
+              let alpha = 0;
+              let color = "";
+              
+              if (humidity > 70) {
+                // High humidity - warmer feel (red tint)
+                alpha = Math.min((humidity - 70) / 30 * 0.15, 0.15);
+                color = `rgba(255, 100, 100, ${alpha})`;
+              } else if (humidity < 30) {
+                // Low humidity - cooler feel (blue tint)
+                alpha = Math.min((30 - humidity) / 30 * 0.15, 0.15);
+                color = `rgba(100, 150, 255, ${alpha})`;
+              }
+              
+              if (alpha > 0) {
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                  Math.max(x1, chartArea.left),
+                  chartArea.top,
+                  Math.min(x2, chartArea.right) - Math.max(x1, chartArea.left),
+                  chartArea.bottom - chartArea.top
+                );
+              }
+            }
+            ctx.restore();
+          }
+        };
+
         // Create highlight dataset if selection exists (for legend only)
         const highlightDataset = selectionRange ? (() => {
           // Create a dataset for the legend only (plugin handles actual drawing on chart)
@@ -1708,10 +1940,10 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
                     return desc ? `${short}: ${tempDisplay}° ${desc}` : `${short}: ${tempDisplay}°`;
                   }
                 }
-              }
             }
+          }
           },
-          plugins: [dayNightShadingPlugin, selectionHighlightPlugin, currentLine, sunMarkerPlugin, timelineLabelsPlugin]
+          plugins: [humidityPlugin, dayNightShadingPlugin, selectionHighlightPlugin, currentLine, sunMarkerPlugin, windChillPlugin, timelineLabelsPlugin]
         });
   
         // Pointer interactions: hover + tap/drag simulation + drag selection
@@ -2048,6 +2280,15 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           statusEl && (statusEl.textContent = sourceLabel ? `Using ${sourceLabel}` : "Using chosen coordinates");
           restartScheduler();
           hideError();
+          
+          // Update favorites UI and offer to save current location
+          updateFavoritesUI();
+          if (currentPlaceName && lastCoords) {
+            offerToSaveFavorite();
+          }
+          
+          // Check for notification conditions
+          checkNotificationConditions();
         } catch (e) {
           log(e);
           let errorTitle = "Weather Fetch Failed";
@@ -2079,6 +2320,93 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         }
       }
   
+      // Favorites functions
+      function saveFavorite(name, lat, lon) {
+        const favorite = { name, lat, lon, id: Date.now() };
+        favorites.push(favorite);
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+        updateFavoritesUI();
+        showNotification(`Saved "${name}" to favorites`, "success");
+      }
+
+      function deleteFavorite(id) {
+        favorites = favorites.filter(f => f.id !== id);
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+        updateFavoritesUI();
+      }
+
+      function updateFavoritesUI() {
+        if (!favoritesList) return;
+        
+        if (favorites.length === 0) {
+          if (favoritesDropdown) favoritesDropdown.style.display = "none";
+          return;
+        }
+        
+        if (favoritesDropdown) favoritesDropdown.style.display = "block";
+        favoritesList.innerHTML = "";
+        
+        favorites.forEach(fav => {
+          const item = document.createElement("div");
+          item.className = "favorite-item";
+          item.innerHTML = `
+            <button class="favorite-name" data-lat="${fav.lat}" data-lon="${fav.lon}">${fav.name}</button>
+            <button class="favorite-delete" data-id="${fav.id}" title="Delete">×</button>
+          `;
+          favoritesList.appendChild(item);
+        });
+        
+        // Add event listeners
+        favoritesList.querySelectorAll(".favorite-name").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const lat = parseFloat(btn.dataset.lat);
+            const lon = parseFloat(btn.dataset.lon);
+            primeWeatherForCoords(lat, lon, btn.textContent);
+            if (favoritesToggle) favoritesToggle.textContent = "⭐ Favorites";
+          });
+        });
+        
+        favoritesList.querySelectorAll(".favorite-delete").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (confirm("Delete this favorite?")) {
+              deleteFavorite(parseInt(btn.dataset.id));
+            }
+          });
+        });
+      }
+
+      function offerToSaveFavorite() {
+        if (!currentPlaceName || !lastCoords) return;
+        const exists = favorites.some(f => 
+          Math.abs(f.lat - lastCoords.latitude) < 0.01 && 
+          Math.abs(f.lon - lastCoords.longitude) < 0.01
+        );
+        if (exists) return;
+        
+        // Show a subtle notification with save option
+        const notification = document.createElement("div");
+        notification.className = "notification success";
+        notification.style.position = "relative";
+        notification.style.marginTop = "8px";
+        notification.innerHTML = `
+          <span>Save "${currentPlaceName}" to favorites?</span>
+          <button style="margin-left: 8px; padding: 4px 8px; background: var(--good); border: none; border-radius: 4px; cursor: pointer;" onclick="this.parentElement.remove(); window.saveCurrentFavorite('${currentPlaceName}', ${lastCoords.latitude}, ${lastCoords.longitude})">Save</button>
+        `;
+        if (statusEl && statusEl.parentElement) {
+          statusEl.parentElement.appendChild(notification);
+          setTimeout(() => notification.remove(), 10000);
+        }
+      }
+
+      // Expose save function globally for inline onclick
+      window.saveCurrentFavorite = (name, lat, lon) => {
+        saveFavorite(name, lat, lon);
+        document.querySelectorAll(".notification").forEach(n => {
+          if (n.textContent.includes("Save")) n.remove();
+        });
+      };
+
       // Geolocation
       function useLocation() {
         statusEl && (statusEl.textContent = "Getting location…");
@@ -2429,6 +2757,19 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
       // Buttons
       els.useLocationBtn && els.useLocationBtn.addEventListener("click", useLocation);
       
+      // Favorites toggle
+      favoritesToggle && favoritesToggle.addEventListener("click", () => {
+        if (favoritesList) {
+          const isVisible = favoritesList.style.display !== "none" && favoritesList.style.display !== "";
+          favoritesList.style.display = isVisible ? "none" : "block";
+          if (!isVisible) favoritesList.classList.add("show");
+          else favoritesList.classList.remove("show");
+        }
+      });
+      
+      // Initialize favorites UI
+      updateFavoritesUI();
+      
       // Clear highlight button
       clearHighlightBtn && clearHighlightBtn.addEventListener("click", () => {
         selectionRange = null;
@@ -2437,6 +2778,8 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         // Hide summary
         if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
         if (copySummaryBtn) copySummaryBtn.style.display = "none";
+        if (exportCSVBtn) exportCSVBtn.style.display = "none";
+        if (exportJSONBtn) exportJSONBtn.style.display = "none";
         
         // Remove start and end from URL but keep other params
         const params = new URLSearchParams(location.search);
@@ -2461,6 +2804,10 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           showNotification("Failed to copy summary. Please select and copy manually.", "error", 5000);
         }
       });
+
+      // Export buttons
+      exportCSVBtn && exportCSVBtn.addEventListener("click", exportToCSV);
+      exportJSONBtn && exportJSONBtn.addEventListener("click", exportToJSON);
 
       // Expired selection modal buttons
       keepCustomBtn && keepCustomBtn.addEventListener("click", handleKeepCustomSettings);
@@ -2520,6 +2867,8 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
               if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
               if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
               if (copySummaryBtn) copySummaryBtn.style.display = "none";
+              if (exportCSVBtn) exportCSVBtn.style.display = "none";
+              if (exportJSONBtn) exportJSONBtn.style.display = "none";
               if (vibeChart) vibeChart.update('none');
             }
           }
@@ -2533,6 +2882,8 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
             if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
             if (copySummaryBtn) copySummaryBtn.style.display = "none";
+            if (exportCSVBtn) exportCSVBtn.style.display = "none";
+            if (exportJSONBtn) exportJSONBtn.style.display = "none";
             if (vibeChart) vibeChart.update('none');
             
             // Remove start and end from URL
