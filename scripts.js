@@ -3781,7 +3781,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
 
       // Update sun card content during hover (make it visible even at night to show sunrise time)
-      if (els.sun && els.sunCard) {
+      // But don't show it if a highlight is active
+      if (els.sun && els.sunCard && !selectionRange) {
         // Make card visible during hover if it's night (to show sunrise time)
         if (!isDay && els.sunCard.style.display === "none") {
           els.sunCard.style.display = "";
