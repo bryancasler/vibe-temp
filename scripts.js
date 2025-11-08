@@ -729,9 +729,14 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
       }
       async function getPlaceName(lat, lon) {
         try {
-          const url = new URL("https://geocoding-api.open-meteo.com/v1/reverse");
-          url.search = new URLSearchParams({ latitude: lat, longitude: lon, language: "en", format: "json" });
-          const r = await fetch(url);
+          const apiUrl = new URL("https://geocoding-api.open-meteo.com/v1/reverse");
+          apiUrl.search = new URLSearchParams({ latitude: lat, longitude: lon, language: "en", format: "json" });
+          
+          // Use CORS proxy for development (works in Simple Browser)
+          // The proxy wraps the request to avoid CORS issues
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl.toString())}`;
+          
+          const r = await fetch(proxyUrl);
           if (!r.ok) throw new Error("reverse geocode failed");
           const j = await r.json();
           const p = j?.results?.[0];
@@ -739,7 +744,11 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           const city = p.name || "";
           const admin = p.admin1 || p.admin2 || p.country || "";
           return admin && admin !== city ? `${city}, ${admin}` : city;
-        } catch { return ""; }
+        } catch (e) {
+          // Silently fail - location name is optional
+          console.debug("Could not fetch location name:", e);
+          return "";
+        }
       }
       function paintCurrentTimeTitle() {
         const place = currentPlaceName || (zipEls?.input?.value ? `ZIP ${zipEls.input.value}` : "your location");
