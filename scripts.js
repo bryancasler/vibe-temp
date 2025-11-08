@@ -1251,7 +1251,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       return T + (RH - calibration.humidityBaseline) / (1 / calibration.humidityCoeff) - calibration.windCoeff * Wind;
     }
     function sunVibeOf(shadeV, solarExposure, R) {
-      return shadeV + calibration.solarCoeff * solarExposure + calibration.reflectCoeff * R;
+      // Only apply reflectivity when there's actual solar exposure
+      const reflectivityEffect = solarExposure > 0 ? calibration.reflectCoeff * R : 0;
+      return shadeV + calibration.solarCoeff * solarExposure + reflectivityEffect;
     }
       function reflectivity() {
         const sel = parseFloat(els.reflect?.value ?? "0");
