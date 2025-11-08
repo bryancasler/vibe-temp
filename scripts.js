@@ -1158,9 +1158,39 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       function isDaylightNow() {
         if (currentIsDay === 0 || currentIsDay === 1) return !!currentIsDay;
         const now = new Date();
+        const nowMs = now.getTime();
+        
+        // Check all sunrises and sunsets to determine if it's currently daylight
+        const allEvents = [
+          ...(sunTimes.sunrises || []).map(t => ({ time: new Date(t).getTime(), type: 'sunrise' })),
+          ...(sunTimes.sunsets || []).map(t => ({ time: new Date(t).getTime(), type: 'sunset' }))
+        ].sort((a, b) => a.time - b.time);
+        
+        if (allEvents.length > 0) {
+          // Find the most recent event before or at now
+          let lastEvent = null;
+          for (let i = 0; i < allEvents.length; i++) {
+            if (allEvents[i].time <= nowMs) {
+              lastEvent = allEvents[i];
+            } else {
+              break;
+            }
+          }
+          
+          // If last event was a sunrise, we're in daytime
+          // If last event was a sunset, we're in nighttime
+          if (lastEvent) {
+            return lastEvent.type === 'sunrise';
+          }
+          
+          // Before first event - check if it's a sunrise (day) or sunset (night)
+          return allEvents[0].type === 'sunrise';
+        }
+        
+        // Fallback to old logic
         if (sunTimes.sunriseToday && sunTimes.sunsetToday) {
-        if (now >= sunTimes.sunriseToday && now < sunTimes.sunsetToday)
-          return true;
+          if (now >= sunTimes.sunriseToday && now < sunTimes.sunsetToday)
+            return true;
         }
         const s = parseFloat(els.solar?.value ?? "0") || 0;
         return s > 0.2;
@@ -1312,12 +1342,15 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           isDay: isDaylightNow(),
           context: "shade",
         }));
-      els.sunLabel &&
-        (els.sunLabel.innerHTML = vibeDescriptor(sunF, {
+      if (els.sunLabel) {
+        // Ensure description section is visible when showing normal content
+        els.sunLabel.style.display = "";
+        els.sunLabel.innerHTML = vibeDescriptor(sunF, {
           solar: solarValue,
           isDay: isDaylightNow(),
           context: "sun",
-        }));
+        });
+      }
 
       // Remove skeleton loading state
       hideCardLoading();
@@ -1752,7 +1785,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
       }
   
-      async function renderChart(labels, shadeValsF, sunValsFF, now) {
+      async function renderChart(labels, shadeValsF, sunValsFF, now, isDayByHour = []) {
         if (!els.chartCanvas) return;
       updateChartTitle();
         await ensureChartJs();
@@ -1779,12 +1812,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         vibeChart._rawLabels = labels;
         vibeChart._markers = markers;
         vibeChart._nowIdx = nowIdx;
+        vibeChart._isDayByHour = isDayByHour;
+        vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
         // Update y-axis range
         vibeChart.options.scales.y.suggestedMin = Math.min(...shadeVals, ...sunVals) - 3;
         vibeChart.options.scales.y.suggestedMax = Math.max(...shadeVals, ...sunVals) + 3;
         vibeChart.update("none");
         // Ensure loading skeleton is hidden
         hideChartLoading();
+        // Update card visibility in case day/night status changed
+        updateCardVisibility();
         return;
       }
 
@@ -2182,6 +2219,18 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             getComputedStyle(document.body).getPropertyValue("--muted") ||
             "#8aa0b6";
 
+          // Measure text to determine minimum spacing
+          const sampleTime = formatTime(new Date()) || "12pm";
+          const sampleDay = formatDay(new Date()) || "Mon";
+          const timeMetrics = ctx.measureText(sampleTime);
+          const dayMetrics = ctx.measureText(sampleDay);
+          const maxTextWidth = Math.max(timeMetrics.width, dayMetrics.width);
+          const minSpacing = maxTextWidth * 1.5; // 1.5x text width for comfortable spacing
+
+          // Filter ticks to prevent overlap
+          const visibleTicks = [];
+          let lastX = -Infinity;
+
           ticks.forEach((tick) => {
             const tickValue = tick.value;
             if (
@@ -2194,8 +2243,69 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             const date = new Date(labels[tickValue]);
             const x = xScale.getPixelForValue(tickValue);
 
-            // Only draw if within chart area
+            // Only consider ticks within chart area
             if (x < chartArea.left || x > chartArea.right) return;
+
+            // Check if this tick is far enough from the last one
+            if (x - lastX >= minSpacing || visibleTicks.length === 0) {
+              visibleTicks.push({ tick, x, date });
+              lastX = x;
+            } else {
+              // If too close, prefer keeping the first and last ticks
+              const isFirst = visibleTicks.length === 0;
+              const isLast = tick === ticks[ticks.length - 1];
+              if (isFirst || isLast) {
+                // For first/last, replace the previous if this one is more important
+                if (visibleTicks.length > 0 && !isFirst) {
+                  visibleTicks.pop();
+                }
+                visibleTicks.push({ tick, x, date });
+                lastX = x;
+              }
+            }
+          });
+
+          // Always include first and last ticks if they exist
+          const firstTick = ticks[0];
+          const lastTick = ticks[ticks.length - 1];
+          const firstTickValue = firstTick?.value;
+          const lastTickValue = lastTick?.value;
+          
+          if (typeof firstTickValue === "number" && firstTickValue >= 0 && firstTickValue < labels.length) {
+            const firstX = xScale.getPixelForValue(firstTickValue);
+            if (firstX >= chartArea.left && firstX <= chartArea.right) {
+              const firstDate = new Date(labels[firstTickValue]);
+              if (!visibleTicks.find(t => t.tick === firstTick)) {
+                visibleTicks.unshift({ tick: firstTick, x: firstX, date: firstDate });
+              }
+            }
+          }
+          
+          if (typeof lastTickValue === "number" && lastTickValue >= 0 && lastTickValue < labels.length) {
+            const lastX = xScale.getPixelForValue(lastTickValue);
+            if (lastX >= chartArea.left && lastX <= chartArea.right) {
+              const lastDate = new Date(labels[lastTickValue]);
+              if (!visibleTicks.find(t => t.tick === lastTick)) {
+                visibleTicks.push({ tick: lastTick, x: lastX, date: lastDate });
+              }
+            }
+          }
+
+          // Sort by x position and remove duplicates
+          visibleTicks.sort((a, b) => a.x - b.x);
+          const finalTicks = [];
+          lastX = -Infinity;
+          visibleTicks.forEach((item) => {
+            if (item.x - lastX >= minSpacing || finalTicks.length === 0) {
+              finalTicks.push(item);
+              lastX = item.x;
+            }
+          });
+
+          // Draw the filtered ticks
+          finalTicks.forEach((item) => {
+            const x = item.x;
+            const date = item.date;
 
             // Draw time on top line
             const timeStr = formatTime(date);
@@ -2414,43 +2524,43 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 {
                   min: -Infinity,
                   max: 32,
-                  color: "rgba(100, 150, 255, 0.1)",
+                  color: "rgba(100, 150, 255, 0.25)",
                   label: "Very Cold",
                 },
                 {
                   min: 32,
                   max: 50,
-                  color: "rgba(150, 200, 255, 0.1)",
+                  color: "rgba(150, 200, 255, 0.25)",
                   label: "Cold",
                 },
                 {
                   min: 50,
                   max: 65,
-                  color: "rgba(200, 220, 255, 0.1)",
+                  color: "rgba(200, 220, 255, 0.25)",
                   label: "Cool",
                 },
                 {
                   min: 65,
                   max: 75,
-                  color: "rgba(100, 255, 150, 0.1)",
+                  color: "rgba(100, 255, 150, 0.25)",
                   label: "Comfortable",
                 },
                 {
                   min: 75,
                   max: 85,
-                  color: "rgba(255, 220, 100, 0.1)",
+                  color: "rgba(255, 220, 100, 0.25)",
                   label: "Warm",
                 },
                 {
                   min: 85,
                   max: 95,
-                  color: "rgba(255, 180, 100, 0.1)",
+                  color: "rgba(255, 180, 100, 0.25)",
                   label: "Hot",
                 },
                 {
                   min: 95,
                   max: Infinity,
-                  color: "rgba(255, 100, 100, 0.1)",
+                  color: "rgba(255, 100, 100, 0.25)",
                   label: "Very Hot",
                 },
               ];
@@ -2460,43 +2570,43 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 {
                   min: -Infinity,
                   max: 0,
-                  color: "rgba(100, 150, 255, 0.1)",
+                  color: "rgba(100, 150, 255, 0.25)",
                   label: "Very Cold",
                 },
                 {
                   min: 0,
                   max: 10,
-                  color: "rgba(150, 200, 255, 0.1)",
+                  color: "rgba(150, 200, 255, 0.25)",
                   label: "Cold",
                 },
                 {
                   min: 10,
                   max: 18,
-                  color: "rgba(200, 220, 255, 0.1)",
+                  color: "rgba(200, 220, 255, 0.25)",
                   label: "Cool",
                 },
                 {
                   min: 18,
                   max: 24,
-                  color: "rgba(100, 255, 150, 0.1)",
+                  color: "rgba(100, 255, 150, 0.25)",
                   label: "Comfortable",
                 },
                 {
                   min: 24,
                   max: 29,
-                  color: "rgba(255, 220, 100, 0.1)",
+                  color: "rgba(255, 220, 100, 0.25)",
                   label: "Warm",
                 },
                 {
                   min: 29,
                   max: 35,
-                  color: "rgba(255, 180, 100, 0.1)",
+                  color: "rgba(255, 180, 100, 0.25)",
                   label: "Hot",
                 },
                 {
                   min: 35,
                   max: Infinity,
-                  color: "rgba(255, 100, 100, 0.1)",
+                  color: "rgba(255, 100, 100, 0.25)",
                   label: "Very Hot",
                 },
               ];
@@ -2583,7 +2693,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           borderColor: "transparent",
           backgroundColor: "transparent", // Hide default fill, gradient plugin will draw it
           pointRadius: 0,
-          tension: 0.5,
+          tension: 0.4,
           fill: false, // Disable default fill
         },
         {
@@ -2593,7 +2703,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           borderColor: "transparent",
           backgroundColor: "transparent", // Hide default fill, gradient plugin will draw it
           pointRadius: 0,
-          tension: 0.5,
+          tension: 0.4,
           fill: false, // Disable default fill
         },
       ];
@@ -2602,8 +2712,122 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const gradientFillPlugin = {
         id: "gradientFill",
         afterDatasetsDraw(chart) {
-          const { ctx, chartArea } = chart;
+          const { ctx, chartArea, scales } = chart;
           const datasets = chart.data.datasets;
+          const rawLabels = chart._rawLabels || [];
+          const sunTimes = chart._sunTimes || { sunrises: [], sunsets: [] };
+
+          // Helper function to get pixel position for exact time (same as day/night shading)
+          function getPixelForExactTime(targetTime) {
+            const target = new Date(targetTime);
+            const labels = rawLabels;
+            // Find the two nearest hour indices
+            let beforeIdx = -1;
+            let afterIdx = -1;
+            let beforeTime = null;
+            let afterTime = null;
+
+            for (let i = 0; i < labels.length; i++) {
+              const labelTime = new Date(labels[i]);
+              if (labelTime <= target) {
+                beforeIdx = i;
+                beforeTime = labelTime;
+              }
+              if (labelTime >= target && afterIdx === -1) {
+                afterIdx = i;
+                afterTime = labelTime;
+                break;
+              }
+            }
+
+            // If exact match or at boundaries
+            if (beforeIdx === afterIdx) {
+              return scales.x.getPixelForValue(
+                beforeIdx >= 0 ? beforeIdx : afterIdx
+              );
+            }
+
+            // If before first label
+            if (beforeIdx === -1) {
+              return scales.x.getPixelForValue(0);
+            }
+
+            // If after last label
+            if (afterIdx === -1) {
+              return scales.x.getPixelForValue(labels.length - 1);
+            }
+
+            // Interpolate between the two hour positions
+            const beforePixel = scales.x.getPixelForValue(beforeIdx);
+            const afterPixel = scales.x.getPixelForValue(afterIdx);
+            const timeDiff = afterTime - beforeTime;
+            const targetDiff = target - beforeTime;
+            const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
+
+            return beforePixel + (afterPixel - beforePixel) * fraction;
+          }
+
+          // Helper function to interpolate y position for a given x position on a bezier curve
+          function getYOnBezierCurve(p1, p2, cp1x, cp1y, cp2x, cp2y, x) {
+            // Binary search to find t value that gives us the desired x
+            let t = 0.5;
+            let iterations = 20;
+            for (let i = 0; i < iterations; i++) {
+              const bezierX = 
+                Math.pow(1 - t, 3) * p1.x +
+                3 * Math.pow(1 - t, 2) * t * cp1x +
+                3 * (1 - t) * Math.pow(t, 2) * cp2x +
+                Math.pow(t, 3) * p2.x;
+              
+              if (Math.abs(bezierX - x) < 0.1) break;
+              
+              if (bezierX < x) {
+                t = t + (1 - t) / 2;
+              } else {
+                t = t / 2;
+              }
+            }
+            
+            // Calculate y at this t
+            return Math.pow(1 - t, 3) * p1.y +
+                   3 * Math.pow(1 - t, 2) * t * cp1y +
+                   3 * (1 - t) * Math.pow(t, 2) * cp2y +
+                   Math.pow(t, 3) * p2.y;
+          }
+
+          // Helper function to check if a time is nighttime (between sunset and sunrise)
+          function isNighttime(time) {
+            if (!time || !sunTimes.sunrises || !sunTimes.sunsets) return false;
+            const timeMs = new Date(time).getTime();
+            
+            // Get all sunrise and sunset times, sorted
+            const allEvents = [
+              ...sunTimes.sunsets.map(t => ({ time: new Date(t).getTime(), type: 'sunset' })),
+              ...sunTimes.sunrises.map(t => ({ time: new Date(t).getTime(), type: 'sunrise' }))
+            ].sort((a, b) => a.time - b.time);
+            
+            if (allEvents.length === 0) return false;
+            
+            // Find the most recent event before or at this time
+            let lastEvent = null;
+            for (let i = 0; i < allEvents.length; i++) {
+              if (allEvents[i].time <= timeMs) {
+                lastEvent = allEvents[i];
+              } else {
+                break;
+              }
+            }
+            
+            // If no event found, check if we're before the first event
+            if (!lastEvent) {
+              // Before first event - check if it's a sunrise (day) or sunset (night)
+              return allEvents[0].type === 'sunset';
+            }
+            
+            // If last event was a sunset, we're in nighttime
+            // If last event was a sunrise, we're in daytime
+            return lastEvent.type === 'sunset';
+          }
 
           datasets.forEach((dataset, datasetIndex) => {
             if (
@@ -2615,41 +2839,68 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
               ctx.save();
 
-              // Create gradient
-              const gradient = ctx.createLinearGradient(
-                chartArea.left,
-                0,
-                chartArea.right,
-                0
-              );
+              const tension = dataset.tension || 0.4;
+              const points = meta.data;
 
-              const colors =
+              // Dark blue color for night
+              const nightColor = "#2d4a6b";
+
+              // Day colors
+              const dayColors =
                 dataset.label === "Sun Vibe"
                   ? chartColors.sun
                   : chartColors.shade;
 
-              gradient.addColorStop(0, colors.start);
-              gradient.addColorStop(1, colors.end);
-
-              // Draw border with gradient (no fill) using smooth curves
-              // Chart.js uses Catmull-Rom spline for tension, we'll approximate with bezier curves
-              const firstPoint = meta.data[0];
-              ctx.strokeStyle = gradient;
-              ctx.lineWidth = 3;
-              ctx.beginPath();
-              ctx.moveTo(firstPoint.x, firstPoint.y);
-
-              const tension = dataset.tension || 0.5;
-              const points = meta.data;
-
               if (points.length === 1) {
-                // Single point, just move to it
-                ctx.lineTo(firstPoint.x, firstPoint.y);
+                // Single point
+                const time = rawLabels[0];
+                const isDay = !isNighttime(time);
+                ctx.strokeStyle = isDay ? dayColors.start : nightColor;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                ctx.lineTo(points[0].x, points[0].y);
+                ctx.stroke();
               } else if (points.length === 2) {
-                // Two points, simple line
+                // Two points - check if both are day or night
+                const time0 = rawLabels[0];
+                const time1 = rawLabels[1];
+                const isDay0 = !isNighttime(time0);
+                const isDay1 = !isNighttime(time1);
+                
+                if (isDay0 && isDay1) {
+                  // Both day - use gradient
+                  const gradient = ctx.createLinearGradient(
+                    points[0].x,
+                    0,
+                    points[1].x,
+                    0
+                  );
+                  gradient.addColorStop(0, dayColors.start);
+                  gradient.addColorStop(1, dayColors.end);
+                  ctx.strokeStyle = gradient;
+                } else {
+                  // At least one is night - use dark blue
+                  ctx.strokeStyle = nightColor;
+                }
+                
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
                 ctx.lineTo(points[1].x, points[1].y);
+                ctx.stroke();
               } else {
-                // Multiple points - use bezier curves for smooth lines
+                // Multiple points - draw segments with proper connection and exact sunrise/sunset splits
+                ctx.lineWidth = 3;
+                ctx.lineJoin = "round";
+                ctx.lineCap = "round";
+                
+                // Get all sunrise/sunset events for checking splits
+                const allEvents = [
+                  ...sunTimes.sunsets.map(t => ({ time: new Date(t).getTime(), type: 'sunset' })),
+                  ...sunTimes.sunrises.map(t => ({ time: new Date(t).getTime(), type: 'sunrise' }))
+                ].sort((a, b) => a.time - b.time);
+                
                 for (let i = 0; i < points.length - 1; i++) {
                   const p0 = i > 0 ? points[i - 1] : points[i];
                   const p1 = points[i];
@@ -2657,16 +2908,172 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   const p3 =
                     i < points.length - 2 ? points[i + 2] : points[i + 1];
 
-                  // Calculate control points using Catmull-Rom to Bezier conversion
-                  const cp1x = p1.x + ((p2.x - p0.x) / 6) * tension;
-                  const cp1y = p1.y + ((p2.y - p0.y) / 6) * tension;
-                  const cp2x = p2.x - ((p3.x - p1.x) / 6) * tension;
-                  const cp2y = p2.y - ((p3.y - p1.y) / 6) * tension;
+                  const time1 = rawLabels[i];
+                  const time2 = rawLabels[i + 1];
+                  const time1Ms = new Date(time1).getTime();
+                  const time2Ms = new Date(time2).getTime();
 
-                  ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+                  // Calculate control points using improved Catmull-Rom to Bezier conversion
+                  const t = tension;
+                  const dx1 = p2.x - p0.x;
+                  const dy1 = p2.y - p0.y;
+                  const dx2 = p3.x - p1.x;
+                  const dy2 = p3.y - p1.y;
+                  
+                  const cp1x = p1.x + (dx1 / 6) * t;
+                  const cp1y = p1.y + (dy1 / 6) * t;
+                  const cp2x = p2.x - (dx2 / 6) * t;
+                  const cp2y = p2.y - (dy2 / 6) * t;
+                  
+                  const smoothFactor = 0.15;
+                  const avgX = (p1.x + p2.x) / 2;
+                  const avgY = (p1.y + p2.y) / 2;
+                  const cp1xSmooth = cp1x + (avgX - cp1x) * smoothFactor;
+                  const cp1ySmooth = cp1y + (avgY - cp1y) * smoothFactor;
+                  const cp2xSmooth = cp2x + (avgX - cp2x) * smoothFactor;
+                  const cp2ySmooth = cp2y + (avgY - cp2y) * smoothFactor;
+
+                  // Find any sunrise/sunset events within this segment (excluding exact boundaries to avoid duplicates)
+                  // Events exactly at boundaries will be handled by the split points
+                  const eventsInSegment = allEvents.filter(e => 
+                    e.time > time1Ms && e.time < time2Ms
+                  );
+
+                  // Check if we need to split (either events in segment or day/night transition)
+                  const isDay1 = !isNighttime(time1);
+                  const isDay2 = !isNighttime(time2);
+                  const hasTransition = isDay1 !== isDay2;
+                  
+                  // If there's a transition, we MUST find the event causing it
+                  // Even if eventsInSegment is empty, there must be an event between these times
+                  let transitionEvent = null;
+                  if (hasTransition) {
+                    // Find the event that causes the transition
+                    // It should be between time1 and time2
+                    transitionEvent = allEvents.find(e => 
+                      e.time > time1Ms && e.time < time2Ms
+                    );
+                    
+                    // If not found with strict comparison, the event list might be incomplete
+                    // In this case, we'll need to interpolate the transition point
+                    if (!transitionEvent) {
+                      console.warn(`Transition detected between ${new Date(time1Ms).toISOString()} and ${new Date(time2Ms).toISOString()} but no event found`);
+                    }
+                  }
+
+                  if (eventsInSegment.length === 0 && !hasTransition && !transitionEvent) {
+                    // No events and no transition - draw as single segment
+                    if (isDay1 && isDay2) {
+                      // Both day - use gradient
+                      const gradient = ctx.createLinearGradient(
+                        p1.x,
+                        0,
+                        p2.x,
+                        0
+                      );
+                      gradient.addColorStop(0, dayColors.start);
+                      gradient.addColorStop(1, dayColors.end);
+                      ctx.strokeStyle = gradient;
+                    } else {
+                      // Both night - use dark blue
+                      ctx.strokeStyle = nightColor;
+                    }
+
+                    ctx.beginPath();
+                    if (i === 0) {
+                      ctx.moveTo(p1.x, p1.y);
+                    } else {
+                      ctx.moveTo(p0.x, p0.y);
+                      ctx.lineTo(p1.x, p1.y);
+                    }
+                    ctx.bezierCurveTo(cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, p2.x, p2.y);
+                    ctx.stroke();
+                  } else {
+                    // Split segment at sunrise/sunset events or transitions
+                    // Build split points: start point, all events in segment, end point
+                    const splitPoints = [
+                      { time: time1Ms, x: p1.x, y: p1.y, isDay: isDay1 }
+                    ];
+                    
+                    // Add transition event if found
+                    if (transitionEvent) {
+                      const x = getPixelForExactTime(new Date(transitionEvent.time));
+                      const y = getYOnBezierCurve(p1, p2, cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, x);
+                      splitPoints.push({ 
+                        time: transitionEvent.time, 
+                        x, 
+                        y, 
+                        isDay: transitionEvent.type === 'sunrise' 
+                      });
+                    }
+                    
+                    // Add events in segment
+                    eventsInSegment.forEach(e => {
+                      const x = getPixelForExactTime(new Date(e.time));
+                      const y = getYOnBezierCurve(p1, p2, cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, x);
+                      splitPoints.push({ 
+                        time: e.time, 
+                        x, 
+                        y, 
+                        isDay: e.type === 'sunrise' 
+                      });
+                    });
+                    
+                    // Add end point
+                    splitPoints.push({ 
+                      time: time2Ms, 
+                      x: p2.x, 
+                      y: p2.y, 
+                      isDay: isDay2 
+                    });
+                    
+                    // Sort by time to ensure correct order
+                    splitPoints.sort((a, b) => a.time - b.time);
+
+                    // Draw each sub-segment
+                    for (let j = 0; j < splitPoints.length - 1; j++) {
+                      const sp1 = splitPoints[j];
+                      const sp2 = splitPoints[j + 1];
+                      
+                      // Determine color for this sub-segment
+                      if (sp1.isDay && sp2.isDay) {
+                        const gradient = ctx.createLinearGradient(
+                          sp1.x,
+                          0,
+                          sp2.x,
+                          0
+                        );
+                        gradient.addColorStop(0, dayColors.start);
+                        gradient.addColorStop(1, dayColors.end);
+                        ctx.strokeStyle = gradient;
+                      } else {
+                        ctx.strokeStyle = nightColor;
+                      }
+
+                      ctx.beginPath();
+                      if (j === 0 && i === 0) {
+                        ctx.moveTo(sp1.x, sp1.y);
+                      } else if (j === 0) {
+                        ctx.moveTo(p0.x, p0.y);
+                        ctx.lineTo(sp1.x, sp1.y);
+                      } else {
+                        ctx.moveTo(sp1.x, sp1.y);
+                      }
+                      
+                      // Draw line to next split point (or use bezier if it's the full segment)
+                      if (j === 0 && splitPoints.length === 2) {
+                        // Full segment with one split - use bezier to split point, then line to end
+                        ctx.bezierCurveTo(cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, sp2.x, sp2.y);
+                      } else {
+                        // Simple line between split points
+                        ctx.lineTo(sp2.x, sp2.y);
+                      }
+                      
+                      ctx.stroke();
+                    }
+                  }
                 }
               }
-              ctx.stroke();
 
               ctx.restore();
             }
@@ -2783,8 +3190,57 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 tooltip.opacity = 0;
               },
                 callbacks: {
-                  // Keep the time label as title
-                  title: (items) => items?.[0]?.label ?? "",
+                  // Keep the time label as title, with sunrise/sunset info if near
+                  title: (items) => {
+                    const defaultTitle = items?.[0]?.label ?? "";
+                    if (!items || items.length === 0) return defaultTitle;
+                    
+                    // Get the hovered time from the first item
+                    const item = items[0];
+                    const dataIndex = item.dataIndex;
+                    const chart = item.chart;
+                    const rawLabels = chart._rawLabels || [];
+                    const sunTimes = chart._sunTimes || { sunrises: [], sunsets: [] };
+                    
+                    if (dataIndex >= 0 && dataIndex < rawLabels.length) {
+                      const hoveredTime = new Date(rawLabels[dataIndex]);
+                      const hoveredTimeMs = hoveredTime.getTime();
+                      const twoHoursMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+                      
+                      // Check all sunrises and sunsets
+                      const allEvents = [
+                        ...sunTimes.sunrises.map(t => ({ time: new Date(t).getTime(), type: 'sunrise', label: 'Sunrise' })),
+                        ...sunTimes.sunsets.map(t => ({ time: new Date(t).getTime(), type: 'sunset', label: 'Sunset' }))
+                      ];
+                      
+                      // Find events within 2 hours before or after
+                      const nearbyEvents = allEvents.filter(e => {
+                        const timeDiff = Math.abs(e.time - hoveredTimeMs);
+                        return timeDiff <= twoHoursMs;
+                      });
+                      
+                      if (nearbyEvents.length > 0) {
+                        // Sort events by time difference
+                        const sortedEvents = nearbyEvents
+                          .map(e => ({
+                            ...e,
+                            diff: Math.abs(e.time - hoveredTimeMs)
+                          }))
+                          .sort((a, b) => a.diff - b.diff);
+                        
+                        // Build inline tooltip: "Fri, 6pm - Sunset 6:35pm"
+                        const eventStrings = sortedEvents.map(event => {
+                          const exactTime = fmtHM(new Date(event.time));
+                          return `${event.label} ${exactTime}`;
+                        });
+                        
+                        // Combine with default title
+                        return `${defaultTitle} - ${eventStrings.join(', ')}`;
+                      }
+                    }
+                    
+                    return defaultTitle;
+                  },
                 // Custom label with color indicator: "● Sun: 84.9° Balanced, light layers"
                   label: (ctx) => {
                   if (ctx.dataset.label === "Highlighted Vibes") return null; // Don't show in tooltip
@@ -2860,9 +3316,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       vibeChart._rawLabels = labels;
       vibeChart._markers = markers;
       vibeChart._nowIdx = nowIdx;
+      vibeChart._isDayByHour = isDayByHour;
+      vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
 
       // Hide skeleton immediately after chart is created
       hideChartLoading();
+      
+      // Update card visibility based on current time
+      updateCardVisibility();
 
       // Pointer interactions: hover + tap/drag simulation + drag selection
         els.chartCanvas.style.touchAction = "none";
@@ -3084,9 +3545,38 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       els.shade &&
         (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
-      // Only update sun card content if it's visible (based on current time, not hovered time)
-      if (els.sun && els.sunCard && els.sunCard.style.display !== "none") {
-        els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
+      
+      // Update sun card content during hover (make it visible even at night to show sunrise time)
+      if (els.sun && els.sunCard) {
+        // Make card visible during hover if it's night (to show sunrise time)
+        if (!isDay && els.sunCard.style.display === "none") {
+          els.sunCard.style.display = "";
+          if (cardsContainer) {
+            cardsContainer.classList.remove("sun-card-hidden");
+          }
+        }
+        
+        if (!isDay) {
+          // At night: show next sunrise time
+          const hoverTimeMs = dt.getTime();
+          const nextSunrise = (sunTimes.sunrises || [])
+            .map(t => new Date(t).getTime())
+            .find(sunriseMs => sunriseMs > hoverTimeMs);
+          
+          if (nextSunrise) {
+            els.sun.innerHTML = `Sunrise at ${fmtHM(new Date(nextSunrise))}`;
+            // Hide description section when showing sunrise time
+            if (els.sunLabel) els.sunLabel.style.display = "none";
+          } else {
+            // No sunrise found, fallback to temp
+            els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
+            // Show description section when showing temperature
+            if (els.sunLabel) els.sunLabel.style.display = "";
+          }
+        } else {
+          // During day: show temperature
+          els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
+        }
       }
   
         const simSolar = solarByHour[i];
@@ -3096,13 +3586,33 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           isDay,
           context: "shade",
         }));
-      if (isDay && els.sunLabel)
-        els.sunLabel.innerHTML = vibeDescriptor(sunVals[i], {
-          solar: simSolar,
-          isDay,
-          context: "sun",
-        });
-      if (!isDay && els.sunLabel) els.sunLabel.innerHTML = "";
+      
+      if (isDay && els.sunLabel) {
+        // During daytime: check if within 2 hours of sunset
+        const hoverTimeMs = dt.getTime();
+        const twoHoursMs = 2 * 60 * 60 * 1000;
+        const nextSunset = (sunTimes.sunsets || [])
+          .map(t => new Date(t).getTime())
+          .find(sunsetMs => sunsetMs > hoverTimeMs);
+        
+        if (nextSunset && (nextSunset - hoverTimeMs) <= twoHoursMs) {
+          // Within 2 hours of sunset, show sunset time in temp area and hide description
+          els.sun.innerHTML = `Sunset at ${fmtHM(new Date(nextSunset))}`;
+          els.sunLabel.style.display = "none";
+        } else {
+          // Normal descriptor - show description section
+          els.sunLabel.style.display = "";
+          els.sunLabel.innerHTML = vibeDescriptor(sunVals[i], {
+            solar: simSolar,
+            isDay,
+            context: "sun",
+          });
+        }
+      }
+      if (!isDay && els.sunLabel && els.sunLabel.style.display !== "none") {
+        // At night, if description is still visible, hide it
+        els.sunLabel.style.display = "none";
+      }
 
       // Remove skeleton loading state
       hideCardLoading();
@@ -3186,7 +3696,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             const ds = buildTimelineDataset(hourlyMaybe);
             timelineState = ds;
             window.timelineState = timelineState; // expose for tooltip descriptors
-            await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+            await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
           // Update summary if selection exists (weather data may have changed)
           if (selectionRange) {
             updateWeatherSummary();
@@ -3265,7 +3775,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const ds = buildTimelineDataset(hourly);
         timelineState = ds;
         window.timelineState = timelineState; // expose for tooltip descriptors
-        await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+        await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
         updateAdvStats(); // Update stats after chart is rendered
         // Update summary if selection exists (weather data may have changed)
         if (selectionRange) {
@@ -3522,7 +4032,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       ds.labels,
                       ds.shadeVals,
                       ds.sunVals,
-                      ds.now
+                      ds.now,
+                      ds.isDayByHour
                     );
                   })
                   .catch(() => {});
@@ -3674,7 +4185,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
               timelineState = ds;
               window.timelineState = timelineState;
-              await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+              await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
               if (selectionRange) {
                 updateWeatherSummary();
               }
@@ -3736,7 +4247,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
-                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
                 // Update weather summary if there's a selection
                 if (selectionRange) {
                   updateWeatherSummary();
@@ -3834,7 +4345,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     ds.labels,
                     ds.shadeVals,
                     ds.sunVals,
-                    ds.now
+                    ds.now,
+                    ds.isDayByHour
                   );
                 })
                 .catch(() => {});
@@ -3966,7 +4478,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
-                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
               })
               .catch(() => {});
           }
@@ -4057,7 +4569,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
-                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
               })
               .catch(() => {});
           } else if (els.temp && els.humidity && els.wind) {
