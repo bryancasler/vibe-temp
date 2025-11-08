@@ -176,6 +176,10 @@ body {
 .card--sun .card-temp {
   color: var(--sun);
 }
+.card--sun .card-temp .time-ampm {
+  font-size: 0.75em;
+  opacity: 0.8;
+}
 .card-desc {
   display: block;
   line-height: 1.25;
@@ -273,31 +277,88 @@ body {
   gap: 4px;
   flex: 1;
 }
+.zip-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.zip-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
 .chart-location-input {
-  font-size: 13px;
+  font-size: 14px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
-  font-weight: 500;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 2px 6px;
-  width: 120px;
-  text-align: right;
-  transition: all 0.2s;
+  font-weight: 600;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px 6px 28px; /* Left padding accounts for spinner space */
+  width: calc(5ch + 48px); /* 5 characters + left padding (28px) + right padding (8px) + extra (12px) */
+  text-align: center;
+  transition: all 0.2s ease;
+  letter-spacing: 0.5px;
+  position: relative;
 }
 .chart-location-input:focus {
   outline: none;
-  border-color: var(--border);
+  border-color: var(--good);
   background: var(--card);
   color: var(--text);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+.chart-location-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg);
 }
 .chart-location-input::placeholder {
   color: var(--muted);
   font-weight: 400;
+  opacity: 0.6;
+}
+[data-theme="light"] .chart-location-input {
+  background: #ffffff;
+  border-color: #d1d5db;
 }
 [data-theme="light"] .chart-location-input:focus {
-  background: var(--bg);
-  border-color: var(--border);
+  background: #ffffff;
+  border-color: var(--good);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+[data-theme="light"] .chart-location-input:disabled {
+  background: #f9fafb;
+}
+.zip-loading-spinner {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--good);
+  border-radius: 50%;
+  animation: spin-vertical 0.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes spin-vertical {
+  to {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+.chart-status {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 2px;
+  min-height: 14px;
 }
 .chart-shading-toggles {
   display: flex;

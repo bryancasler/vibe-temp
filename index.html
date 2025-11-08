@@ -169,16 +169,24 @@
       <!-- Chart -->
       <section class="chart-wrap">
         <div class="chart-head">
-          <div class="chart-title">Today and Tomorrow</div>
+          <div class="chart-title">24-Hour Forecast</div>
           <div class="chart-head-right">
-            <input
-              type="text"
-              id="chartLocation"
-              class="chart-location-input"
-              placeholder="Enter ZIP"
-              maxlength="10"
-              title="Enter ZIP code to change location"
-            />
+            <div class="zip-input-wrapper">
+              <label for="chartLocation" class="zip-label">ZIP</label>
+              <div style="position: relative;">
+                <input
+                  type="text"
+                  id="chartLocation"
+                  class="chart-location-input"
+                  placeholder="12345"
+                  maxlength="5"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  title="Enter 5-digit ZIP code"
+                />
+                <div class="zip-loading-spinner" id="zipLoadingSpinner" style="display: none;"></div>
+              </div>
+            </div>
             <div class="chart-status" id="chartStatus"></div>
           </div>
         </div>
@@ -199,20 +207,20 @@
         </div>
         <div class="time-presets">
           <button
+            id="presetDefault"
+            class="preset-btn active"
+            type="button"
+            title="Show 24-hour forecast"
+          >
+            24-Hour Forecast
+          </button>
+          <button
             id="presetToday"
             class="preset-btn"
             type="button"
             title="Show today only"
           >
             Today
-          </button>
-          <button
-            id="presetDefault"
-            class="preset-btn active"
-            type="button"
-            title="Show today and tomorrow"
-          >
-            Today & Tomorrow
           </button>
           <button
             id="presetTomorrow"

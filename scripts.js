@@ -1,46 +1,46 @@
 (() => {
-    // Load Chart.js dynamically
+  // Load Chart.js dynamically
   const CHART_JS_URL =
     "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js";
-    let CHART_READY = null;
-  
-    function loadScriptOnce(src) {
-      return new Promise((resolve, reject) => {
+  let CHART_READY = null;
+
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
       const existing = Array.from(document.scripts).find((s) => s.src === src);
-        if (existing) {
-          if (window.Chart) return resolve();
-          existing.addEventListener("load", () => resolve());
-          existing.addEventListener("error", (e) => reject(e));
-          return;
-        }
-        const s = document.createElement("script");
-        s.src = src;
-        s.async = true;
-        s.defer = true;
-        s.onload = () => resolve();
-        s.onerror = (e) => reject(e);
-        document.head.appendChild(s);
-      });
-    }
-    function ensureChartJs() {
-      if (!CHART_READY) CHART_READY = loadScriptOnce(CHART_JS_URL);
-      return CHART_READY;
-    }
-  
-    // DOM ready helper (works if script loads after DOM or with defer)
-    const onReady = (cb) => {
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", cb, { once: true });
-      } else {
-        cb();
+      if (existing) {
+        if (window.Chart) return resolve();
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", (e) => reject(e));
+        return;
       }
-    };
-  
-    onReady(() => {
-      // Elements
-      const $ = (s) => document.querySelector(s);
-      const statusEl = $("#status");
-      const chartStatusEl = $("#chartStatus");
+      const s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.defer = true;
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.head.appendChild(s);
+    });
+  }
+  function ensureChartJs() {
+    if (!CHART_READY) CHART_READY = loadScriptOnce(CHART_JS_URL);
+    return CHART_READY;
+  }
+
+  // DOM ready helper (works if script loads after DOM or with defer)
+  const onReady = (cb) => {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", cb, { once: true });
+    } else {
+      cb();
+    }
+  };
+
+  onReady(() => {
+    // Elements
+    const $ = (s) => document.querySelector(s);
+    const statusEl = $("#status");
+    const chartStatusEl = $("#chartStatus");
     const chartTitleEl = $(".chart-title");
     const chartBox = $("#chartBox");
     const clearHighlightBtn = $("#clearHighlight");
@@ -138,7 +138,7 @@
         if (daysAhead === 1) {
           title = "Today";
         } else if (daysAhead === 2) {
-          title = "Today and Tomorrow";
+          title = "24-Hour Forecast";
         } else {
           title = `Next ${daysAhead} Days`;
         }
@@ -152,11 +152,15 @@
         // Show ZIP code if saved, otherwise show place name or empty
         const savedZip = localStorage.getItem(ZIP_KEY);
         if (savedZip) {
+          // Show "ZIP [code]" format for clarity
           chartLocationEl.value = savedZip;
+          chartLocationEl.placeholder = `ZIP ${savedZip}`;
         } else if (currentPlaceName) {
-          chartLocationEl.value = currentPlaceName;
+          chartLocationEl.value = "";
+          chartLocationEl.placeholder = currentPlaceName;
         } else {
           chartLocationEl.value = "";
+          chartLocationEl.placeholder = "Enter ZIP";
         }
       }
     }
@@ -216,33 +220,33 @@
       }
     }
 
-      const els = {
-        temp: $("#temp"),
-        humidity: $("#humidity"),
-        wind: $("#wind"),
-        solar: $("#solar"),
-        solarVal: $("#solarVal"),
-        reflect: $("#reflect"),
-        reflectCustom: $("#reflectCustom"),
-        shade: $("#shade"),
-        sun: $("#sun"),
-        shadeLabel: $("#shadeLabel"),
-        sunLabel: $("#sunLabel"),
-        chartCanvas: $("#vibeChart"),
-        lastUpdated: $("#lastUpdated"),
-        nextUpdated: $("#nextUpdated"),
+    const els = {
+      temp: $("#temp"),
+      humidity: $("#humidity"),
+      wind: $("#wind"),
+      solar: $("#solar"),
+      solarVal: $("#solarVal"),
+      reflect: $("#reflect"),
+      reflectCustom: $("#reflectCustom"),
+      shade: $("#shade"),
+      sun: $("#sun"),
+      shadeLabel: $("#shadeLabel"),
+      sunLabel: $("#sunLabel"),
+      chartCanvas: $("#vibeChart"),
+      lastUpdated: $("#lastUpdated"),
+      nextUpdated: $("#nextUpdated"),
       advCurrentLocation: $("#advCurrentLocation"),
       advCoordinates: $("#advCoordinates"),
       advDataPoints: $("#advDataPoints"),
-        updateInterval: $("#updateInterval"),
-        updateHourlyToggle: $("#updateHourlyToggle"),
-        updateNow: $("#updateNow"),
+      updateInterval: $("#updateInterval"),
+      updateHourlyToggle: $("#updateHourlyToggle"),
+      updateNow: $("#updateNow"),
       daysAhead: $("#daysAhead"),
       nightShadingToggle: $("#nightShadingToggle"),
-        useLocationBtn: $("#use-location"),
-        sunCard: $("#sunCard"),
-      };
-  
+      useLocationBtn: $("#use-location"),
+      sunCard: $("#sunCard"),
+    };
+
     // Advanced Configuration Modal
     const advConfigBtn = $("#advConfigBtn");
     const advConfigModal = $("#advConfigModal");
@@ -283,17 +287,17 @@
           closeAdvConfig();
         }
       });
-      }
-  
-      // Units & ZIP
-      const unitEls = { F: $("#unitF"), C: $("#unitC") };
+    }
+
+    // Units & ZIP
+    const unitEls = { F: $("#unitF"), C: $("#unitC") };
     const zipEls = {
       input: $("#chartLocation"), // Now references the input in chart header
       status: null, // Status removed from advanced modal
     };
-  
-      // State
-      const UNIT_KEY = "vibeUnit";
+
+    // State
+    const UNIT_KEY = "vibeUnit";
     const ZIP_KEY = "vibeZip";
     const DAYS_AHEAD_KEY = "vibeDaysAhead";
     const NIGHT_SHADING_KEY = "vibeNightShading";
@@ -318,17 +322,17 @@
     let rainIconsEnabled = localStorage.getItem(RAIN_ICONS_KEY) !== "false"; // Default true
     let snowIconsEnabled = localStorage.getItem(SNOW_ICONS_KEY) !== "false"; // Default true
     let iceIconsEnabled = localStorage.getItem(ICE_ICONS_KEY) !== "false"; // Default true
-    
+
     // Calibration defaults
     const defaultCalibration = {
-      humidityCoeff: 1/15, // 0.0667
+      humidityCoeff: 1 / 15, // 0.0667
       humidityBaseline: 40,
       windCoeff: 0.7,
       solarCoeff: 8,
       reflectCoeff: 4,
-      cloudExp: 0.7
+      cloudExp: 0.7,
     };
-    
+
     // Load calibration from localStorage or use defaults
     let calibration = defaultCalibration;
     try {
@@ -346,7 +350,7 @@
       nightShadingEnabled = true;
       localStorage.setItem(NIGHT_SHADING_KEY, "true");
     }
-      let lastCoords = null;
+    let lastCoords = null;
     let favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
     let chartColors = JSON.parse(
       localStorage.getItem(CHART_COLORS_KEY) ||
@@ -356,20 +360,20 @@
         })
     );
     // vibeChart is declared earlier (line 90) to avoid reference errors
-      let pollTimer = null;
-      let nextUpdateAt = null;
-  
+    let pollTimer = null;
+    let nextUpdateAt = null;
+
     let sunTimes = { sunrises: [], sunsets: [] }; // Arrays of all sunrise/sunset times for visible range
-      let currentIsDay = null;
-      let currentPlaceName = "";
-  
-    let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, now } all in °F
-      window.timelineState = null; // expose for tooltip use
-      let simActive = false;
+    let currentIsDay = null;
+    let currentPlaceName = "";
+
+    let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, now } all in °F
+    window.timelineState = null; // expose for tooltip use
+    let simActive = false;
     let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
     let summaryGenerationInProgress = false;
-  
-      const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
+
+    const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
     const log = (...a) => {
       if (DEBUG) console.log("[Vibe]", ...a);
     };
@@ -1056,8 +1060,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           (afterTime.getTime() - beforeTime.getTime()) * fraction
       );
     }
-  
-      // Utils
+
+    // Utils
     function clamp(n, min, max) {
       return Math.min(max, Math.max(min, n));
     }
@@ -1069,6 +1073,19 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
     function fmtHM(d) {
       return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     }
+    function fmtHMWithSmallAMPM(d) {
+      const timeStr = d.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      // Split time and AM/PM, wrap AM/PM in span with smaller font
+      // Handle both "6:43 AM" and "6:43AM" formats
+      const parts = timeStr.split(/(\s*[AP]M)/i);
+      if (parts.length === 3) {
+        return `${parts[0]}<span class="time-ampm">${parts[1]}</span>`;
+      }
+      return timeStr;
+    }
     function fmtHMS(d) {
       return d.toLocaleTimeString([], {
         hour: "numeric",
@@ -1076,33 +1093,33 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         second: "2-digit",
       });
     }
-  
-      function paintUnitToggle() {
-        unitEls.F?.classList.toggle("active", unit === "F");
-        unitEls.C?.classList.toggle("active", unit === "C");
-      }
-      function applyUnitLabels() {
-        // Update inline Air Temp unit tag in Advanced
-        const airUnit = document.getElementById("airUnitLabel");
+
+    function paintUnitToggle() {
+      unitEls.F?.classList.toggle("active", unit === "F");
+      unitEls.C?.classList.toggle("active", unit === "C");
+    }
+    function applyUnitLabels() {
+      // Update inline Air Temp unit tag in Advanced
+      const airUnit = document.getElementById("airUnitLabel");
       if (airUnit) airUnit.textContent = unit === "F" ? "\u00B0F" : "\u00B0C"; // Use Unicode for degree symbol
-      }
-      function convertTempInputIfPresent(toUnit) {
-        const t = els.temp;
-        if (!t || t.value === "") return;
+    }
+    function convertTempInputIfPresent(toUnit) {
+      const t = els.temp;
+      if (!t || t.value === "") return;
       const val = parseFloat(t.value);
       if (Number.isNaN(val)) return;
-        if (toUnit === "C" && unit === "F") t.value = fToC(val).toFixed(1);
-        else if (toUnit === "F" && unit === "C") t.value = cToF(val).toFixed(1);
-      }
-  
-      // ZIP helpers
-      function normalizeZip(raw) {
-        if (!raw) return null;
-        const s = String(raw).trim();
-        const m = s.match(/^(\d{5})(?:-\d{4})?$/);
-        return m ? m[1] : null;
-      }
-      async function getCoordsForZip(zip5) {
+      if (toUnit === "C" && unit === "F") t.value = fToC(val).toFixed(1);
+      else if (toUnit === "F" && unit === "C") t.value = cToF(val).toFixed(1);
+    }
+
+    // ZIP helpers
+    function normalizeZip(raw) {
+      if (!raw) return null;
+      const s = String(raw).trim();
+      const m = s.match(/^(\d{5})(?:-\d{4})?$/);
+      return m ? m[1] : null;
+    }
+    async function getCoordsForZip(zip5) {
       try {
         const r = await fetch(`https://api.zippopotam.us/us/${zip5}`);
         if (!r.ok) {
@@ -1121,9 +1138,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (e.message === "ZIP_NOT_FOUND") throw new Error("ZIP_NOT_FOUND");
         throw new Error("ZIP_LOOKUP_FAILED");
       }
-      }
-      async function getPlaceName(lat, lon) {
-        try {
+    }
+    async function getPlaceName(lat, lon) {
+      try {
         const apiUrl = new URL(
           "https://geocoding-api.open-meteo.com/v1/reverse"
         );
@@ -1141,64 +1158,70 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         )}`;
 
         const r = await fetch(proxyUrl);
-          if (!r.ok) throw new Error("reverse geocode failed");
-          const j = await r.json();
-          const p = j?.results?.[0];
-          if (!p) return "";
-          const city = p.name || "";
-          const admin = p.admin1 || p.admin2 || p.country || "";
-          return admin && admin !== city ? `${city}, ${admin}` : city;
+        if (!r.ok) throw new Error("reverse geocode failed");
+        const j = await r.json();
+        const p = j?.results?.[0];
+        if (!p) return "";
+        const city = p.name || "";
+        const admin = p.admin1 || p.admin2 || p.country || "";
+        return admin && admin !== city ? `${city}, ${admin}` : city;
       } catch (e) {
         // Silently fail - location name is optional
         console.debug("Could not fetch location name:", e);
         return "";
       }
-      }
-  
-      function isDaylightNow() {
-        if (currentIsDay === 0 || currentIsDay === 1) return !!currentIsDay;
-        const now = new Date();
-        const nowMs = now.getTime();
-        
-        // Check all sunrises and sunsets to determine if it's currently daylight
-        const allEvents = [
-          ...(sunTimes.sunrises || []).map(t => ({ time: new Date(t).getTime(), type: 'sunrise' })),
-          ...(sunTimes.sunsets || []).map(t => ({ time: new Date(t).getTime(), type: 'sunset' }))
-        ].sort((a, b) => a.time - b.time);
-        
-        if (allEvents.length > 0) {
-          // Find the most recent event before or at now
-          let lastEvent = null;
-          for (let i = 0; i < allEvents.length; i++) {
-            if (allEvents[i].time <= nowMs) {
-              lastEvent = allEvents[i];
-            } else {
-              break;
-            }
+    }
+
+    function isDaylightNow() {
+      if (currentIsDay === 0 || currentIsDay === 1) return !!currentIsDay;
+      const now = new Date();
+      const nowMs = now.getTime();
+
+      // Check all sunrises and sunsets to determine if it's currently daylight
+      const allEvents = [
+        ...(sunTimes.sunrises || []).map((t) => ({
+          time: new Date(t).getTime(),
+          type: "sunrise",
+        })),
+        ...(sunTimes.sunsets || []).map((t) => ({
+          time: new Date(t).getTime(),
+          type: "sunset",
+        })),
+      ].sort((a, b) => a.time - b.time);
+
+      if (allEvents.length > 0) {
+        // Find the most recent event before or at now
+        let lastEvent = null;
+        for (let i = 0; i < allEvents.length; i++) {
+          if (allEvents[i].time <= nowMs) {
+            lastEvent = allEvents[i];
+          } else {
+            break;
           }
-          
-          // If last event was a sunrise, we're in daytime
-          // If last event was a sunset, we're in nighttime
-          if (lastEvent) {
-            return lastEvent.type === 'sunrise';
-          }
-          
-          // Before first event - check if it's a sunrise (day) or sunset (night)
-          return allEvents[0].type === 'sunrise';
         }
-        
-        // Fallback to old logic
-        if (sunTimes.sunriseToday && sunTimes.sunsetToday) {
-          if (now >= sunTimes.sunriseToday && now < sunTimes.sunsetToday)
-            return true;
+
+        // If last event was a sunrise, we're in daytime
+        // If last event was a sunset, we're in nighttime
+        if (lastEvent) {
+          return lastEvent.type === "sunrise";
         }
-        const s = parseFloat(els.solar?.value ?? "0") || 0;
-        return s > 0.2;
+
+        // Before first event - check if it's a sunrise (day) or sunset (night)
+        return allEvents[0].type === "sunrise";
       }
-  
-      // Descriptors
-      function describeDay(tempF, context = "shade") {
-        if (tempF < -10) return "Brutally frigid; frostbite risk";
+
+      // Fallback to old logic
+      if (sunTimes.sunriseToday && sunTimes.sunsetToday) {
+        if (now >= sunTimes.sunriseToday && now < sunTimes.sunsetToday)
+          return true;
+      }
+      const s = parseFloat(els.solar?.value ?? "0") || 0;
+      return s > 0.2;
+    }
+
+    // Descriptors
+    function describeDay(tempF, context = "shade") {
+      if (tempF < -10) return "Brutally frigid; frostbite risk";
       if (tempF < -5) return "Bitter, painfully cold";
       if (tempF < 0) return "Bitter cold";
       if (tempF < 5) return "Arctic chill";
@@ -1226,12 +1249,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       if (tempF < 85) return "Quite warm; shade helps";
       if (tempF < 90) return "Hot; hydrate";
       if (tempF < 95) return "Baking in the sun";
-        if (tempF < 100) return "Very hot; limit exertion";
-        if (tempF < 105) return "Oppressive heat; take it easy";
-        return "Extreme heat alert";
-      }
-      function describeNight(tempF) {
-        if (tempF < -10) return "Brutally frigid night";
+      if (tempF < 100) return "Very hot; limit exertion";
+      if (tempF < 105) return "Oppressive heat; take it easy";
+      return "Extreme heat alert";
+    }
+    function describeNight(tempF) {
+      if (tempF < -10) return "Brutally frigid night";
       if (tempF < -5) return "Bitter, painfully cold night";
       if (tempF < 0) return "Bitter cold night";
       if (tempF < 5) return "Arctic night air";
@@ -1253,10 +1276,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       if (tempF < 85) return "Hot evening";
       if (tempF < 90) return "Hot evening; hydrate";
       if (tempF < 95) return "Stifling night heat";
-        if (tempF < 100) return "Oppressive night heat";
-        if (tempF < 105) return "Dangerously hot night";
-        return "Extreme heat night";
-      }
+      if (tempF < 100) return "Oppressive night heat";
+      if (tempF < 105) return "Dangerously hot night";
+      return "Extreme heat night";
+    }
     function vibeDescriptor(
       tempF,
       {
@@ -1265,34 +1288,41 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         context = "shade",
       } = {}
     ) {
-        const base = isDay ? describeDay(tempF, context) : describeNight(tempF);
-        if (!isDay) return base;
-        const s = clamp(Number.isFinite(solar) ? solar : 0, 0, 1);
-        let suffix = "";
+      const base = isDay ? describeDay(tempF, context) : describeNight(tempF);
+      if (!isDay) return base;
+      const s = clamp(Number.isFinite(solar) ? solar : 0, 0, 1);
+      let suffix = "";
       if (s < 0.2)
         suffix = context === "sun" ? "clouds mute the sun" : "overcast";
       else if (s < 0.4) suffix = "mostly cloudy";
       else if (s < 0.7) suffix = "partly sunny";
-        return suffix ? `${base} (${suffix})` : base;
-      }
-  
-      // Formulas
+      return suffix ? `${base} (${suffix})` : base;
+    }
+
+    // Formulas
     function shadeVibeOf(T, RH, Wind) {
-      return T + (RH - calibration.humidityBaseline) / (1 / calibration.humidityCoeff) - calibration.windCoeff * Wind;
+      return (
+        T +
+        (RH - calibration.humidityBaseline) / (1 / calibration.humidityCoeff) -
+        calibration.windCoeff * Wind
+      );
     }
     function sunVibeOf(shadeV, solarExposure, R) {
       // Only apply reflectivity when there's actual solar exposure
-      const reflectivityEffect = solarExposure > 0 ? calibration.reflectCoeff * R : 0;
-      return shadeV + calibration.solarCoeff * solarExposure + reflectivityEffect;
+      const reflectivityEffect =
+        solarExposure > 0 ? calibration.reflectCoeff * R : 0;
+      return (
+        shadeV + calibration.solarCoeff * solarExposure + reflectivityEffect
+      );
     }
-      function reflectivity() {
-        const sel = parseFloat(els.reflect?.value ?? "0");
+    function reflectivity() {
+      const sel = parseFloat(els.reflect?.value ?? "0");
       if (sel === 0)
         return clamp(parseFloat(els.reflectCustom?.value ?? "0") || 0, 0, 1);
-        return clamp(sel, 0, 1);
-      }
-  
-      // Solar exposure
+      return clamp(sel, 0, 1);
+    }
+
+    // Solar exposure
     function solarFromUVandCloud({
       uv_index,
       uv_index_clear_sky,
@@ -1306,29 +1336,30 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           : typeof uv_index === "number"
           ? uv_index / 10
           : 0;
-      const cloudAtten = 1 - Math.pow((cloud_cover ?? 0) / 100, calibration.cloudExp);
+      const cloudAtten =
+        1 - Math.pow((cloud_cover ?? 0) / 100, calibration.cloudExp);
       const solar = isDaylight ? baseUV * cloudAtten : 0;
-        return clamp(solar, 0, 1);
-      }
-  
-      // Compute card values (cards show °F/°C)
-      function compute() {
-        const Traw = parseFloat(els.temp?.value ?? "NaN");
+      return clamp(solar, 0, 1);
+    }
+
+    // Compute card values (cards show °F/°C)
+    function compute() {
+      const Traw = parseFloat(els.temp?.value ?? "NaN");
       const RH = parseFloat(els.humidity?.value ?? "NaN");
-        const Wind = parseFloat(els.wind?.value ?? "NaN");
+      const Wind = parseFloat(els.wind?.value ?? "NaN");
       const Solar = parseFloat(els.solar?.value ?? "NaN");
       if ([Traw, RH, Wind].some((v) => Number.isNaN(v))) {
         statusEl &&
           (statusEl.textContent =
             "Enter temp, humidity, and wind or use your location/ZIP.");
-          return;
-        }
-        const tempF = unit === "F" ? Traw : cToF(Traw);
-        const shadeF = shadeVibeOf(tempF, RH, Wind);
+        return;
+      }
+      const tempF = unit === "F" ? Traw : cToF(Traw);
+      const shadeF = shadeVibeOf(tempF, RH, Wind);
       const solarValue = Number.isNaN(Solar) ? 0 : clamp(Solar, 0, 1);
       const sunF = sunVibeOf(shadeF, solarValue, reflectivity());
-  
-        const shadeDisplay = toUserTemp(shadeF);
+
+      const shadeDisplay = toUserTemp(shadeF);
       const sunDisplay = toUserTemp(sunF);
 
       els.shade &&
@@ -1354,9 +1385,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Remove skeleton loading state
       hideCardLoading();
-  
-        if (!simActive && els.sunCard) {
+
+      if (!simActive && els.sunCard) {
+        // Hide sun card if selection is active, otherwise show based on daylight
+        if (selectionRange) {
+          els.sunCard.style.display = "none";
+        } else {
           els.sunCard.style.display = isDaylightNow() ? "" : "none";
+        }
         // Update cards container class based on sun card visibility
         if (cardsContainer) {
           cardsContainer.classList.toggle(
@@ -1364,19 +1400,19 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             els.sunCard.style.display === "none"
           );
         }
-        }
-        statusEl && (statusEl.textContent = "Computed from current inputs.");
       }
-  
-      function autoSolarFromCloudCover(cloudCoverPct) {
-        const solar = clamp(1 - cloudCoverPct / 100, 0.2, 1);
-        els.solar && (els.solar.value = solar.toFixed(1));
-        els.solarVal && (els.solarVal.textContent = solar.toFixed(1));
-        return solar;
-      }
-  
+      statusEl && (statusEl.textContent = "Computed from current inputs.");
+    }
+
+    function autoSolarFromCloudCover(cloudCoverPct) {
+      const solar = clamp(1 - cloudCoverPct / 100, 0.2, 1);
+      els.solar && (els.solar.value = solar.toFixed(1));
+      els.solarVal && (els.solarVal.textContent = solar.toFixed(1));
+      return solar;
+    }
+
     // API with error handling
-      async function getCurrentWeather(lat, lon) {
+    async function getCurrentWeather(lat, lon) {
       try {
         const params = new URLSearchParams({
           latitude: lat,
@@ -1410,14 +1446,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           throw new Error("INVALID_RESPONSE");
         throw new Error("NETWORK_ERROR");
       }
-      }
-      async function getHourlyWeather(lat, lon) {
+    }
+    async function getHourlyWeather(lat, lon) {
       try {
         const params = new URLSearchParams({
           latitude: lat,
           longitude: lon,
           hourly:
-            "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+            "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day,precipitation,weathercode",
           temperature_unit: "fahrenheit",
           wind_speed_unit: "mph",
           timezone: "auto",
@@ -1485,11 +1521,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           throw new Error("INVALID_RESPONSE");
         throw new Error("NETWORK_ERROR");
       }
-      }
-  
-      // Timeline
+    }
+
+    // Timeline
     function buildTimelineDataset(hourly, daysAheadParam = daysAhead) {
-        const now = new Date();
+      const now = new Date();
       const start = new Date(now);
       start.setHours(0, 0, 0, 0);
       const end = new Date(now);
@@ -1499,42 +1535,48 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const times = hourly.time.map((t) => new Date(t));
       const startIdx = times.findIndex((d) => d >= start);
       const endIdx = times.findIndex((d) => d >= end);
-        const s = startIdx === -1 ? 0 : startIdx;
-        const e = endIdx === -1 ? times.length : endIdx;
-  
+      const s = startIdx === -1 ? 0 : startIdx;
+      const e = endIdx === -1 ? times.length : endIdx;
+
       const labels = [],
         shadeVals = [],
         sunVals = [],
         solarByHour = [],
         isDayByHour = [],
         windByHour = [],
-        humidityByHour = [];
-  
-        for (let i = s; i < e; i++) {
-          const T = hourly.temperature_2m[i];
-          const RH = hourly.relative_humidity_2m[i];
-          const Wind = hourly.wind_speed_10m[i];
-          const CC = hourly.cloud_cover[i];
+        humidityByHour = [],
+        precipitationByHour = [],
+        weathercodeByHour = [];
+
+      for (let i = s; i < e; i++) {
+        const T = hourly.temperature_2m[i];
+        const RH = hourly.relative_humidity_2m[i];
+        const Wind = hourly.wind_speed_10m[i];
+        const CC = hourly.cloud_cover[i];
         const uv = hourly.uv_index[i] ?? 0;
-          const uvc = hourly.uv_index_clear_sky[i] ?? 0;
-          const isDay = hourly.is_day[i] === 1;
-  
-          const shade = shadeVibeOf(T, RH, Wind);
+        const uvc = hourly.uv_index_clear_sky[i] ?? 0;
+        const isDay = hourly.is_day[i] === 1;
+        const precip = hourly.precipitation?.[i] ?? 0;
+        const wmo = hourly.weathercode?.[i] ?? 0;
+
+        const shade = shadeVibeOf(T, RH, Wind);
         const solar = solarFromUVandCloud({
           uv_index: uv,
           uv_index_clear_sky: uvc,
           cloud_cover: CC,
           is_day: isDay ? 1 : 0,
         });
-          const sun = sunVibeOf(shade, solar, reflectivity());
-  
-          labels.push(times[i]);
-          shadeVals.push(parseFloat(shade.toFixed(1))); // °F
+        const sun = sunVibeOf(shade, solar, reflectivity());
+
+        labels.push(times[i]);
+        shadeVals.push(parseFloat(shade.toFixed(1))); // °F
         sunVals.push(parseFloat(sun.toFixed(1))); // °F
-          solarByHour.push(solar);
-          isDayByHour.push(isDay ? 1 : 0);
+        solarByHour.push(solar);
+        isDayByHour.push(isDay ? 1 : 0);
         windByHour.push(Wind ?? 0);
         humidityByHour.push(RH ?? 0);
+        precipitationByHour.push(precip);
+        weathercodeByHour.push(wmo);
       }
       return {
         labels,
@@ -1544,6 +1586,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         isDayByHour,
         windByHour,
         humidityByHour,
+        precipitationByHour,
+        weathercodeByHour,
         now,
       };
     }
@@ -1552,25 +1596,25 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       k.setMinutes(0, 0, 0);
       return k.getTime();
     }
-  
-      function nearestLabelIndex(labelDates, target) {
-        if (!target) return -1;
+
+    function nearestLabelIndex(labelDates, target) {
+      if (!target) return -1;
       const tg = new Date(target);
       tg.setMinutes(0, 0, 0);
       let bestIdx = -1,
         bestDiff = Infinity;
-        for (let i = 0; i < labelDates.length; i++) {
+      for (let i = 0; i < labelDates.length; i++) {
         const d = new Date(labelDates[i]);
         d.setMinutes(0, 0, 0);
-          const diff = Math.abs(d - tg);
+        const diff = Math.abs(d - tg);
         if (diff < bestDiff) {
           bestDiff = diff;
           bestIdx = i;
         }
-        }
-        return bestIdx;
       }
-      function buildSunMarkers(labelDates) {
+      return bestIdx;
+    }
+    function buildSunMarkers(labelDates) {
       const evts = [];
       // Add all sunrise/sunset events from the arrays
       if (sunTimes.sunrises && sunTimes.sunrises.length > 0) {
@@ -1783,13 +1827,19 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         // Resume skeleton animations when error is hidden
         document.body.classList.remove("error-displayed");
       }
-      }
-  
-      async function renderChart(labels, shadeValsF, sunValsFF, now, isDayByHour = []) {
-        if (!els.chartCanvas) return;
+    }
+
+    async function renderChart(
+      labels,
+      shadeValsF,
+      sunValsFF,
+      now,
+      isDayByHour = []
+    ) {
+      if (!els.chartCanvas) return;
       updateChartTitle();
-        await ensureChartJs();
-        const ctx = els.chartCanvas.getContext("2d");
+      await ensureChartJs();
+      const ctx = els.chartCanvas.getContext("2d");
       if (!window.Chart) {
         console.warn("Chart.js failed to load.");
         return;
@@ -1801,7 +1851,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         d.toLocaleString([], { weekday: "short", hour: "numeric" })
       );
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
-        const markers = buildSunMarkers(labels);
+      const markers = buildSunMarkers(labels);
 
       // Optimize: If chart exists and structure hasn't changed, just update data
       if (vibeChart && vibeChart.data.labels.length === displayLabels.length) {
@@ -1815,8 +1865,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         vibeChart._isDayByHour = isDayByHour;
         vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
         // Update y-axis range
-        vibeChart.options.scales.y.suggestedMin = Math.min(...shadeVals, ...sunVals) - 3;
-        vibeChart.options.scales.y.suggestedMax = Math.max(...shadeVals, ...sunVals) + 3;
+        vibeChart.options.scales.y.suggestedMin =
+          Math.min(...shadeVals, ...sunVals) - 3;
+        vibeChart.options.scales.y.suggestedMax =
+          Math.max(...shadeVals, ...sunVals) + 3;
         vibeChart.update("none");
         // Ensure loading skeleton is hidden
         hideChartLoading();
@@ -2270,22 +2322,34 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const lastTick = ticks[ticks.length - 1];
           const firstTickValue = firstTick?.value;
           const lastTickValue = lastTick?.value;
-          
-          if (typeof firstTickValue === "number" && firstTickValue >= 0 && firstTickValue < labels.length) {
+
+          if (
+            typeof firstTickValue === "number" &&
+            firstTickValue >= 0 &&
+            firstTickValue < labels.length
+          ) {
             const firstX = xScale.getPixelForValue(firstTickValue);
             if (firstX >= chartArea.left && firstX <= chartArea.right) {
               const firstDate = new Date(labels[firstTickValue]);
-              if (!visibleTicks.find(t => t.tick === firstTick)) {
-                visibleTicks.unshift({ tick: firstTick, x: firstX, date: firstDate });
+              if (!visibleTicks.find((t) => t.tick === firstTick)) {
+                visibleTicks.unshift({
+                  tick: firstTick,
+                  x: firstX,
+                  date: firstDate,
+                });
               }
             }
           }
-          
-          if (typeof lastTickValue === "number" && lastTickValue >= 0 && lastTickValue < labels.length) {
+
+          if (
+            typeof lastTickValue === "number" &&
+            lastTickValue >= 0 &&
+            lastTickValue < labels.length
+          ) {
             const lastX = xScale.getPixelForValue(lastTickValue);
             if (lastX >= chartArea.left && lastX <= chartArea.right) {
               const lastDate = new Date(labels[lastTickValue]);
-              if (!visibleTicks.find(t => t.tick === lastTick)) {
+              if (!visibleTicks.find((t) => t.tick === lastTick)) {
                 visibleTicks.push({ tick: lastTick, x: lastX, date: lastDate });
               }
             }
@@ -2323,39 +2387,39 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ctx.restore();
         },
       };
-  
-        // Vertical line for current time in same green as the clock
-        const currentLine = {
-          id: "currentLine",
-          afterDatasetsDraw(chart) {
-            if (nowIdx === -1) return;
-            const { ctx, chartArea, scales } = chart;
-            const x = scales.x.getPixelForValue(nowIdx);
+
+      // Vertical line for current time in same green as the clock
+      const currentLine = {
+        id: "currentLine",
+        afterDatasetsDraw(chart) {
+          if (nowIdx === -1) return;
+          const { ctx, chartArea, scales } = chart;
+          const x = scales.x.getPixelForValue(nowIdx);
           const timeColor =
             (els.nowTime && getComputedStyle(els.nowTime).color) || "#22c55e";
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(x, chartArea.top);
-            ctx.lineTo(x, chartArea.bottom);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = timeColor;
-            ctx.setLineDash([5, 5]);
-            ctx.stroke();
-            ctx.restore();
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = timeColor;
+          ctx.setLineDash([5, 5]);
+          ctx.stroke();
+          ctx.restore();
         },
-        };
-  
-        // ☀️ markers over the Sun Vibe line
-        const sunMarkerPlugin = {
-          id: "sunMarkers",
-          afterDatasetsDraw(chart) {
+      };
+
+      // ☀️ markers over the Sun Vibe line
+      const sunMarkerPlugin = {
+        id: "sunMarkers",
+        afterDatasetsDraw(chart) {
           if (!sunMarkersEnabled) return; // Don't draw if disabled
           const { ctx, scales, chartArea } = chart;
           const sunDsIndex = chart.data.datasets.findIndex(
             (d) => d.label === "Sun Vibe"
           );
-            if (sunDsIndex === -1) return;
-            const sunData = chart.data.datasets[sunDsIndex].data; // display units
+          if (sunDsIndex === -1) return;
+          const sunData = chart.data.datasets[sunDsIndex].data; // display units
 
           // Helper to get exact pixel position for a Date (same as in day/night shading)
           function getPixelForExactTime(targetTime) {
@@ -2405,12 +2469,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
             return beforePixel + (afterPixel - beforePixel) * fraction;
           }
-  
-            ctx.save();
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-  
+
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+
           markers.forEach((m) => {
             // Get exact x position for the sunrise/sunset time
             const x = getPixelForExactTime(m.time);
@@ -2468,10 +2532,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               return; // Can't determine position
             }
 
-              ctx.fillText(m.emoji, x, ySun - 8);
-            });
-  
-            ctx.restore();
+            ctx.fillText(m.emoji, x, ySun - 8);
+          });
+
+          ctx.restore();
         },
       };
 
@@ -2505,6 +2569,104 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               ctx.fillText("\u{1F4A8}", x, chartArea.top - 8); // 💨
             }
           }
+          ctx.restore();
+        },
+      };
+
+      // Rain/Snow/Ice icons plugin - shows weather condition icons at hourly boundaries only
+      const precipitationIconsPlugin = {
+        id: "precipitationIcons",
+        afterDatasetsDraw(chart) {
+          if (!timelineState) return;
+          const { ctx, chartArea, scales } = chart;
+          const rawLabels = chart._rawLabels || [];
+          const { labels, shadeVals, precipitationByHour, weathercodeByHour } =
+            timelineState;
+
+          // Helper function to determine weather condition
+          const getWeatherCondition = (tempF, precip, wmo, index) => {
+            // WMO weather codes: https://open-meteo.com/en/docs
+            // Rain codes: 51-67, 80-82
+            // Snow codes: 71-77, 85-86
+            // Freezing rain: 56, 57, 66, 67
+
+            if (precip > 0) {
+              // Check WMO code first for accuracy
+              if (wmo >= 51 && wmo <= 67) {
+                // Rain or freezing rain
+                if (wmo === 56 || wmo === 57 || wmo === 66 || wmo === 67) {
+                  return "freezing_rain"; // Could be ice
+                }
+                if (tempF < 32) {
+                  return "snow"; // Freezing rain becomes snow
+                }
+                return "rain";
+              } else if (wmo >= 71 && wmo <= 77) {
+                return "snow";
+              } else if (wmo >= 80 && wmo <= 82) {
+                return "rain";
+              } else if (wmo >= 85 && wmo <= 86) {
+                return "snow";
+              }
+
+              // Fallback to temperature-based logic
+              if (tempF < 32) {
+                return "snow";
+              } else if (tempF < 50) {
+                return "ice"; // Freezing conditions
+              } else {
+                return "rain";
+              }
+            }
+            return null;
+          };
+
+          ctx.save();
+          ctx.font = "14px system-ui";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+
+          // Only process points at hourly boundaries (minutes === 0)
+          for (let i = 0; i < rawLabels.length; i++) {
+            const label = rawLabels[i];
+            const date = new Date(label);
+            const minutes = date.getMinutes();
+
+            // Skip non-hourly points
+            if (minutes !== 0) continue;
+
+            // Check if icons are enabled and conditions are met
+            const tempF = shadeVals[i];
+            const precip = precipitationByHour?.[i] ?? 0;
+            const wmo = weathercodeByHour?.[i] ?? 0;
+            const condition = getWeatherCondition(tempF, precip, wmo, i);
+
+            if (!condition) continue;
+
+            // Check if the appropriate icon toggle is enabled
+            let icon = null;
+            if (condition === "rain" && rainIconsEnabled && precip > 0) {
+              icon = "\u{1F327}\u{FE0F}"; // 🌧️
+            } else if (condition === "snow" && snowIconsEnabled && precip > 0) {
+              icon = "\u{2744}\u{FE0F}"; // ❄️
+            } else if (condition === "ice" && iceIconsEnabled && tempF < 50) {
+              icon = "\u{1F9CA}"; // 🧊
+            } else if (condition === "freezing_rain" && iceIconsEnabled) {
+              icon = "\u{1F9CA}"; // 🧊
+            }
+
+            if (!icon) continue;
+
+            const x = scales.x.getPixelForValue(i);
+            if (x < chartArea.left || x > chartArea.right) continue;
+
+            // Position icon above the chart area
+            const y = chartArea.top - 10;
+
+            ctx.fillStyle = "rgba(100, 150, 255, 0.8)";
+            ctx.fillText(icon, x, y);
+          }
+
           ctx.restore();
         },
       };
@@ -2773,41 +2935,49 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             let t = 0.5;
             let iterations = 20;
             for (let i = 0; i < iterations; i++) {
-              const bezierX = 
+              const bezierX =
                 Math.pow(1 - t, 3) * p1.x +
                 3 * Math.pow(1 - t, 2) * t * cp1x +
                 3 * (1 - t) * Math.pow(t, 2) * cp2x +
                 Math.pow(t, 3) * p2.x;
-              
+
               if (Math.abs(bezierX - x) < 0.1) break;
-              
+
               if (bezierX < x) {
                 t = t + (1 - t) / 2;
               } else {
                 t = t / 2;
               }
             }
-            
+
             // Calculate y at this t
-            return Math.pow(1 - t, 3) * p1.y +
-                   3 * Math.pow(1 - t, 2) * t * cp1y +
-                   3 * (1 - t) * Math.pow(t, 2) * cp2y +
-                   Math.pow(t, 3) * p2.y;
+            return (
+              Math.pow(1 - t, 3) * p1.y +
+              3 * Math.pow(1 - t, 2) * t * cp1y +
+              3 * (1 - t) * Math.pow(t, 2) * cp2y +
+              Math.pow(t, 3) * p2.y
+            );
           }
 
           // Helper function to check if a time is nighttime (between sunset and sunrise)
           function isNighttime(time) {
             if (!time || !sunTimes.sunrises || !sunTimes.sunsets) return false;
             const timeMs = new Date(time).getTime();
-            
+
             // Get all sunrise and sunset times, sorted
             const allEvents = [
-              ...sunTimes.sunsets.map(t => ({ time: new Date(t).getTime(), type: 'sunset' })),
-              ...sunTimes.sunrises.map(t => ({ time: new Date(t).getTime(), type: 'sunrise' }))
+              ...sunTimes.sunsets.map((t) => ({
+                time: new Date(t).getTime(),
+                type: "sunset",
+              })),
+              ...sunTimes.sunrises.map((t) => ({
+                time: new Date(t).getTime(),
+                type: "sunrise",
+              })),
             ].sort((a, b) => a.time - b.time);
-            
+
             if (allEvents.length === 0) return false;
-            
+
             // Find the most recent event before or at this time
             let lastEvent = null;
             for (let i = 0; i < allEvents.length; i++) {
@@ -2817,16 +2987,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 break;
               }
             }
-            
+
             // If no event found, check if we're before the first event
             if (!lastEvent) {
               // Before first event - check if it's a sunrise (day) or sunset (night)
-              return allEvents[0].type === 'sunset';
+              return allEvents[0].type === "sunset";
             }
-            
+
             // If last event was a sunset, we're in nighttime
             // If last event was a sunrise, we're in daytime
-            return lastEvent.type === 'sunset';
+            return lastEvent.type === "sunset";
           }
 
           datasets.forEach((dataset, datasetIndex) => {
@@ -2867,7 +3037,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const time1 = rawLabels[1];
                 const isDay0 = !isNighttime(time0);
                 const isDay1 = !isNighttime(time1);
-                
+
                 if (isDay0 && isDay1) {
                   // Both day - use gradient
                   const gradient = ctx.createLinearGradient(
@@ -2883,7 +3053,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   // At least one is night - use dark blue
                   ctx.strokeStyle = nightColor;
                 }
-                
+
                 ctx.lineWidth = 3;
                 ctx.beginPath();
                 ctx.moveTo(points[0].x, points[0].y);
@@ -2894,13 +3064,19 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 ctx.lineWidth = 3;
                 ctx.lineJoin = "round";
                 ctx.lineCap = "round";
-                
+
                 // Get all sunrise/sunset events for checking splits
                 const allEvents = [
-                  ...sunTimes.sunsets.map(t => ({ time: new Date(t).getTime(), type: 'sunset' })),
-                  ...sunTimes.sunrises.map(t => ({ time: new Date(t).getTime(), type: 'sunrise' }))
+                  ...sunTimes.sunsets.map((t) => ({
+                    time: new Date(t).getTime(),
+                    type: "sunset",
+                  })),
+                  ...sunTimes.sunrises.map((t) => ({
+                    time: new Date(t).getTime(),
+                    type: "sunrise",
+                  })),
                 ].sort((a, b) => a.time - b.time);
-                
+
                 for (let i = 0; i < points.length - 1; i++) {
                   const p0 = i > 0 ? points[i - 1] : points[i];
                   const p1 = points[i];
@@ -2919,12 +3095,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   const dy1 = p2.y - p0.y;
                   const dx2 = p3.x - p1.x;
                   const dy2 = p3.y - p1.y;
-                  
+
                   const cp1x = p1.x + (dx1 / 6) * t;
                   const cp1y = p1.y + (dy1 / 6) * t;
                   const cp2x = p2.x - (dx2 / 6) * t;
                   const cp2y = p2.y - (dy2 / 6) * t;
-                  
+
                   const smoothFactor = 0.15;
                   const avgX = (p1.x + p2.x) / 2;
                   const avgY = (p1.y + p2.y) / 2;
@@ -2935,33 +3111,43 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
                   // Find any sunrise/sunset events within this segment (excluding exact boundaries to avoid duplicates)
                   // Events exactly at boundaries will be handled by the split points
-                  const eventsInSegment = allEvents.filter(e => 
-                    e.time > time1Ms && e.time < time2Ms
+                  const eventsInSegment = allEvents.filter(
+                    (e) => e.time > time1Ms && e.time < time2Ms
                   );
 
                   // Check if we need to split (either events in segment or day/night transition)
                   const isDay1 = !isNighttime(time1);
                   const isDay2 = !isNighttime(time2);
                   const hasTransition = isDay1 !== isDay2;
-                  
+
                   // If there's a transition, we MUST find the event causing it
                   // Even if eventsInSegment is empty, there must be an event between these times
                   let transitionEvent = null;
                   if (hasTransition) {
                     // Find the event that causes the transition
                     // It should be between time1 and time2
-                    transitionEvent = allEvents.find(e => 
-                      e.time > time1Ms && e.time < time2Ms
+                    transitionEvent = allEvents.find(
+                      (e) => e.time > time1Ms && e.time < time2Ms
                     );
-                    
+
                     // If not found with strict comparison, the event list might be incomplete
                     // In this case, we'll need to interpolate the transition point
                     if (!transitionEvent) {
-                      console.warn(`Transition detected between ${new Date(time1Ms).toISOString()} and ${new Date(time2Ms).toISOString()} but no event found`);
+                      console.warn(
+                        `Transition detected between ${new Date(
+                          time1Ms
+                        ).toISOString()} and ${new Date(
+                          time2Ms
+                        ).toISOString()} but no event found`
+                      );
                     }
                   }
 
-                  if (eventsInSegment.length === 0 && !hasTransition && !transitionEvent) {
+                  if (
+                    eventsInSegment.length === 0 &&
+                    !hasTransition &&
+                    !transitionEvent
+                  ) {
                     // No events and no transition - draw as single segment
                     if (isDay1 && isDay2) {
                       // Both day - use gradient
@@ -2986,47 +3172,72 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       ctx.moveTo(p0.x, p0.y);
                       ctx.lineTo(p1.x, p1.y);
                     }
-                    ctx.bezierCurveTo(cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, p2.x, p2.y);
+                    ctx.bezierCurveTo(
+                      cp1xSmooth,
+                      cp1ySmooth,
+                      cp2xSmooth,
+                      cp2ySmooth,
+                      p2.x,
+                      p2.y
+                    );
                     ctx.stroke();
                   } else {
                     // Split segment at sunrise/sunset events or transitions
                     // Build split points: start point, all events in segment, end point
                     const splitPoints = [
-                      { time: time1Ms, x: p1.x, y: p1.y, isDay: isDay1 }
+                      { time: time1Ms, x: p1.x, y: p1.y, isDay: isDay1 },
                     ];
-                    
+
                     // Add transition event if found
                     if (transitionEvent) {
-                      const x = getPixelForExactTime(new Date(transitionEvent.time));
-                      const y = getYOnBezierCurve(p1, p2, cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, x);
-                      splitPoints.push({ 
-                        time: transitionEvent.time, 
-                        x, 
-                        y, 
-                        isDay: transitionEvent.type === 'sunrise' 
+                      const x = getPixelForExactTime(
+                        new Date(transitionEvent.time)
+                      );
+                      const y = getYOnBezierCurve(
+                        p1,
+                        p2,
+                        cp1xSmooth,
+                        cp1ySmooth,
+                        cp2xSmooth,
+                        cp2ySmooth,
+                        x
+                      );
+                      splitPoints.push({
+                        time: transitionEvent.time,
+                        x,
+                        y,
+                        isDay: transitionEvent.type === "sunrise",
                       });
                     }
-                    
+
                     // Add events in segment
-                    eventsInSegment.forEach(e => {
+                    eventsInSegment.forEach((e) => {
                       const x = getPixelForExactTime(new Date(e.time));
-                      const y = getYOnBezierCurve(p1, p2, cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, x);
-                      splitPoints.push({ 
-                        time: e.time, 
-                        x, 
-                        y, 
-                        isDay: e.type === 'sunrise' 
+                      const y = getYOnBezierCurve(
+                        p1,
+                        p2,
+                        cp1xSmooth,
+                        cp1ySmooth,
+                        cp2xSmooth,
+                        cp2ySmooth,
+                        x
+                      );
+                      splitPoints.push({
+                        time: e.time,
+                        x,
+                        y,
+                        isDay: e.type === "sunrise",
                       });
                     });
-                    
+
                     // Add end point
-                    splitPoints.push({ 
-                      time: time2Ms, 
-                      x: p2.x, 
-                      y: p2.y, 
-                      isDay: isDay2 
+                    splitPoints.push({
+                      time: time2Ms,
+                      x: p2.x,
+                      y: p2.y,
+                      isDay: isDay2,
                     });
-                    
+
                     // Sort by time to ensure correct order
                     splitPoints.sort((a, b) => a.time - b.time);
 
@@ -3034,7 +3245,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     for (let j = 0; j < splitPoints.length - 1; j++) {
                       const sp1 = splitPoints[j];
                       const sp2 = splitPoints[j + 1];
-                      
+
                       // Determine color for this sub-segment
                       if (sp1.isDay && sp2.isDay) {
                         const gradient = ctx.createLinearGradient(
@@ -3059,16 +3270,23 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       } else {
                         ctx.moveTo(sp1.x, sp1.y);
                       }
-                      
+
                       // Draw line to next split point (or use bezier if it's the full segment)
                       if (j === 0 && splitPoints.length === 2) {
                         // Full segment with one split - use bezier to split point, then line to end
-                        ctx.bezierCurveTo(cp1xSmooth, cp1ySmooth, cp2xSmooth, cp2ySmooth, sp2.x, sp2.y);
+                        ctx.bezierCurveTo(
+                          cp1xSmooth,
+                          cp1ySmooth,
+                          cp2xSmooth,
+                          cp2ySmooth,
+                          sp2.x,
+                          sp2.y
+                        );
                       } else {
                         // Simple line between split points
                         ctx.lineTo(sp2.x, sp2.y);
                       }
-                      
+
                       ctx.stroke();
                     }
                   }
@@ -3083,17 +3301,17 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Show canvas so Chart.js can render, but keep skeleton visible until animation completes
       if (els.chartCanvas) els.chartCanvas.style.display = "block";
-  
-        vibeChart = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: displayLabels,
+
+      vibeChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: displayLabels,
           datasets: datasets,
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: "index", intersect: false },
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
           animation: false,
           animations: {
             x: false,
@@ -3106,7 +3324,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               bottom: 40, // Extra space for two-line labels
             },
           },
-            scales: {
+          scales: {
             x: {
               ticks: {
                 maxRotation: 0,
@@ -3126,11 +3344,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 callback: (val) =>
                   `${typeof val === "number" ? val : Number(val)}°`,
               },
-                suggestedMin: Math.min(...shadeVals, ...sunVals) - 3,
+              suggestedMin: Math.min(...shadeVals, ...sunVals) - 3,
               suggestedMax: Math.max(...shadeVals, ...sunVals) + 3,
             },
-            },
-            plugins: {
+          },
+          plugins: {
             legend: {
               display: true,
               labels: {
@@ -3144,7 +3362,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 },
               },
             },
-              tooltip: {
+            tooltip: {
               itemSort: (a, b) => {
                 const order = ["Sun Vibe", "Shade Vibe", "Highlighted Vibes"];
                 return (
@@ -3189,74 +3407,85 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const tooltip = chart.tooltip;
                 tooltip.opacity = 0;
               },
-                callbacks: {
-                  // Keep the time label as title, with sunrise/sunset info if near
-                  title: (items) => {
-                    const defaultTitle = items?.[0]?.label ?? "";
-                    if (!items || items.length === 0) return defaultTitle;
-                    
-                    // Get the hovered time from the first item
-                    const item = items[0];
-                    const dataIndex = item.dataIndex;
-                    const chart = item.chart;
-                    const rawLabels = chart._rawLabels || [];
-                    const sunTimes = chart._sunTimes || { sunrises: [], sunsets: [] };
-                    
-                    if (dataIndex >= 0 && dataIndex < rawLabels.length) {
-                      const hoveredTime = new Date(rawLabels[dataIndex]);
-                      const hoveredTimeMs = hoveredTime.getTime();
-                      const twoHoursMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-                      
-                      // Check all sunrises and sunsets
-                      const allEvents = [
-                        ...sunTimes.sunrises.map(t => ({ time: new Date(t).getTime(), type: 'sunrise', label: 'Sunrise' })),
-                        ...sunTimes.sunsets.map(t => ({ time: new Date(t).getTime(), type: 'sunset', label: 'Sunset' }))
-                      ];
-                      
-                      // Find events within 2 hours before or after
-                      const nearbyEvents = allEvents.filter(e => {
-                        const timeDiff = Math.abs(e.time - hoveredTimeMs);
-                        return timeDiff <= twoHoursMs;
+              callbacks: {
+                // Keep the time label as title, with sunrise/sunset info if near
+                title: (items) => {
+                  const defaultTitle = items?.[0]?.label ?? "";
+                  if (!items || items.length === 0) return defaultTitle;
+
+                  // Get the hovered time from the first item
+                  const item = items[0];
+                  const dataIndex = item.dataIndex;
+                  const chart = item.chart;
+                  const rawLabels = chart._rawLabels || [];
+                  const sunTimes = chart._sunTimes || {
+                    sunrises: [],
+                    sunsets: [],
+                  };
+
+                  if (dataIndex >= 0 && dataIndex < rawLabels.length) {
+                    const hoveredTime = new Date(rawLabels[dataIndex]);
+                    const hoveredTimeMs = hoveredTime.getTime();
+                    const twoHoursMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+
+                    // Check all sunrises and sunsets
+                    const allEvents = [
+                      ...sunTimes.sunrises.map((t) => ({
+                        time: new Date(t).getTime(),
+                        type: "sunrise",
+                        label: "Sunrise",
+                      })),
+                      ...sunTimes.sunsets.map((t) => ({
+                        time: new Date(t).getTime(),
+                        type: "sunset",
+                        label: "Sunset",
+                      })),
+                    ];
+
+                    // Find events within 2 hours before or after
+                    const nearbyEvents = allEvents.filter((e) => {
+                      const timeDiff = Math.abs(e.time - hoveredTimeMs);
+                      return timeDiff <= twoHoursMs;
+                    });
+
+                    if (nearbyEvents.length > 0) {
+                      // Sort events by time difference
+                      const sortedEvents = nearbyEvents
+                        .map((e) => ({
+                          ...e,
+                          diff: Math.abs(e.time - hoveredTimeMs),
+                        }))
+                        .sort((a, b) => a.diff - b.diff);
+
+                      // Build inline tooltip: "Fri, 6pm - Sunset 6:35pm"
+                      const eventStrings = sortedEvents.map((event) => {
+                        const exactTime = fmtHM(new Date(event.time));
+                        return `${event.label} ${exactTime}`;
                       });
-                      
-                      if (nearbyEvents.length > 0) {
-                        // Sort events by time difference
-                        const sortedEvents = nearbyEvents
-                          .map(e => ({
-                            ...e,
-                            diff: Math.abs(e.time - hoveredTimeMs)
-                          }))
-                          .sort((a, b) => a.diff - b.diff);
-                        
-                        // Build inline tooltip: "Fri, 6pm - Sunset 6:35pm"
-                        const eventStrings = sortedEvents.map(event => {
-                          const exactTime = fmtHM(new Date(event.time));
-                          return `${event.label} ${exactTime}`;
-                        });
-                        
-                        // Combine with default title
-                        return `${defaultTitle} - ${eventStrings.join(', ')}`;
-                      }
+
+                      // Combine with default title
+                      return `${defaultTitle} - ${eventStrings.join(", ")}`;
                     }
-                    
-                    return defaultTitle;
-                  },
+                  }
+
+                  return defaultTitle;
+                },
                 // Custom label with color indicator: "● Sun: 84.9° Balanced, light layers"
-                  label: (ctx) => {
+                label: (ctx) => {
                   if (ctx.dataset.label === "Highlighted Vibes") return null; // Don't show in tooltip
                   const short =
                     ctx.dataset.label === "Sun Vibe" ? "Sun" : "Shade";
-                    const tempDisplay = Number(ctx.parsed.y).toFixed(1); // already in current unit
+                  const tempDisplay = Number(ctx.parsed.y).toFixed(1); // already in current unit
                   // Get color for the dataset
                   const isSun = ctx.dataset.label === "Sun Vibe";
                   const color = isSun
                     ? chartColors.sun.start
                     : chartColors.shade.start;
-                    let desc = "";
-                    try {
-                      const i = ctx.dataIndex;
-                      const ts = window.timelineState;
-                      if (ts && Number.isFinite(i)) {
+                  let desc = "";
+                  try {
+                    const i = ctx.dataIndex;
+                    const ts = window.timelineState;
+                    if (ts && Number.isFinite(i)) {
                       const isDay = !!ts.isDayByHour?.[i];
                       const solar = ts.solarByHour?.[i] ?? 0;
                       const tempF =
@@ -3265,13 +3494,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                           : ts.shadeVals?.[i]; // °F
                       const context =
                         ctx.dataset.label === "Sun Vibe" ? "sun" : "shade";
-                        if (typeof tempF === "number") {
+                      if (typeof tempF === "number") {
                         desc =
                           vibeDescriptor(tempF, { solar, isDay, context }) ||
                           "";
-                        }
                       }
-                    } catch {}
+                    }
+                  } catch {}
                   // Return label (color is shown via labelColor callback)
                   return desc
                     ? `${short}: ${tempDisplay}° ${desc}`
@@ -3308,6 +3537,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           currentLine,
           sunMarkerPlugin,
           windChillPlugin,
+          precipitationIconsPlugin,
           timelineLabelsPlugin,
         ],
       });
@@ -3321,34 +3551,34 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Hide skeleton immediately after chart is created
       hideChartLoading();
-      
+
       // Update card visibility based on current time
       updateCardVisibility();
 
       // Pointer interactions: hover + tap/drag simulation + drag selection
-        els.chartCanvas.style.touchAction = "none";
-        let isPointerDown = false;
+      els.chartCanvas.style.touchAction = "none";
+      let isPointerDown = false;
       let isSelecting = false;
       let selectionStartX = null;
       let selectionStartTime = null;
       let touchStartTime = null;
       let hasMoved = false;
-  
-        function updateFromClientX(clientX) {
-          if (!vibeChart || !timelineState) return;
-          const rect = els.chartCanvas.getBoundingClientRect();
-          const x = clientX - rect.left;
-          const idxFloat = vibeChart.scales.x.getValueForPixel(x);
-          const idx = Math.round(idxFloat);
+
+      function updateFromClientX(clientX) {
+        if (!vibeChart || !timelineState) return;
+        const rect = els.chartCanvas.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const idxFloat = vibeChart.scales.x.getValueForPixel(x);
+        const idx = Math.round(idxFloat);
         if (
           Number.isFinite(idx) &&
           idx >= 0 &&
           idx < timelineState.labels.length
         ) {
-            simActive = true;
-            paintSimulatedIndex(idx);
-          }
+          simActive = true;
+          paintSimulatedIndex(idx);
         }
+      }
 
       function getTimeFromClientX(clientX) {
         if (!vibeChart || !timelineState) return null;
@@ -3356,8 +3586,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const x = clientX - rect.left;
         return pixelToTime(x, timelineState.labels, vibeChart.scales);
       }
-  
-        els.chartCanvas.addEventListener("pointerdown", (e) => {
+
+      els.chartCanvas.addEventListener("pointerdown", (e) => {
         // Check if shift key is held for selection mode
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
           isSelecting = true;
@@ -3374,9 +3604,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           } catch {}
           updateFromClientX(e.clientX);
         }
-        });
+      });
 
-        els.chartCanvas.addEventListener("pointermove", (e) => {
+      els.chartCanvas.addEventListener("pointermove", (e) => {
         if (isSelecting && selectionStartTime) {
           hasMoved = true;
           // Prevent scrolling on mobile during selection
@@ -3414,7 +3644,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             isSelecting = false;
             selectionStartX = null;
             selectionStartTime = null;
-          isPointerDown = false;
+            isPointerDown = false;
             try {
               els.chartCanvas.releasePointerCapture(e.pointerId);
             } catch {}
@@ -3480,8 +3710,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         }
       }
 
-        els.chartCanvas.addEventListener("pointerup", endPointer);
-        els.chartCanvas.addEventListener("pointercancel", endPointer);
+      els.chartCanvas.addEventListener("pointerup", endPointer);
+      els.chartCanvas.addEventListener("pointercancel", endPointer);
       els.chartCanvas.addEventListener("pointerleave", (e) => {
         if (isSelecting) {
           endPointer(e);
@@ -3489,12 +3719,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           if (simActive) paintRealtimeCards();
           simActive = false;
         }
-        });
-      }
-  
-      // Current time + next sun event
-      function chooseNextSunEvent() {
-        const now = new Date();
+      });
+    }
+
+    // Current time + next sun event
+    function chooseNextSunEvent() {
+      const now = new Date();
       const { sunriseToday, sunsetToday, sunriseTomorrow, sunsetTomorrow } =
         sunTimes;
       const candidates = [
@@ -3506,17 +3736,22 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         .filter(Boolean)
         .filter((t) => t > now)
         .sort((a, b) => a - b);
-        if (!candidates.length) return null;
-        const next = candidates[0];
+      if (!candidates.length) return null;
+      const next = candidates[0];
       const isSunrise =
         next === sunTimes.sunriseToday || next === sunTimes.sunriseTomorrow;
-        return { next, kind: isSunrise ? "Sunrise" : "Sunset" };
-      }
-  
-      function paintRealtimeCards() {
-        compute();
+      return { next, kind: isSunrise ? "Sunrise" : "Sunset" };
+    }
+
+    function paintRealtimeCards() {
+      compute();
       if (els.sunCard) {
-        els.sunCard.style.display = isDaylightNow() ? "" : "none";
+        // Hide sun card if selection is active, otherwise show based on daylight
+        if (selectionRange) {
+          els.sunCard.style.display = "none";
+        } else {
+          els.sunCard.style.display = isDaylightNow() ? "" : "none";
+        }
         // Update cards container class based on sun card visibility
         if (cardsContainer) {
           cardsContainer.classList.toggle(
@@ -3525,27 +3760,27 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           );
         }
       }
-      }
-  
-      function paintSimulatedIndex(i) {
-        if (!timelineState) return;
+    }
+
+    function paintSimulatedIndex(i) {
+      if (!timelineState) return;
       const { labels, shadeVals, sunVals, solarByHour, isDayByHour } =
         timelineState;
-        if (i < 0 || i >= labels.length) return;
-  
-        const dt = labels[i];
-        els.nowTime && (els.nowTime.textContent = fmtHM(dt));
-  
-        const isDay = !!isDayByHour[i];
+      if (i < 0 || i >= labels.length) return;
+
+      const dt = labels[i];
+      els.nowTime && (els.nowTime.textContent = fmtHM(dt));
+
+      const isDay = !!isDayByHour[i];
       // Don't change sun card visibility during hover - only update temperature values
       // This prevents layout shifts that cause feedback loops on mobile
-  
-        const shadeDisp = toUserTemp(shadeVals[i]);
+
+      const shadeDisp = toUserTemp(shadeVals[i]);
       const sunDisp = toUserTemp(sunVals[i]);
 
       els.shade &&
         (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
-      
+
       // Update sun card content during hover (make it visible even at night to show sunrise time)
       if (els.sun && els.sunCard) {
         // Make card visible during hover if it's night (to show sunrise time)
@@ -3555,16 +3790,18 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             cardsContainer.classList.remove("sun-card-hidden");
           }
         }
-        
+
         if (!isDay) {
           // At night: show next sunrise time
           const hoverTimeMs = dt.getTime();
           const nextSunrise = (sunTimes.sunrises || [])
-            .map(t => new Date(t).getTime())
-            .find(sunriseMs => sunriseMs > hoverTimeMs);
-          
+            .map((t) => new Date(t).getTime())
+            .find((sunriseMs) => sunriseMs > hoverTimeMs);
+
           if (nextSunrise) {
-            els.sun.innerHTML = `Sunrise at ${fmtHM(new Date(nextSunrise))}`;
+            els.sun.innerHTML = `\u{1F31E} at ${fmtHMWithSmallAMPM(
+              new Date(nextSunrise)
+            )}`;
             // Hide description section when showing sunrise time
             if (els.sunLabel) els.sunLabel.style.display = "none";
           } else {
@@ -3578,26 +3815,28 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
         }
       }
-  
-        const simSolar = solarByHour[i];
+
+      const simSolar = solarByHour[i];
       els.shadeLabel &&
         (els.shadeLabel.innerHTML = vibeDescriptor(shadeVals[i], {
           solar: simSolar,
           isDay,
           context: "shade",
         }));
-      
+
       if (isDay && els.sunLabel) {
         // During daytime: check if within 2 hours of sunset
         const hoverTimeMs = dt.getTime();
         const twoHoursMs = 2 * 60 * 60 * 1000;
         const nextSunset = (sunTimes.sunsets || [])
-          .map(t => new Date(t).getTime())
-          .find(sunsetMs => sunsetMs > hoverTimeMs);
-        
-        if (nextSunset && (nextSunset - hoverTimeMs) <= twoHoursMs) {
+          .map((t) => new Date(t).getTime())
+          .find((sunsetMs) => sunsetMs > hoverTimeMs);
+
+        if (nextSunset && nextSunset - hoverTimeMs <= twoHoursMs) {
           // Within 2 hours of sunset, show sunset time in temp area and hide description
-          els.sun.innerHTML = `Sunset at ${fmtHM(new Date(nextSunset))}`;
+          els.sun.innerHTML = `\u{1F31E} at ${fmtHMWithSmallAMPM(
+            new Date(nextSunset)
+          )}`;
           els.sunLabel.style.display = "none";
         } else {
           // Normal descriptor - show description section
@@ -3616,21 +3855,21 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Remove skeleton loading state
       hideCardLoading();
-      }
-  
-      // Scheduler
+    }
+
+    // Scheduler
     function clearPollTimer() {
       if (pollTimer) clearTimeout(pollTimer);
       pollTimer = null;
     }
-      function scheduleNextTick(minutes) {
-        const ms = Math.max(0.5, parseFloat(minutes) || 1) * 60 * 1000;
-        nextUpdateAt = new Date(Date.now() + ms);
-        els.nextUpdated && (els.nextUpdated.textContent = fmtHMS(nextUpdateAt));
+    function scheduleNextTick(minutes) {
+      const ms = Math.max(0.5, parseFloat(minutes) || 1) * 60 * 1000;
+      nextUpdateAt = new Date(Date.now() + ms);
+      els.nextUpdated && (els.nextUpdated.textContent = fmtHMS(nextUpdateAt));
       updateAdvStats();
-        pollTimer = setTimeout(runUpdateCycle, ms);
-      }
-      async function runUpdateCycle() {
+      pollTimer = setTimeout(runUpdateCycle, ms);
+    }
+    async function runUpdateCycle() {
       if (!lastCoords) {
         scheduleNextTick(els.updateInterval?.value || 1);
         return;
@@ -3645,45 +3884,45 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         }
       }
 
-        const { latitude, longitude } = lastCoords;
-  
-        try {
-          const wantHourly = !!els.updateHourlyToggle?.checked;
-          const [cur, hourlyMaybe] = await Promise.all([
-            getCurrentWeather(latitude, longitude),
+      const { latitude, longitude } = lastCoords;
+
+      try {
+        const wantHourly = !!els.updateHourlyToggle?.checked;
+        const [cur, hourlyMaybe] = await Promise.all([
+          getCurrentWeather(latitude, longitude),
           wantHourly
             ? getHourlyWeather(latitude, longitude)
             : Promise.resolve(null),
-          ]);
-  
-          if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
-  
+        ]);
+
+        if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
+
         const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
         if (tempF != null)
           els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
-          els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
-          els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
-  
+        els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
+        els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
+
         if (
           typeof cur.uv_index === "number" &&
           (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
         ) {
-            const solar = solarFromUVandCloud({
+          const solar = solarFromUVandCloud({
             uv_index: cur.uv_index,
             uv_index_clear_sky: cur.uv_index_clear_sky,
             cloud_cover: cur.cloud_cover ?? 0,
             is_day: cur.is_day,
-            });
-            els.solar.value = solar.toFixed(1);
-            els.solarVal.textContent = solar.toFixed(1);
-          } else if (typeof cur.cloud_cover === "number") {
-            autoSolarFromCloudCover(cur.cloud_cover);
-          }
-  
-          compute();
+          });
+          els.solar.value = solar.toFixed(1);
+          els.solarVal.textContent = solar.toFixed(1);
+        } else if (typeof cur.cloud_cover === "number") {
+          autoSolarFromCloudCover(cur.cloud_cover);
+        }
+
+        compute();
         updateChartTitle();
-  
-          if (hourlyMaybe) {
+
+        if (hourlyMaybe) {
           // Refetch sunrise/sunset data if needed (in case days ahead changed)
           try {
             const dailySun = await getDailySun(latitude, longitude, daysAhead);
@@ -3693,33 +3932,39 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
           // Only show loading if chart doesn't exist yet
           if (!vibeChart) showChartLoading();
-            const ds = buildTimelineDataset(hourlyMaybe);
-            timelineState = ds;
-            window.timelineState = timelineState; // expose for tooltip descriptors
-            await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
+          const ds = buildTimelineDataset(hourlyMaybe);
+          timelineState = ds;
+          window.timelineState = timelineState; // expose for tooltip descriptors
+          await renderChart(
+            ds.labels,
+            ds.shadeVals,
+            ds.sunVals,
+            ds.now,
+            ds.isDayByHour
+          );
           // Update summary if selection exists (weather data may have changed)
           if (selectionRange) {
             updateWeatherSummary();
           }
-          }
-  
-          const nowTime = new Date();
-          els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
+        }
+
+        const nowTime = new Date();
+        els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
         updateAdvStats();
-        } catch (e) {
-          console.warn("Update cycle failed", e);
+      } catch (e) {
+        console.warn("Update cycle failed", e);
         // Don't show error for update cycle failures, just log them
         // User can manually retry with "Update Now" button
-        } finally {
-          scheduleNextTick(els.updateInterval?.value || 1);
-        }
+      } finally {
+        scheduleNextTick(els.updateInterval?.value || 1);
       }
+    }
     function restartScheduler() {
       clearPollTimer();
       scheduleNextTick(els.updateInterval?.value || 1);
     }
-  
-      // Prime weather
+
+    // Prime weather
     async function primeWeatherForCoords(
       latitude,
       longitude,
@@ -3739,18 +3984,18 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         ]);
         sunTimes = dailySun;
         lastCoords = { latitude, longitude };
-  
+
         currentPlaceName = await getPlaceName(latitude, longitude);
         updateChartTitle();
         updateAdvStats();
-  
+
         const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
         if (tempF != null)
           els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
         els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
         els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
         if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
-  
+
         if (
           typeof cur.uv_index === "number" &&
           (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
@@ -3766,22 +4011,28 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         } else if (typeof cur.cloud_cover === "number") {
           autoSolarFromCloudCover(cur.cloud_cover);
         }
-  
+
         compute();
         updateChartTitle();
-  
+
         // Only show loading if chart doesn't exist yet
         if (!vibeChart) showChartLoading();
         const ds = buildTimelineDataset(hourly);
         timelineState = ds;
         window.timelineState = timelineState; // expose for tooltip descriptors
-        await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
+        await renderChart(
+          ds.labels,
+          ds.shadeVals,
+          ds.sunVals,
+          ds.now,
+          ds.isDayByHour
+        );
         updateAdvStats(); // Update stats after chart is rendered
         // Update summary if selection exists (weather data may have changed)
         if (selectionRange) {
           updateWeatherSummary();
         }
-  
+
         const nowTime = new Date();
         els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
         updateAdvStats();
@@ -3802,34 +4053,43 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         checkNotificationConditions();
       } catch (e) {
         log(e);
-        let errorTitle = "Weather Fetch Failed";
-        let errorDetails = "Could not retrieve weather data.";
-        let errorSuggestion = "";
 
-        if (e.message === "RATE_LIMIT") {
-          errorTitle = "Rate Limit Exceeded";
-          errorDetails =
-            "Too many requests to the weather service. Please wait a moment.";
-          errorSuggestion = "Wait a few seconds and try again.";
-        } else if (e.message === "SERVER_ERROR") {
-          errorTitle = "Weather Service Error";
-          errorDetails = "The weather service is temporarily unavailable.";
-          errorSuggestion = "Please try again in a moment.";
-        } else if (e.message === "NETWORK_ERROR") {
-          errorTitle = "Network Error";
-          errorDetails =
-            "Could not connect to the weather service. Check your internet connection.";
-          errorSuggestion = "Check your connection and try again.";
-        } else if (e.message === "INVALID_RESPONSE") {
-          errorTitle = "Invalid Response";
-          errorDetails = "Received unexpected data from the weather service.";
-          errorSuggestion = "Please try again.";
-        }
+        // Delay showing error to allow time for localStorage/cookies to be read
+        setTimeout(() => {
+          // Check if error was already resolved (e.g., by saved ZIP or another location method)
+          if (lastCoords) {
+            return; // Location was successfully determined, don't show error
+          }
 
-        showError(errorTitle, errorDetails, errorSuggestion, {
-          zip: () => {}, // ZIP input will be shown in error message
-        });
-        statusEl && (statusEl.textContent = "Failed to fetch weather data.");
+          let errorTitle = "Weather Fetch Failed";
+          let errorDetails = "Could not retrieve weather data.";
+          let errorSuggestion = "";
+
+          if (e.message === "RATE_LIMIT") {
+            errorTitle = "Rate Limit Exceeded";
+            errorDetails =
+              "Too many requests to the weather service. Please wait a moment.";
+            errorSuggestion = "Wait a few seconds and try again.";
+          } else if (e.message === "SERVER_ERROR") {
+            errorTitle = "Weather Service Error";
+            errorDetails = "The weather service is temporarily unavailable.";
+            errorSuggestion = "Please try again in a moment.";
+          } else if (e.message === "NETWORK_ERROR") {
+            errorTitle = "Network Error";
+            errorDetails =
+              "Could not connect to the weather service. Check your internet connection.";
+            errorSuggestion = "Check your connection and try again.";
+          } else if (e.message === "INVALID_RESPONSE") {
+            errorTitle = "Invalid Response";
+            errorDetails = "Received unexpected data from the weather service.";
+            errorSuggestion = "Please try again.";
+          }
+
+          showError(errorTitle, errorDetails, errorSuggestion, {
+            zip: () => {}, // ZIP input will be shown in error message
+          });
+          statusEl && (statusEl.textContent = "Failed to fetch weather data.");
+        }, 1500); // 1.5 second delay
       }
     }
 
@@ -3922,7 +4182,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
     };
 
     // Geolocation - precise location (requires permission)
-      function useLocation() {
+    function useLocation() {
       statusEl && (statusEl.textContent = "Getting precise location…");
       hideError();
       if (!navigator.geolocation) {
@@ -3950,29 +4210,75 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             updateAdvStats();
           } catch (e) {
             log(e);
-            let errorTitle = "Weather Fetch Failed";
-            let errorDetails = "Could not retrieve weather data.";
+
+            // Delay showing error to allow time for localStorage/cookies to be read
+            setTimeout(() => {
+              // Check if error was already resolved (e.g., by saved ZIP or another location method)
+              if (lastCoords) {
+                return; // Location was successfully determined, don't show error
+              }
+
+              let errorTitle = "Weather Fetch Failed";
+              let errorDetails = "Could not retrieve weather data.";
+              let errorSuggestion = "";
+
+              if (e.message === "RATE_LIMIT") {
+                errorTitle = "Rate Limit Exceeded";
+                errorDetails =
+                  "Too many requests to the weather service. Please wait a moment.";
+                errorSuggestion = "Wait a few seconds and try again.";
+              } else if (e.message === "SERVER_ERROR") {
+                errorTitle = "Weather Service Error";
+                errorDetails =
+                  "The weather service is temporarily unavailable.";
+                errorSuggestion = "Please try again in a moment.";
+              } else if (e.message === "NETWORK_ERROR") {
+                errorTitle = "Network Error";
+                errorDetails =
+                  "Could not connect to the weather service. Check your internet connection.";
+                errorSuggestion = "Check your connection and try again.";
+              } else if (e.message === "INVALID_RESPONSE") {
+                errorTitle = "Invalid Response";
+                errorDetails =
+                  "Received unexpected data from the weather service.";
+                errorSuggestion = "Please try again.";
+              }
+
+              showError(errorTitle, errorDetails, errorSuggestion, {
+                zip: () => {}, // ZIP input will be shown in error message
+              });
+              statusEl &&
+                (statusEl.textContent =
+                  "Could not fetch weather. Enter values manually.");
+            }, 1500); // 1.5 second delay
+          }
+        },
+        (err) => {
+          log(err);
+
+          // Delay showing error to allow time for localStorage/cookies to be read
+          setTimeout(() => {
+            // Check if error was already resolved (e.g., by saved ZIP)
+            if (lastCoords) {
+              return; // Location was successfully determined, don't show error
+            }
+
+            let errorTitle = "Location Access Denied";
+            let errorDetails = "Location permission was denied or unavailable.";
             let errorSuggestion = "";
 
-            if (e.message === "RATE_LIMIT") {
-              errorTitle = "Rate Limit Exceeded";
-              errorDetails =
-                "Too many requests to the weather service. Please wait a moment.";
-              errorSuggestion = "Wait a few seconds and try again.";
-            } else if (e.message === "SERVER_ERROR") {
-              errorTitle = "Weather Service Error";
-              errorDetails = "The weather service is temporarily unavailable.";
-              errorSuggestion = "Please try again in a moment.";
-            } else if (e.message === "NETWORK_ERROR") {
-              errorTitle = "Network Error";
-              errorDetails =
-                "Could not connect to the weather service. Check your internet connection.";
-              errorSuggestion = "Check your connection and try again.";
-            } else if (e.message === "INVALID_RESPONSE") {
-              errorTitle = "Invalid Response";
-              errorDetails =
-                "Received unexpected data from the weather service.";
-              errorSuggestion = "Please try again.";
+            if (err.code === err.PERMISSION_DENIED) {
+              errorTitle = "Location Permission Denied";
+              errorDetails = "Location access was denied.";
+              errorSuggestion = "";
+            } else if (err.code === err.POSITION_UNAVAILABLE) {
+              errorTitle = "Location Unavailable";
+              errorDetails = "Could not determine your precise location.";
+            } else if (err.code === err.TIMEOUT) {
+              errorTitle = "Location Request Timeout";
+              errorDetails = "Location request took too long.";
+              errorSuggestion =
+                "Please try again or enter a ZIP code manually.";
             }
 
             showError(errorTitle, errorDetails, errorSuggestion, {
@@ -3980,54 +4286,27 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             });
             statusEl &&
               (statusEl.textContent =
-                "Could not fetch weather. Enter values manually.");
-          }
-        },
-        (err) => {
-          log(err);
-
-          let errorTitle = "Location Access Denied";
-          let errorDetails = "Location permission was denied or unavailable.";
-          let errorSuggestion = "";
-
-          if (err.code === err.PERMISSION_DENIED) {
-            errorTitle = "Location Permission Denied";
-            errorDetails = "Location access was denied.";
-            errorSuggestion = "";
-          } else if (err.code === err.POSITION_UNAVAILABLE) {
-            errorTitle = "Location Unavailable";
-            errorDetails = "Could not determine your precise location.";
-          } else if (err.code === err.TIMEOUT) {
-            errorTitle = "Location Request Timeout";
-            errorDetails = "Location request took too long.";
-            errorSuggestion = "Please try again or enter a ZIP code manually.";
-          }
-
-          showError(errorTitle, errorDetails, errorSuggestion, {
-            zip: () => {}, // ZIP input will be shown in error message
-          });
-          statusEl &&
-            (statusEl.textContent =
-              "Location denied. Enter values manually or set a ZIP.");
+                "Location denied. Enter values manually or set a ZIP.");
+          }, 1500); // 1.5 second delay
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       ); // maximumAge: 0 forces fresh location
-      }
-  
-      // Inputs auto-update
+    }
+
+    // Inputs auto-update
     ["input", "change"].forEach((evt) => {
       ["temp", "humidity", "wind", "solar", "reflect", "reflectCustom"].forEach(
         (id) => {
           const el = els[id];
           el &&
             el.addEventListener(evt, () => {
-            compute();
-            if ((id === "reflect" || id === "reflectCustom") && lastCoords) {
-              getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
-                .then(async (hourly) => {
-                  const ds = buildTimelineDataset(hourly);
-                  timelineState = ds;
-                  window.timelineState = timelineState;
+              compute();
+              if ((id === "reflect" || id === "reflectCustom") && lastCoords) {
+                getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+                  .then(async (hourly) => {
+                    const ds = buildTimelineDataset(hourly);
+                    timelineState = ds;
+                    window.timelineState = timelineState;
                     await renderChart(
                       ds.labels,
                       ds.shadeVals,
@@ -4106,7 +4385,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (preset === "tomorrow") {
           if (chartTitleEl) chartTitleEl.textContent = "Tomorrow";
         } else if (preset === "default") {
-          if (chartTitleEl) chartTitleEl.textContent = "Today and Tomorrow";
+          if (chartTitleEl) chartTitleEl.textContent = "24-Hour Forecast";
         } else {
           updateChartTitle();
         }
@@ -4185,7 +4464,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
               timelineState = ds;
               window.timelineState = timelineState;
-              await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
+              await renderChart(
+                ds.labels,
+                ds.shadeVals,
+                ds.sunVals,
+                ds.now,
+                ds.isDayByHour
+              );
               if (selectionRange) {
                 updateWeatherSummary();
               }
@@ -4229,7 +4514,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           els.solarVal &&
             (els.solarVal.textContent = parseFloat(els.solar.value).toFixed(1));
         });
-  
+
       // Unit toggle
       function setUnit(newUnit, { persist = true, rerender = true } = {}) {
         if (newUnit !== "F" && newUnit !== "C") return;
@@ -4247,7 +4532,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
-                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
+                await renderChart(
+                  ds.labels,
+                  ds.shadeVals,
+                  ds.sunVals,
+                  ds.now,
+                  ds.isDayByHour
+                );
                 // Update weather summary if there's a selection
                 if (selectionRange) {
                   updateWeatherSummary();
@@ -4271,7 +4562,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       unitEls.C?.addEventListener("click", () => setUnit("C"));
       paintUnitToggle();
       applyUnitLabels();
-  
+
       // Storage sync across tabs
       window.addEventListener("storage", (e) => {
         if (e.key === UNIT_KEY) {
@@ -4295,7 +4586,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         }
       });
-  
+
       // Scheduler controls
       function clearPollTimer() {
         if (pollTimer) clearTimeout(pollTimer);
@@ -4464,7 +4755,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (shadeColorStart) chartColors.shade.start = shadeColorStart.value;
         if (shadeColorEnd) chartColors.shade.end = shadeColorEnd.value;
         localStorage.setItem(CHART_COLORS_KEY, JSON.stringify(chartColors));
-        
+
         // Debounce rapid color changes
         if (colorUpdateTimeout) clearTimeout(colorUpdateTimeout);
         colorUpdateTimeout = setTimeout(() => {
@@ -4478,7 +4769,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
-                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
+                await renderChart(
+                  ds.labels,
+                  ds.shadeVals,
+                  ds.sunVals,
+                  ds.now,
+                  ds.isDayByHour
+                );
               })
               .catch(() => {});
           }
@@ -4524,41 +4821,56 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       // Initialize calibration inputs
       if (calibHumidityCoeff) {
         calibHumidityCoeff.value = calibration.humidityCoeff;
-        if (calibHumidityCoeffVal) calibHumidityCoeffVal.textContent = calibration.humidityCoeff.toFixed(4);
+        if (calibHumidityCoeffVal)
+          calibHumidityCoeffVal.textContent =
+            calibration.humidityCoeff.toFixed(4);
       }
       if (calibHumidityBaseline) {
         calibHumidityBaseline.value = calibration.humidityBaseline;
-        if (calibHumidityBaselineVal) calibHumidityBaselineVal.textContent = calibration.humidityBaseline;
+        if (calibHumidityBaselineVal)
+          calibHumidityBaselineVal.textContent = calibration.humidityBaseline;
       }
       if (calibWindCoeff) {
         calibWindCoeff.value = calibration.windCoeff;
-        if (calibWindCoeffVal) calibWindCoeffVal.textContent = calibration.windCoeff.toFixed(1);
+        if (calibWindCoeffVal)
+          calibWindCoeffVal.textContent = calibration.windCoeff.toFixed(1);
       }
       if (calibSolarCoeff) {
         calibSolarCoeff.value = calibration.solarCoeff;
-        if (calibSolarCoeffVal) calibSolarCoeffVal.textContent = calibration.solarCoeff;
+        if (calibSolarCoeffVal)
+          calibSolarCoeffVal.textContent = calibration.solarCoeff;
       }
       if (calibReflectCoeff) {
         calibReflectCoeff.value = calibration.reflectCoeff;
-        if (calibReflectCoeffVal) calibReflectCoeffVal.textContent = calibration.reflectCoeff;
+        if (calibReflectCoeffVal)
+          calibReflectCoeffVal.textContent = calibration.reflectCoeff;
       }
       if (calibCloudExp) {
         calibCloudExp.value = calibration.cloudExp;
-        if (calibCloudExpVal) calibCloudExpVal.textContent = calibration.cloudExp.toFixed(1);
+        if (calibCloudExpVal)
+          calibCloudExpVal.textContent = calibration.cloudExp.toFixed(1);
       }
 
       // Debounce calibration updates
       let calibrationUpdateTimeout = null;
       function updateCalibration() {
-        if (calibHumidityCoeff) calibration.humidityCoeff = parseFloat(calibHumidityCoeff.value);
-        if (calibHumidityBaseline) calibration.humidityBaseline = parseFloat(calibHumidityBaseline.value);
-        if (calibWindCoeff) calibration.windCoeff = parseFloat(calibWindCoeff.value);
-        if (calibSolarCoeff) calibration.solarCoeff = parseFloat(calibSolarCoeff.value);
-        if (calibReflectCoeff) calibration.reflectCoeff = parseFloat(calibReflectCoeff.value);
-        if (calibCloudExp) calibration.cloudExp = parseFloat(calibCloudExp.value);
-        
+        if (calibHumidityCoeff)
+          calibration.humidityCoeff = parseFloat(calibHumidityCoeff.value);
+        if (calibHumidityBaseline)
+          calibration.humidityBaseline = parseFloat(
+            calibHumidityBaseline.value
+          );
+        if (calibWindCoeff)
+          calibration.windCoeff = parseFloat(calibWindCoeff.value);
+        if (calibSolarCoeff)
+          calibration.solarCoeff = parseFloat(calibSolarCoeff.value);
+        if (calibReflectCoeff)
+          calibration.reflectCoeff = parseFloat(calibReflectCoeff.value);
+        if (calibCloudExp)
+          calibration.cloudExp = parseFloat(calibCloudExp.value);
+
         localStorage.setItem(CALIBRATION_KEY, JSON.stringify(calibration));
-        
+
         // Debounce recalculation
         if (calibrationUpdateTimeout) clearTimeout(calibrationUpdateTimeout);
         calibrationUpdateTimeout = setTimeout(() => {
@@ -4569,7 +4881,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
-                await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now, ds.isDayByHour);
+                await renderChart(
+                  ds.labels,
+                  ds.shadeVals,
+                  ds.sunVals,
+                  ds.now,
+                  ds.isDayByHour
+                );
               })
               .catch(() => {});
           } else if (els.temp && els.humidity && els.wind) {
@@ -4580,65 +4898,96 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
 
       // Calibration event listeners
-      calibHumidityCoeff && calibHumidityCoeff.addEventListener("input", () => {
-        if (calibHumidityCoeffVal) calibHumidityCoeffVal.textContent = parseFloat(calibHumidityCoeff.value).toFixed(4);
-        updateCalibration();
-      });
-      calibHumidityBaseline && calibHumidityBaseline.addEventListener("input", () => {
-        if (calibHumidityBaselineVal) calibHumidityBaselineVal.textContent = parseFloat(calibHumidityBaseline.value);
-        updateCalibration();
-      });
-      calibWindCoeff && calibWindCoeff.addEventListener("input", () => {
-        if (calibWindCoeffVal) calibWindCoeffVal.textContent = parseFloat(calibWindCoeff.value).toFixed(1);
-        updateCalibration();
-      });
-      calibSolarCoeff && calibSolarCoeff.addEventListener("input", () => {
-        if (calibSolarCoeffVal) calibSolarCoeffVal.textContent = parseFloat(calibSolarCoeff.value);
-        updateCalibration();
-      });
-      calibReflectCoeff && calibReflectCoeff.addEventListener("input", () => {
-        if (calibReflectCoeffVal) calibReflectCoeffVal.textContent = parseFloat(calibReflectCoeff.value);
-        updateCalibration();
-      });
-      calibCloudExp && calibCloudExp.addEventListener("input", () => {
-        if (calibCloudExpVal) calibCloudExpVal.textContent = parseFloat(calibCloudExp.value).toFixed(1);
-        updateCalibration();
-      });
+      calibHumidityCoeff &&
+        calibHumidityCoeff.addEventListener("input", () => {
+          if (calibHumidityCoeffVal)
+            calibHumidityCoeffVal.textContent = parseFloat(
+              calibHumidityCoeff.value
+            ).toFixed(4);
+          updateCalibration();
+        });
+      calibHumidityBaseline &&
+        calibHumidityBaseline.addEventListener("input", () => {
+          if (calibHumidityBaselineVal)
+            calibHumidityBaselineVal.textContent = parseFloat(
+              calibHumidityBaseline.value
+            );
+          updateCalibration();
+        });
+      calibWindCoeff &&
+        calibWindCoeff.addEventListener("input", () => {
+          if (calibWindCoeffVal)
+            calibWindCoeffVal.textContent = parseFloat(
+              calibWindCoeff.value
+            ).toFixed(1);
+          updateCalibration();
+        });
+      calibSolarCoeff &&
+        calibSolarCoeff.addEventListener("input", () => {
+          if (calibSolarCoeffVal)
+            calibSolarCoeffVal.textContent = parseFloat(calibSolarCoeff.value);
+          updateCalibration();
+        });
+      calibReflectCoeff &&
+        calibReflectCoeff.addEventListener("input", () => {
+          if (calibReflectCoeffVal)
+            calibReflectCoeffVal.textContent = parseFloat(
+              calibReflectCoeff.value
+            );
+          updateCalibration();
+        });
+      calibCloudExp &&
+        calibCloudExp.addEventListener("input", () => {
+          if (calibCloudExpVal)
+            calibCloudExpVal.textContent = parseFloat(
+              calibCloudExp.value
+            ).toFixed(1);
+          updateCalibration();
+        });
 
-      resetCalibrationBtn && resetCalibrationBtn.addEventListener("click", () => {
-        calibration = { ...defaultCalibration };
-        if (calibHumidityCoeff) {
-          calibHumidityCoeff.value = calibration.humidityCoeff;
-          if (calibHumidityCoeffVal) calibHumidityCoeffVal.textContent = calibration.humidityCoeff.toFixed(4);
-        }
-        if (calibHumidityBaseline) {
-          calibHumidityBaseline.value = calibration.humidityBaseline;
-          if (calibHumidityBaselineVal) calibHumidityBaselineVal.textContent = calibration.humidityBaseline;
-        }
-        if (calibWindCoeff) {
-          calibWindCoeff.value = calibration.windCoeff;
-          if (calibWindCoeffVal) calibWindCoeffVal.textContent = calibration.windCoeff.toFixed(1);
-        }
-        if (calibSolarCoeff) {
-          calibSolarCoeff.value = calibration.solarCoeff;
-          if (calibSolarCoeffVal) calibSolarCoeffVal.textContent = calibration.solarCoeff;
-        }
-        if (calibReflectCoeff) {
-          calibReflectCoeff.value = calibration.reflectCoeff;
-          if (calibReflectCoeffVal) calibReflectCoeffVal.textContent = calibration.reflectCoeff;
-        }
-        if (calibCloudExp) {
-          calibCloudExp.value = calibration.cloudExp;
-          if (calibCloudExpVal) calibCloudExpVal.textContent = calibration.cloudExp.toFixed(1);
-        }
-        updateCalibration();
-      });
-  
+      resetCalibrationBtn &&
+        resetCalibrationBtn.addEventListener("click", () => {
+          calibration = { ...defaultCalibration };
+          if (calibHumidityCoeff) {
+            calibHumidityCoeff.value = calibration.humidityCoeff;
+            if (calibHumidityCoeffVal)
+              calibHumidityCoeffVal.textContent =
+                calibration.humidityCoeff.toFixed(4);
+          }
+          if (calibHumidityBaseline) {
+            calibHumidityBaseline.value = calibration.humidityBaseline;
+            if (calibHumidityBaselineVal)
+              calibHumidityBaselineVal.textContent =
+                calibration.humidityBaseline;
+          }
+          if (calibWindCoeff) {
+            calibWindCoeff.value = calibration.windCoeff;
+            if (calibWindCoeffVal)
+              calibWindCoeffVal.textContent = calibration.windCoeff.toFixed(1);
+          }
+          if (calibSolarCoeff) {
+            calibSolarCoeff.value = calibration.solarCoeff;
+            if (calibSolarCoeffVal)
+              calibSolarCoeffVal.textContent = calibration.solarCoeff;
+          }
+          if (calibReflectCoeff) {
+            calibReflectCoeff.value = calibration.reflectCoeff;
+            if (calibReflectCoeffVal)
+              calibReflectCoeffVal.textContent = calibration.reflectCoeff;
+          }
+          if (calibCloudExp) {
+            calibCloudExp.value = calibration.cloudExp;
+            if (calibCloudExpVal)
+              calibCloudExpVal.textContent = calibration.cloudExp.toFixed(1);
+          }
+          updateCalibration();
+        });
+
       // ZIP input handler - submit on Enter or blur
       async function handleZipSubmit() {
         if (!zipEls.input) return;
         const raw = zipEls.input.value.trim();
-        
+
         // If empty, clear ZIP and use device location
         if (!raw) {
           localStorage.removeItem(ZIP_KEY);
@@ -4650,7 +4999,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
           return;
         }
-        
+
         const zip5 = normalizeZip(raw);
         if (!zip5) {
           showError(
@@ -4665,7 +5014,15 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           );
           return;
         }
-        
+
+        // Show loading state
+        const zipLoadingSpinner = $("#zipLoadingSpinner");
+        if (zipLoadingSpinner) zipLoadingSpinner.style.display = "block";
+        if (zipEls.input) {
+          zipEls.input.disabled = true;
+        }
+        if (!vibeChart) showChartLoading();
+
         try {
           hideError();
           const { latitude, longitude, place } = await getCoordsForZip(zip5);
@@ -4690,8 +5047,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               "Please verify the ZIP code and try again, or use your device location.";
           } else if (e.message === "ZIP_LOOKUP_FAILED") {
             errorTitle = "ZIP Lookup Service Error";
-            errorDetails =
-              "The ZIP lookup service is temporarily unavailable.";
+            errorDetails = "The ZIP lookup service is temporarily unavailable.";
             errorSuggestion =
               "Please try again in a moment or use your device location.";
           }
@@ -4701,9 +5057,15 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               if (zipEls.input) zipEls.input.focus();
             },
           });
+        } finally {
+          // Always clear loading state
+          if (zipLoadingSpinner) zipLoadingSpinner.style.display = "none";
+          if (zipEls.input) {
+            zipEls.input.disabled = false;
+          }
         }
       }
-      
+
       // Debounce ZIP input to avoid excessive lookups
       let zipSubmitTimeout = null;
       if (zipEls.input) {
@@ -4714,7 +5076,29 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             handleZipSubmit();
           }
         });
-        
+
+        zipEls.input.addEventListener("input", (e) => {
+          // Only allow numeric input
+          const value = e.target.value.replace(/\D/g, "");
+          if (e.target.value !== value) {
+            e.target.value = value;
+          }
+
+          const currentValue = value.trim();
+          // Auto-submit if exactly 5 digits (standard ZIP code)
+          if (currentValue.length === 5 && /^\d{5}$/.test(currentValue)) {
+            // Clear any existing timeout
+            if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
+            // Submit after user stops typing (500ms debounce)
+            zipSubmitTimeout = setTimeout(() => {
+              handleZipSubmit();
+            }, 500);
+          } else {
+            // Clear timeout if not 5 digits
+            if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
+          }
+        });
+
         zipEls.input.addEventListener("blur", () => {
           // Only submit if value changed
           const currentValue = zipEls.input.value.trim();
@@ -4725,7 +5109,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         });
       }
-      
 
       // Buttons
       els.useLocationBtn &&
@@ -4914,7 +5297,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         });
 
       // ZIP input handlers are set up earlier (around line 4125)
-  
+
       // Buttons
       els.useLocationBtn &&
         els.useLocationBtn.addEventListener("click", () => {
@@ -5217,21 +5600,21 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         }
       }
-  
+
       // Boot
       setTimeout(() => {
         statusEl &&
           (statusEl.textContent = "Trying to get your local weather…");
-  
+
         // Apply URL parameters first
         applyURLParameters();
 
         // If no location was set from URL, use saved ZIP or prompt for browser location
         if (!lastCoords) {
-        const savedZip = localStorage.getItem(ZIP_KEY);
-        if (savedZip && zipEls.input) {
-          zipEls.input.value = savedZip;
-          getCoordsForZip(savedZip)
+          const savedZip = localStorage.getItem(ZIP_KEY);
+          if (savedZip && zipEls.input) {
+            zipEls.input.value = savedZip;
+            getCoordsForZip(savedZip)
               .then(({ latitude, longitude, place }) =>
                 primeWeatherForCoords(
                   latitude,
@@ -5243,10 +5626,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 hideError(); // Ensure error is hidden after successful weather fetch
                 updateChartTitle(); // Update input display
               })
-            .catch(() => useLocation());
-        } else {
+              .catch(() => useLocation());
+          } else {
             // Prompt for browser location first, fall back to IP if denied
-          useLocation();
+            useLocation();
           }
         } else {
           // Update chart title to show location even if set from URL
@@ -5254,6 +5637,5 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         }
       }, 300);
     });
-    });
-  })();
-  
+  });
+})();
