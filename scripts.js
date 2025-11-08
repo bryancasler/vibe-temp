@@ -152,16 +152,15 @@
         // Show ZIP code if saved, otherwise show place name or empty
         const savedZip = localStorage.getItem(ZIP_KEY);
         if (savedZip) {
-          // Show "ZIP [code]" format for clarity
+          // Show ZIP code value
           chartLocationEl.value = savedZip;
-          chartLocationEl.placeholder = `ZIP ${savedZip}`;
         } else if (currentPlaceName) {
           chartLocationEl.value = "";
-          chartLocationEl.placeholder = currentPlaceName;
         } else {
           chartLocationEl.value = "";
-          chartLocationEl.placeholder = "Enter ZIP";
         }
+        // Always keep placeholder as "12345"
+        chartLocationEl.placeholder = "12345";
       }
     }
 
