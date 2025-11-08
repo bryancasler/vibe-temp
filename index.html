@@ -1,11 +1,13 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
-    <link rel="stylesheet" href="styles.css" />
-    <script src="scripts.js"></script>
+    <meta charset="UTF-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="scripts.js"></script>
   </head>
   <body>
     <div class="app">
@@ -17,38 +19,104 @@
           </h1>
         </div>
 
-        <!-- Unit toggle (saved to localStorage and syncs across tabs) -->
-        <div class="unit-toggle" aria-label="Units">
+        <div class="header-controls">
+          <!-- Advanced Configuration -->
           <button
-            id="unitF"
-            class="unit-btn"
+            id="advConfigBtn"
+            class="theme-btn"
             type="button"
-            title="Switch to Fahrenheit"
+            title="Advanced Configuration"
           >
-            °F
+            ⚙️
           </button>
-          <button
-            id="unitC"
-            class="unit-btn"
-            type="button"
-            title="Switch to Celsius"
-          >
-            °C
-          </button>
+          <!-- Theme toggle -->
+          <div class="theme-toggle" aria-label="Theme">
+            <button
+              id="themeToggle"
+              class="theme-btn"
+              type="button"
+              title="Toggle dark/light theme"
+            >
+              &#127769;
+            </button>
+          </div>
+          <!-- Unit toggle (saved to localStorage and syncs across tabs) -->
+          <div class="unit-toggle" aria-label="Units">
+            <button
+              id="unitF"
+              class="unit-btn"
+              type="button"
+              title="Switch to Fahrenheit"
+            >
+              &#176;F
+            </button>
+            <button
+              id="unitC"
+              class="unit-btn"
+              type="button"
+              title="Switch to Celsius"
+            >
+              &#176;C
+            </button>
+          </div>
         </div>
       </header>
 
-      <!-- Three cards in one row -->
-      <section class="cards">
-        <article class="card card--now">
-          <h3 class="card-title" id="currentTimeTitle">Current Time</h3>
-          <div class="card-temp card-temp--now">
-            <span id="nowTime" class="skeleton-text">--:--</span>
+      <!-- Error Message with Retry -->
+      <div id="errorMessage" class="error-message" style="display: none">
+        <div class="error-content">
+          <div class="error-icon">⚠️</div>
+          <div class="error-text">
+            <div class="error-title"></div>
+            <div class="error-details"></div>
+            <div class="error-suggestion"></div>
           </div>
-          <div class="card-desc">
-            <small id="nowSubLabel" class="now-time__sub skeleton-text"
-              >—</small
+        </div>
+        <div class="error-actions">
+          <div class="error-zip-input-wrapper" style="display: none">
+            <input
+              id="errorZipInput"
+              class="error-zip-input"
+              type="text"
+              placeholder="Enter ZIP code (e.g., 20001)"
+              maxlength="10"
+            />
+            <button
+              id="errorZipSubmitBtn"
+              class="error-action-btn error-zip-submit-btn"
+              type="button"
             >
+              Use ZIP
+            </button>
+          </div>
+          <button
+            id="errorRetryBtn"
+            class="error-action-btn error-retry-btn"
+            type="button"
+            style="display: none"
+          >
+            Retry
+          </button>
+          <button
+            id="errorDismissBtn"
+            class="error-dismiss-btn"
+            type="button"
+            title="Dismiss error"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Two cards in one row -->
+      <section class="cards">
+        <article class="card card--sun" id="sunCard">
+          <h3 class="card-title">Sun Vibe</h3>
+          <div class="card-temp" id="sun">
+            <span class="skeleton-text">—</span>
+          </div>
+          <div class="card-desc" id="sunLabel">
+            <span class="skeleton-text">Loading…</span>
           </div>
         </article>
 
@@ -58,16 +126,6 @@
             <span class="skeleton-text">—</span>
           </div>
           <div class="card-desc" id="shadeLabel">
-            <span class="skeleton-text">Loading…</span>
-          </div>
-        </article>
-
-        <article class="card card--sun" id="sunCard">
-          <h3 class="card-title">Sun Vibe</h3>
-          <div class="card-temp" id="sun">
-            <span class="skeleton-text">—</span>
-          </div>
-          <div class="card-desc" id="sunLabel">
             <span class="skeleton-text">Loading…</span>
           </div>
         </article>
@@ -83,24 +141,6 @@
           <div class="summary-header">
             <h3 class="summary-title">Highlighted Vibes</h3>
             <div class="summary-actions">
-              <button
-                id="exportCSVBtn"
-                class="export-btn"
-                type="button"
-                title="Export selected range as CSV"
-                style="display: none"
-              >
-                📥 CSV
-              </button>
-              <button
-                id="exportJSONBtn"
-                class="export-btn"
-                type="button"
-                title="Export selected range as JSON"
-                style="display: none"
-              >
-                📥 JSON
-              </button>
               <button
                 id="copySummaryBtn"
                 class="copy-summary-btn"
@@ -131,41 +171,8 @@
         <div class="chart-head">
           <div class="chart-title">Today and Tomorrow</div>
           <div class="chart-head-right">
-            <div class="time-presets">
-              <button
-                id="presetToday"
-                class="preset-btn"
-                type="button"
-                title="Show today only"
-              >
-                Today
-              </button>
-              <button
-                id="presetTomorrow"
-                class="preset-btn"
-                type="button"
-                title="Show tomorrow only"
-              >
-                Tomorrow
-              </button>
-              <button
-                id="preset3Days"
-                class="preset-btn"
-                type="button"
-                title="Show next 3 days"
-              >
-                3 Days
-              </button>
-              <button
-                id="presetWeek"
-                class="preset-btn"
-                type="button"
-                title="Show next week"
-              >
-                Week
-              </button>
-            </div>
-            <div class="chart-status" id="chartStatus">Loading timeline…</div>
+            <div class="chart-location" id="chartLocation"></div>
+            <div class="chart-status" id="chartStatus"></div>
           </div>
         </div>
         <div class="chart-box" id="chartBox">
@@ -183,12 +190,103 @@
             on the graph to select a time range and share it</small
           >
         </div>
+        <div class="time-presets">
+          <button
+            id="presetToday"
+            class="preset-btn"
+            type="button"
+            title="Show today only"
+          >
+            Today
+          </button>
+          <button
+            id="presetDefault"
+            class="preset-btn active"
+            type="button"
+            title="Show today and tomorrow"
+          >
+            Today & Tomorrow
+          </button>
+          <button
+            id="presetTomorrow"
+            class="preset-btn"
+            type="button"
+            title="Show tomorrow only"
+          >
+            Tomorrow
+          </button>
+          <button
+            id="preset3Days"
+            class="preset-btn"
+            type="button"
+            title="Show next 3 days"
+          >
+            3 Days
+          </button>
+          <button
+            id="presetWeek"
+            class="preset-btn"
+            type="button"
+            title="Show next week"
+          >
+            Week
+          </button>
+        </div>
+        <div class="chart-shading-toggles">
+          <label class="shading-toggle-label">
+            <input
+              id="nightShadingToggle"
+              type="checkbox"
+              checked
+              title="Show darker shading on the graph for nighttime periods (between sunset and sunrise)"
+            />
+            <span class="toggle-switch"></span>
+            <span>Night</span>
+          </label>
+          <label class="shading-toggle-label">
+            <input
+              id="temperatureZonesToggle"
+              type="checkbox"
+              title="Show color-coded temperature comfort zones"
+            />
+            <span class="toggle-switch"></span>
+            <span>Zones</span>
+          </label>
+          <label class="shading-toggle-label">
+            <input
+              id="humidityVisToggle"
+              type="checkbox"
+              title="Show humidity impact visualization (red tint for high humidity, blue for low)"
+            />
+            <span class="toggle-switch"></span>
+            <span>Humidity</span>
+          </label>
+          <label class="shading-toggle-label">
+            <input
+              id="sunMarkersToggle"
+              type="checkbox"
+              checked
+              title="Show sunrise and sunset icons on the chart"
+            />
+            <span class="toggle-switch"></span>
+            <span>Sun</span>
+          </label>
+          <label class="shading-toggle-label">
+            <input
+              id="rainIconsToggle"
+              type="checkbox"
+              checked
+              title="Show rain icons on the chart"
+            />
+            <span class="toggle-switch"></span>
+            <span>Rain</span>
+          </label>
+        </div>
       </section>
 
       <!-- Status & quick controls -->
       <section class="controls">
         <div class="controls-left">
-          <button id="use-location" class="btn">Use My Location</button>
           <div
             id="favoritesDropdown"
             class="favorites-dropdown"
@@ -213,35 +311,27 @@
           >
             🔔 Notifications
           </button>
-          <div id="status" class="status">
-            Trying to get your local weather…
-          </div>
         </div>
         <div class="controls-right">
-          <div class="times">
-            <div>
-              <strong>Last Updated:</strong> <span id="lastUpdated">—</span>
-            </div>
-            <div>
-              <strong>Next Update:</strong> <span id="nextUpdated">—</span>
-            </div>
-          </div>
         </div>
       </section>
 
-      <!-- Advanced Configuration (collapsed by default) -->
-      <section class="advanced">
-        <button
-          class="adv-toggle"
-          type="button"
-          aria-expanded="false"
-          aria-controls="advPanel"
-        >
-          <span class="adv-label">Advanced Configuration</span>
-          <span class="adv-caret" aria-hidden="true"></span>
-        </button>
-
-        <div id="advPanel" class="adv-panel" hidden>
+      <!-- Advanced Configuration Modal -->
+      <div id="advConfigModal" class="modal-overlay" style="display: none">
+        <div class="modal-content modal-large">
+          <div class="modal-header">
+            <h2 class="modal-title">Advanced Configuration</h2>
+            <button
+              id="advConfigClose"
+              class="modal-close"
+              type="button"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div class="modal-body">
+            <div id="advPanel" class="adv-panel">
           <div class="adv-grid">
             <!-- Inputs -->
             <div class="adv-col">
@@ -361,6 +451,13 @@
 
               <hr class="adv-sep" />
 
+              <h4 class="adv-h4">Status</h4>
+              <div id="status" class="adv-status">
+                Trying to get your local weather…
+              </div>
+
+              <hr class="adv-sep" />
+
               <h4 class="adv-h4">Auto Updates</h4>
               <div class="row">
                 <label class="inline">
@@ -404,15 +501,52 @@
                   />
                 </label>
               </div>
+              <hr class="adv-sep" />
+              <h4 class="adv-h4">Chart Colors</h4>
               <div class="row">
-                <label class="inline">
+                <label class="field">
+                  <span class="field-label">Sun Vibe Start</span>
                   <input
-                    id="nightShadingToggle"
-                    type="checkbox"
-                    title="Show darker shading on the graph for nighttime periods (between sunset and sunrise)"
+                    id="sunColorStart"
+                    type="color"
+                    value="#ffb86b"
+                    title="Starting color for Sun Vibe gradient"
                   />
-                  <span>Show night shading</span>
                 </label>
+                <label class="field">
+                  <span class="field-label">Sun Vibe End</span>
+                  <input
+                    id="sunColorEnd"
+                    type="color"
+                    value="#ff9500"
+                    title="Ending color for Sun Vibe gradient"
+                  />
+                </label>
+              </div>
+              <div class="row">
+                <label class="field">
+                  <span class="field-label">Shade Vibe Start</span>
+                  <input
+                    id="shadeColorStart"
+                    type="color"
+                    value="#6ea8fe"
+                    title="Starting color for Shade Vibe gradient"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Shade Vibe End</span>
+                  <input
+                    id="shadeColorEnd"
+                    type="color"
+                    value="#4a90e2"
+                    title="Ending color for Shade Vibe gradient"
+                  />
+                </label>
+              </div>
+              <div class="row">
+                <button id="resetColors" class="btn btn--sm" type="button">
+                  Reset to Defaults
+                </button>
               </div>
             </div>
 
@@ -432,30 +566,13 @@
               </div>
             </div>
           </div>
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
     </div>
     <div id="notification" class="notification" style="display: none"></div>
 
-    <!-- Error Message with Retry -->
-    <div id="errorMessage" class="error-message" style="display: none">
-      <div class="error-content">
-        <div class="error-icon">⚠️</div>
-        <div class="error-text">
-          <div class="error-title"></div>
-          <div class="error-details"></div>
-          <div class="error-suggestion"></div>
-        </div>
-      </div>
-      <button
-        id="errorRetryBtn"
-        class="error-retry-btn"
-        type="button"
-        style="display: none"
-      >
-        Retry
-      </button>
-    </div>
 
     <!-- Expired Selection Modal -->
     <div
