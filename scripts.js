@@ -51,13 +51,26 @@
       const expiredModalEl = $("#expiredModal");
       const keepCustomBtn = $("#keepCustomBtn");
       const useDefaultsBtn = $("#useDefaultsBtn");
+      const chartSkeletonEl = $("#chartSkeleton");
+      const errorMessageEl = $("#errorMessage");
+      const errorTitleEl = $(".error-title");
+      const errorDetailsEl = $(".error-details");
+      const errorSuggestionEl = $(".error-suggestion");
+      const errorRetryBtn = $("#errorRetryBtn");
+      const copySummaryBtn = $("#copySummaryBtn");
+      const shortcutsModalEl = $("#shortcutsModal");
+      const closeShortcutsBtn = $("#closeShortcutsBtn");
+      const presetTodayBtn = $("#presetToday");
+      const presetTomorrowBtn = $("#presetTomorrow");
+      const preset3DaysBtn = $("#preset3Days");
+      const presetWeekBtn = $("#presetWeek");
       
       function updateChartTitle() {
         if (chartTitleEl) {
           if (daysAhead === 1) {
             chartTitleEl.textContent = "Today";
           } else if (daysAhead === 2) {
-            chartTitleEl.textContent = "Today & Tomorrow";
+            chartTitleEl.textContent = "Today and Tomorrow";
           } else {
             chartTitleEl.textContent = `Next ${daysAhead} Days`;
           }
@@ -576,6 +589,11 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         summaryGenerationInProgress = true;
         
         if (weatherSummaryEl) weatherSummaryEl.style.display = "block";
+        showSummaryLoading();
+        
+        // Show copy button and clear button
+        if (copySummaryBtn) copySummaryBtn.style.display = "none";
+        if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
         
         // Update title with smart description
         if (summaryTitleEl && selectionRange) {
@@ -613,15 +631,20 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             summaryTextEl.textContent = summary;
             summaryTextEl.className = "summary-text";
           }
-        } catch (error) {
-          console.warn("Failed to generate summary:", error);
-          if (summaryTextEl) {
-            summaryTextEl.textContent = "Unable to generate summary at this time.";
-            summaryTextEl.className = "summary-text";
+          
+          // Show copy button when summary is ready
+          if (copySummaryBtn) copySummaryBtn.style.display = "block";
+          } catch (error) {
+            console.warn("Failed to generate summary:", error);
+            if (summaryTextEl) {
+              summaryTextEl.textContent = "Unable to generate summary at this time.";
+              summaryTextEl.className = "summary-text";
+            }
+            // Hide copy button on error
+            if (copySummaryBtn) copySummaryBtn.style.display = "none";
+          } finally {
+            summaryGenerationInProgress = false;
           }
-        } finally {
-          summaryGenerationInProgress = false;
-        }
       }
 
       // Helper to convert pixel to time
@@ -685,16 +708,24 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         return m ? m[1] : null;
       }
       async function getCoordsForZip(zip5) {
-        const r = await fetch(`https://api.zippopotam.us/us/${zip5}`);
-        if (!r.ok) throw new Error("ZIP lookup failed");
-        const data = await r.json();
-        const p = data.places?.[0];
-        if (!p) throw new Error("ZIP not found");
-        return {
-          latitude: parseFloat(p.latitude),
-          longitude: parseFloat(p.longitude),
-          place: `${p["place name"]}, ${p["state abbreviation"]}`
-        };
+        try {
+          const r = await fetch(`https://api.zippopotam.us/us/${zip5}`);
+          if (!r.ok) {
+            if (r.status === 404) throw new Error("ZIP_NOT_FOUND");
+            throw new Error("ZIP_LOOKUP_FAILED");
+          }
+          const data = await r.json();
+          const p = data.places?.[0];
+          if (!p) throw new Error("ZIP_NOT_FOUND");
+          return {
+            latitude: parseFloat(p.latitude),
+            longitude: parseFloat(p.longitude),
+            place: `${p["place name"]}, ${p["state abbreviation"]}`
+          };
+        } catch (e) {
+          if (e.message === "ZIP_NOT_FOUND") throw new Error("ZIP_NOT_FOUND");
+          throw new Error("ZIP_LOOKUP_FAILED");
+        }
       }
       async function getPlaceName(lat, lon) {
         try {
@@ -802,11 +833,12 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
   
       // Solar exposure
       function solarFromUVandCloud({ uv_index, uv_index_clear_sky, cloud_cover, is_day }) {
+        const isDaylight = is_day === 1 || is_day === true;
         const baseUV = (typeof uv_index_clear_sky === "number" && uv_index_clear_sky > 0)
           ? uv_index / uv_index_clear_sky
           : (typeof uv_index === "number" ? uv_index / 10 : 0);
         const cloudAtten = 1 - Math.pow((cloud_cover ?? 0) / 100, 0.7);
-        const solar = (is_day ? baseUV * cloudAtten : 0);
+        const solar = (isDaylight ? baseUV * cloudAtten : 0);
         return clamp(solar, 0, 1);
       }
   
@@ -822,16 +854,20 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         }
         const tempF = unit === "F" ? Traw : cToF(Traw);
         const shadeF = shadeVibeOf(tempF, RH, Wind);
-        const sunF   = sunVibeOf(shadeF, Solar, reflectivity());
+        const solarValue = Number.isNaN(Solar) ? 0 : clamp(Solar, 0, 1);
+        const sunF   = sunVibeOf(shadeF, solarValue, reflectivity());
   
         const shadeDisplay = toUserTemp(shadeF);
         const sunDisplay   = toUserTemp(sunF);
   
-        els.shade && (els.shade.textContent = `${shadeDisplay.toFixed(1)}${unitSuffix()}`);
-        els.sun   && (els.sun.textContent   = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
+        els.shade && (els.shade.innerHTML = `${shadeDisplay.toFixed(1)}${unitSuffix()}`);
+        els.sun   && (els.sun.innerHTML   = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
   
-        els.shadeLabel && (els.shadeLabel.textContent = vibeDescriptor(shadeF, { solar: Solar, isDay: isDaylightNow(), context: "shade" }));
-        els.sunLabel   && (els.sunLabel.textContent   = vibeDescriptor(sunF,   { solar: Solar, isDay: isDaylightNow(), context: "sun" }));
+        els.shadeLabel && (els.shadeLabel.innerHTML = vibeDescriptor(shadeF, { solar: solarValue, isDay: isDaylightNow(), context: "shade" }));
+        els.sunLabel   && (els.sunLabel.innerHTML   = vibeDescriptor(sunF,   { solar: solarValue, isDay: isDaylightNow(), context: "sun" }));
+        
+        // Remove skeleton loading state
+        hideCardLoading();
   
         if (!simActive && els.sunCard) {
           els.sunCard.style.display = isDaylightNow() ? "" : "none";
@@ -846,49 +882,96 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         return solar;
       }
   
-      // API
+      // API with error handling
       async function getCurrentWeather(lat, lon) {
-        const params = new URLSearchParams({
-          latitude: lat, longitude: lon,
-          current: "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
-          temperature_unit: "fahrenheit", wind_speed_unit: "mph", timezone: "auto"
-        });
-        const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-        if (!r.ok) throw new Error("Weather fetch failed");
-        const data = await r.json();
-        return data.current;
+        try {
+          const params = new URLSearchParams({
+            latitude: lat, longitude: lon,
+            current: "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+            temperature_unit: "fahrenheit", wind_speed_unit: "mph", timezone: "auto"
+          });
+          const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+          if (!r.ok) {
+            if (r.status === 429) {
+              throw new Error("RATE_LIMIT");
+            } else if (r.status >= 500) {
+              throw new Error("SERVER_ERROR");
+            } else {
+              throw new Error(`API_ERROR_${r.status}`);
+            }
+          }
+          const data = await r.json();
+          if (!data.current) throw new Error("INVALID_RESPONSE");
+          return data.current;
+        } catch (e) {
+          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
+          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
+          if (e.message.startsWith("API_ERROR_")) throw e;
+          if (e.message === "INVALID_RESPONSE") throw new Error("INVALID_RESPONSE");
+          throw new Error("NETWORK_ERROR");
+        }
       }
       async function getHourlyWeather(lat, lon) {
-        const params = new URLSearchParams({
-          latitude: lat, longitude: lon,
-          hourly: "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
-          temperature_unit: "fahrenheit", wind_speed_unit: "mph", timezone: "auto"
-        });
-        const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-        if (!r.ok) throw new Error("Hourly fetch failed");
-        const data = await r.json();
-        return data.hourly;
+        try {
+          const params = new URLSearchParams({
+            latitude: lat, longitude: lon,
+            hourly: "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+            temperature_unit: "fahrenheit", wind_speed_unit: "mph", timezone: "auto"
+          });
+          const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+          if (!r.ok) {
+            if (r.status === 429) {
+              throw new Error("RATE_LIMIT");
+            } else if (r.status >= 500) {
+              throw new Error("SERVER_ERROR");
+            } else {
+              throw new Error(`API_ERROR_${r.status}`);
+            }
+          }
+          const data = await r.json();
+          if (!data.hourly) throw new Error("INVALID_RESPONSE");
+          return data.hourly;
+        } catch (e) {
+          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
+          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
+          if (e.message.startsWith("API_ERROR_")) throw e;
+          if (e.message === "INVALID_RESPONSE") throw new Error("INVALID_RESPONSE");
+          throw new Error("NETWORK_ERROR");
+        }
       }
       async function getDailySun(lat, lon, daysAheadParam = daysAhead) {
-        const params = new URLSearchParams({
-          latitude: lat, longitude: lon, daily: "sunrise,sunset", timezone: "auto",
+        try {
+          const params = new URLSearchParams({
+            latitude: lat, longitude: lon, daily: "sunrise,sunset", timezone: "auto",
           forecast_days: Math.max(daysAheadParam, 7) // Request at least 7 days to ensure we have enough
         });
-        const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-        if (!r.ok) throw new Error("Daily fetch failed");
-        const data = await r.json();
-        const rises = data?.daily?.sunrise?.map(t => new Date(t)) ?? [];
-        const sets  = data?.daily?.sunset?.map(t => new Date(t)) ?? [];
-        // Return arrays of all sunrise/sunset times for the visible range
-        return {
-          sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
-          sunsets: sets.slice(0, daysAheadParam + 1),
-          // Keep legacy properties for backward compatibility
-          sunriseToday: rises[0] ?? null,
-          sunsetToday: sets[0] ?? null,
-          sunriseTomorrow: rises[1] ?? null,
-          sunsetTomorrow: sets[1] ?? null
-        };
+          const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+          if (!r.ok) {
+            if (r.status === 429) throw new Error("RATE_LIMIT");
+            if (r.status >= 500) throw new Error("SERVER_ERROR");
+            throw new Error(`API_ERROR_${r.status}`);
+          }
+          const data = await r.json();
+          if (!data.daily) throw new Error("INVALID_RESPONSE");
+          const rises = data?.daily?.sunrise?.map(t => new Date(t)) ?? [];
+          const sets  = data?.daily?.sunset?.map(t => new Date(t)) ?? [];
+          // Return arrays of all sunrise/sunset times for the visible range
+          return {
+            sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
+            sunsets: sets.slice(0, daysAheadParam + 1),
+            // Keep legacy properties for backward compatibility
+            sunriseToday: rises[0] ?? null,
+            sunsetToday: sets[0] ?? null,
+            sunriseTomorrow: rises[1] ?? null,
+            sunsetTomorrow: sets[1] ?? null
+          };
+        } catch (e) {
+          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
+          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
+          if (e.message.startsWith("API_ERROR_")) throw e;
+          if (e.message === "INVALID_RESPONSE") throw new Error("INVALID_RESPONSE");
+          throw new Error("NETWORK_ERROR");
+        }
       }
   
       // Timeline
@@ -977,6 +1060,62 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           .filter(e => e !== null);
       }
   
+      // Loading state helpers
+      function showCardLoading() {
+        // Cards start with skeleton class, will be removed when data loads
+      }
+      
+      function hideCardLoading() {
+        document.querySelectorAll('.skeleton-text').forEach(el => {
+          el.classList.remove('skeleton-text');
+        });
+      }
+      
+      function showChartLoading() {
+        if (chartSkeletonEl) chartSkeletonEl.style.display = 'flex';
+        if (els.chartCanvas) els.chartCanvas.style.display = 'none';
+      }
+      
+      function hideChartLoading() {
+        if (chartSkeletonEl) chartSkeletonEl.style.display = 'none';
+        if (els.chartCanvas) els.chartCanvas.style.display = 'block';
+      }
+      
+      function showSummaryLoading() {
+        if (summaryTextEl) {
+          summaryTextEl.textContent = "Generating summary...";
+          summaryTextEl.className = "summary-text loading";
+        }
+      }
+
+      // Error handling with retry
+      function showError(title, details, suggestion, retryCallback = null) {
+        if (!errorMessageEl) return;
+        if (errorTitleEl) errorTitleEl.textContent = title;
+        if (errorDetailsEl) errorDetailsEl.textContent = details;
+        if (errorSuggestionEl) errorSuggestionEl.textContent = suggestion || "";
+        if (errorRetryBtn) {
+          if (retryCallback) {
+            errorRetryBtn.style.display = "block";
+            errorRetryBtn.onclick = () => {
+              hideError();
+              retryCallback();
+            };
+          } else {
+            errorRetryBtn.style.display = "none";
+          }
+        }
+        errorMessageEl.classList.add("show");
+        errorMessageEl.style.display = "block";
+      }
+
+      function hideError() {
+        if (errorMessageEl) {
+          errorMessageEl.classList.remove("show");
+          errorMessageEl.style.display = "none";
+        }
+      }
+
       async function renderChart(labels, shadeValsF, sunValsFF, now) {
         if (!els.chartCanvas) return;
         updateChartTitle();
@@ -1488,6 +1627,9 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           datasets.push(highlightDataset); // Add at end so it appears last in legend
         }
 
+        // Hide skeleton, show chart
+        hideChartLoading();
+        
         vibeChart = new Chart(ctx, {
           type: "line",
           data: {
@@ -1569,6 +1711,8 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         let isSelecting = false;
         let selectionStartX = null;
         let selectionStartTime = null;
+        let touchStartTime = null;
+        let hasMoved = false;
 
         function updateFromClientX(clientX) {
           if (!vibeChart || !timelineState) return;
@@ -1606,6 +1750,11 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         
         els.chartCanvas.addEventListener("pointermove", (e) => {
           if (isSelecting && selectionStartTime) {
+            hasMoved = true;
+            // Prevent scrolling on mobile during selection
+            if (e.pointerType === "touch") {
+              e.preventDefault();
+            }
             const currentTime = getTimeFromClientX(e.clientX);
             if (currentTime && selectionStartTime) {
               const startTime = currentTime < selectionStartTime ? currentTime : selectionStartTime;
@@ -1621,7 +1770,20 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         
         function endPointer(e){
           if (isSelecting && selectionStartTime) {
+            const isTouch = e.pointerType === "touch";
             const endTime = getTimeFromClientX(e.clientX);
+            
+            // For touch, check if it was a tap (not a drag) - if so, don't create selection
+            if (isTouch && !hasMoved && Date.now() - touchStartTime < 300) {
+              // It was a tap, not a drag - just show the value at that point
+              isSelecting = false;
+              selectionStartX = null;
+              selectionStartTime = null;
+              isPointerDown = false;
+              try { els.chartCanvas.releasePointerCapture(e.pointerId); } catch {}
+              return;
+            }
+            
             if (endTime && selectionStartTime) {
               const startTime = endTime < selectionStartTime ? endTime : selectionStartTime;
               const finalEndTime = endTime > selectionStartTime ? endTime : selectionStartTime;
@@ -1631,9 +1793,6 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
               if (duration >= 5 * 60 * 1000) {
                 selectionRange = { startTime, endTime: finalEndTime };
                 vibeChart.update('none');
-                
-                // Show clear button
-                if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
                 
                 // Copy URL to clipboard and update browser URL
                 const url = generateShareURL(startTime, finalEndTime);
@@ -1661,6 +1820,8 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             isSelecting = false;
             selectionStartX = null;
             selectionStartTime = null;
+            hasMoved = false;
+            touchStartTime = null;
             try { els.chartCanvas.releasePointerCapture(e.pointerId); } catch {}
           } else {
             isPointerDown = false;
@@ -1692,6 +1853,15 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         return { next, kind: isSunrise ? "Sunrise" : "Sunset" };
       }
       function updateClockCard() {
+        // Remove skeleton from clock card
+        const nowTimeEl = els.nowTime;
+        const nowSubLabelEl = els.nowSubLabel;
+        if (nowTimeEl && nowTimeEl.classList.contains('skeleton-text')) {
+          nowTimeEl.classList.remove('skeleton-text');
+        }
+        if (nowSubLabelEl && nowSubLabelEl.classList.contains('skeleton-text')) {
+          nowSubLabelEl.classList.remove('skeleton-text');
+        }
         const now = new Date();
         els.nowTime && (els.nowTime.textContent = fmtHM(now));
         const nxt = chooseNextSunEvent();
@@ -1720,13 +1890,16 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         const shadeDisp = toUserTemp(shadeVals[i]);
         const sunDisp   = toUserTemp(sunVals[i]);
   
-        els.shade && (els.shade.textContent = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
-        if (isDay && els.sun) els.sun.textContent = `${sunDisp.toFixed(1)}${unitSuffix()}`;
-  
+        els.shade && (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
+        if (isDay && els.sun) els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
+
         const simSolar = solarByHour[i];
-        els.shadeLabel && (els.shadeLabel.textContent = vibeDescriptor(shadeVals[i], { solar: simSolar, isDay, context: "shade" }));
-        if (isDay && els.sunLabel) els.sunLabel.textContent = vibeDescriptor(sunVals[i], { solar: simSolar, isDay, context: "sun" });
-        if (!isDay && els.sunLabel) els.sunLabel.textContent = "";
+        els.shadeLabel && (els.shadeLabel.innerHTML = vibeDescriptor(shadeVals[i], { solar: simSolar, isDay, context: "shade" }));
+        if (isDay && els.sunLabel) els.sunLabel.innerHTML = vibeDescriptor(sunVals[i], { solar: simSolar, isDay, context: "sun" });
+        if (!isDay && els.sunLabel) els.sunLabel.innerHTML = "";
+        
+        // Remove skeleton loading state
+        hideCardLoading();
       }
   
       // Scheduler
@@ -1765,7 +1938,7 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
           els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
   
-          if (typeof cur.uv_index === "number" && typeof cur.is_day === "number") {
+          if (typeof cur.uv_index === "number" && (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")) {
             const solar = solarFromUVandCloud({
               uv_index: cur.uv_index, uv_index_clear_sky: cur.uv_index_clear_sky,
               cloud_cover: cur.cloud_cover ?? 0, is_day: cur.is_day
@@ -1788,6 +1961,7 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             } catch (e) {
               // If fetch fails, continue with existing sunTimes
             }
+            showChartLoading();
             const ds = buildTimelineDataset(hourlyMaybe);
             timelineState = ds;
             window.timelineState = timelineState; // expose for tooltip descriptors
@@ -1803,6 +1977,8 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
         } catch (e) {
           console.warn("Update cycle failed", e);
+          // Don't show error for update cycle failures, just log them
+          // User can manually retry with "Update Now" button
         } finally {
           scheduleNextTick(els.updateInterval?.value || 1);
         }
@@ -1812,69 +1988,155 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
       // Prime weather
       async function primeWeatherForCoords(latitude, longitude, sourceLabel = "") {
         statusEl && (statusEl.textContent = sourceLabel ? `Getting weather for ${sourceLabel}…` : "Getting weather…");
-        const [cur, hourly, dailySun] = await Promise.all([
-          getCurrentWeather(latitude, longitude),
-          getHourlyWeather(latitude, longitude),
-          getDailySun(latitude, longitude, daysAhead)
-        ]);
-        sunTimes = dailySun;
-        lastCoords = { latitude, longitude };
+        showChartLoading();
+        try {
+          const [cur, hourly, dailySun] = await Promise.all([
+            getCurrentWeather(latitude, longitude),
+            getHourlyWeather(latitude, longitude),
+            getDailySun(latitude, longitude, daysAhead)
+          ]);
+          sunTimes = dailySun;
+          lastCoords = { latitude, longitude };
   
-        currentPlaceName = await getPlaceName(latitude, longitude);
-        paintCurrentTimeTitle();
+          currentPlaceName = await getPlaceName(latitude, longitude);
+          paintCurrentTimeTitle();
   
-        const tempF = (cur.temperature_2m ?? cur.apparent_temperature ?? null);
-        if (tempF != null) els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
-        els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
-        els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
-        if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
+          const tempF = (cur.temperature_2m ?? cur.apparent_temperature ?? null);
+          if (tempF != null) els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
+          els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
+          els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
+          if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
   
-        if (typeof cur.uv_index === "number" && typeof cur.is_day === "number") {
-          const solar = solarFromUVandCloud({
-            uv_index: cur.uv_index, uv_index_clear_sky: cur.uv_index_clear_sky,
-            cloud_cover: cur.cloud_cover ?? 0, is_day: cur.is_day
-          });
-          els.solar.value = solar.toFixed(1);
-          els.solarVal.textContent = solar.toFixed(1);
-        } else if (typeof cur.cloud_cover === "number") {
-          autoSolarFromCloudCover(cur.cloud_cover);
+          if (typeof cur.uv_index === "number" && (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")) {
+            const solar = solarFromUVandCloud({
+              uv_index: cur.uv_index, uv_index_clear_sky: cur.uv_index_clear_sky,
+              cloud_cover: cur.cloud_cover ?? 0, is_day: cur.is_day
+            });
+            els.solar.value = solar.toFixed(1);
+            els.solarVal.textContent = solar.toFixed(1);
+          } else if (typeof cur.cloud_cover === "number") {
+            autoSolarFromCloudCover(cur.cloud_cover);
+          }
+  
+          compute();
+          updateClockCard();
+          paintCurrentTimeTitle();
+  
+          chartStatusEl && (chartStatusEl.textContent = "Loading timeline…");
+          showChartLoading();
+          const ds = buildTimelineDataset(hourly);
+          timelineState = ds;
+          window.timelineState = timelineState; // expose for tooltip descriptors
+          await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+          chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
+          // Update summary if selection exists (weather data may have changed)
+          if (selectionRange) {
+            updateWeatherSummary();
+          }
+  
+          const nowTime = new Date();
+          els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
+          statusEl && (statusEl.textContent = sourceLabel ? `Using ${sourceLabel}` : "Using chosen coordinates");
+          restartScheduler();
+          hideError();
+        } catch (e) {
+          log(e);
+          let errorTitle = "Weather Fetch Failed";
+          let errorDetails = "Could not retrieve weather data.";
+          let errorSuggestion = "Please try again or check your connection.";
+          let retryCallback = () => primeWeatherForCoords(latitude, longitude, sourceLabel);
+          
+          if (e.message === "RATE_LIMIT") {
+            errorTitle = "Rate Limit Exceeded";
+            errorDetails = "Too many requests to the weather service. Please wait a moment.";
+            errorSuggestion = "Wait a few seconds and try again.";
+          } else if (e.message === "SERVER_ERROR") {
+            errorTitle = "Weather Service Error";
+            errorDetails = "The weather service is temporarily unavailable.";
+            errorSuggestion = "Please try again in a moment.";
+          } else if (e.message === "NETWORK_ERROR") {
+            errorTitle = "Network Error";
+            errorDetails = "Could not connect to the weather service. Check your internet connection.";
+            errorSuggestion = "Check your connection and try again.";
+          } else if (e.message === "INVALID_RESPONSE") {
+            errorTitle = "Invalid Response";
+            errorDetails = "Received unexpected data from the weather service.";
+            errorSuggestion = "Please try again.";
+          }
+          
+          showError(errorTitle, errorDetails, errorSuggestion, retryCallback);
+          statusEl && (statusEl.textContent = "Failed to fetch weather data.");
+          chartStatusEl && (chartStatusEl.textContent = "Timeline unavailable without weather.");
         }
-  
-        compute();
-        updateClockCard();
-        paintCurrentTimeTitle();
-  
-        chartStatusEl && (chartStatusEl.textContent = "Loading timeline…");
-        const ds = buildTimelineDataset(hourly);
-        timelineState = ds;
-        window.timelineState = timelineState; // expose for tooltip descriptors
-        await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
-        chartStatusEl && (chartStatusEl.textContent = "Timeline based on hourly forecast.");
-        // Update summary if selection exists (weather data may have changed)
-        if (selectionRange) {
-          updateWeatherSummary();
-        }
-  
-        const nowTime = new Date();
-        els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
-        statusEl && (statusEl.textContent = sourceLabel ? `Using ${sourceLabel}` : "Using chosen coordinates");
-        restartScheduler();
       }
   
       // Geolocation
       function useLocation() {
         statusEl && (statusEl.textContent = "Getting location…");
-        if (!navigator.geolocation) { statusEl && (statusEl.textContent = "Geolocation unavailable. Enter values manually."); return; }
+        hideError();
+        if (!navigator.geolocation) {
+          showError(
+            "Geolocation Unavailable",
+            "Your browser doesn't support location services.",
+            "Please enter a ZIP code or coordinates manually in Advanced Configuration."
+          );
+          statusEl && (statusEl.textContent = "Geolocation unavailable. Enter values manually.");
+          return;
+        }
         navigator.geolocation.getCurrentPosition(async pos => {
           const { latitude, longitude } = pos.coords;
-          try { await primeWeatherForCoords(latitude, longitude, "device location"); }
+          try { 
+            await primeWeatherForCoords(latitude, longitude, "device location");
+            hideError();
+          }
           catch (e) {
             log(e);
+            let errorTitle = "Weather Fetch Failed";
+            let errorDetails = "Could not retrieve weather data.";
+            let errorSuggestion = "Please try again or enter a ZIP code manually.";
+            let retryCallback = () => useLocation();
+            
+            if (e.message === "RATE_LIMIT") {
+              errorTitle = "Rate Limit Exceeded";
+              errorDetails = "Too many requests to the weather service. Please wait a moment.";
+              errorSuggestion = "Wait a few seconds and try again.";
+            } else if (e.message === "SERVER_ERROR") {
+              errorTitle = "Weather Service Error";
+              errorDetails = "The weather service is temporarily unavailable.";
+              errorSuggestion = "Please try again in a moment.";
+            } else if (e.message === "NETWORK_ERROR") {
+              errorTitle = "Network Error";
+              errorDetails = "Could not connect to the weather service. Check your internet connection.";
+              errorSuggestion = "Check your connection and try again, or enter a ZIP code manually.";
+            } else if (e.message === "INVALID_RESPONSE") {
+              errorTitle = "Invalid Response";
+              errorDetails = "Received unexpected data from the weather service.";
+              errorSuggestion = "Please try again or enter a ZIP code manually.";
+            }
+            
+            showError(errorTitle, errorDetails, errorSuggestion, retryCallback);
             statusEl && (statusEl.textContent = "Could not fetch weather. Enter values manually.");
             chartStatusEl && (chartStatusEl.textContent = "Timeline unavailable without weather.");
           }
         }, err => {
           log(err);
+          let errorTitle = "Location Access Denied";
+          let errorDetails = "Location permission was denied or unavailable.";
+          let errorSuggestion = "Please allow location access or enter a ZIP code manually in Advanced Configuration.";
+          
+          if (err.code === err.PERMISSION_DENIED) {
+            errorTitle = "Location Permission Denied";
+            errorDetails = "Location access was denied. Please enable location permissions in your browser settings.";
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            errorTitle = "Location Unavailable";
+            errorDetails = "Could not determine your location.";
+          } else if (err.code === err.TIMEOUT) {
+            errorTitle = "Location Request Timeout";
+            errorDetails = "Location request took too long.";
+            errorSuggestion = "Please try again or enter a ZIP code manually.";
+          }
+          
+          showError(errorTitle, errorDetails, errorSuggestion);
           statusEl && (statusEl.textContent = "Location denied. Enter values manually or set a ZIP.");
           chartStatusEl && (chartStatusEl.textContent = "Timeline unavailable without location.");
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
@@ -1894,11 +2156,113 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
                   window.timelineState = timelineState;
                   await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
                 })
-                .catch(()=>{});
-            }
-          });
+              .catch(()=>{});
+          }
         });
       });
+      
+      // Time preset functions
+      function setTimePreset(preset) {
+        // Clear active state from all presets
+        [presetTodayBtn, presetTomorrowBtn, preset3DaysBtn, presetWeekBtn].forEach(btn => {
+          if (btn) btn.classList.remove("active");
+        });
+        
+        let newDaysAhead = daysAhead;
+        let startFromTomorrow = false;
+        
+        switch(preset) {
+          case "today":
+            newDaysAhead = 1;
+            startFromTomorrow = false;
+            if (presetTodayBtn) presetTodayBtn.classList.add("active");
+            break;
+          case "tomorrow":
+            newDaysAhead = 1;
+            startFromTomorrow = true;
+            if (presetTomorrowBtn) presetTomorrowBtn.classList.add("active");
+            break;
+          case "3days":
+            newDaysAhead = 3;
+            startFromTomorrow = false;
+            if (preset3DaysBtn) preset3DaysBtn.classList.add("active");
+            break;
+          case "week":
+            newDaysAhead = 7;
+            startFromTomorrow = false;
+            if (presetWeekBtn) presetWeekBtn.classList.add("active");
+            break;
+        }
+        
+        daysAhead = newDaysAhead;
+        if (els.daysAhead) els.daysAhead.value = daysAhead;
+        localStorage.setItem(DAYS_AHEAD_KEY, String(daysAhead));
+        
+        // Update chart title
+        if (preset === "tomorrow") {
+          if (chartTitleEl) chartTitleEl.textContent = "Tomorrow";
+        } else {
+          updateChartTitle();
+        }
+        
+        // Update chart if we have data
+        if (lastCoords) {
+          getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+            .then(async (hourly) => {
+              try {
+                const dailySun = await getDailySun(lastCoords.latitude, lastCoords.longitude, daysAhead);
+                sunTimes = dailySun;
+              } catch (e) {
+                console.warn("Failed to fetch sun times:", e);
+              }
+              let ds = buildTimelineDataset(hourly);
+              
+              // For "tomorrow" preset, filter to start from tomorrow
+              if (startFromTomorrow && ds.labels.length > 0) {
+                const now = new Date();
+                const tomorrowStart = new Date(now);
+                tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+                tomorrowStart.setHours(0, 0, 0, 0);
+                
+                const tomorrowEnd = new Date(tomorrowStart);
+                tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+                
+                const filteredIndices = [];
+                for (let i = 0; i < ds.labels.length; i++) {
+                  const labelTime = new Date(ds.labels[i]);
+                  if (labelTime >= tomorrowStart && labelTime < tomorrowEnd) {
+                    filteredIndices.push(i);
+                  }
+                }
+                
+                if (filteredIndices.length > 0) {
+                  ds = {
+                    labels: filteredIndices.map(i => ds.labels[i]),
+                    shadeVals: filteredIndices.map(i => ds.shadeVals[i]),
+                    sunVals: filteredIndices.map(i => ds.sunVals[i]),
+                    solarByHour: filteredIndices.map(i => ds.solarByHour[i]),
+                    isDayByHour: filteredIndices.map(i => ds.isDayByHour[i]),
+                    now: ds.now
+                  };
+                }
+              }
+              
+              timelineState = ds;
+              window.timelineState = timelineState;
+              await renderChart(ds.labels, ds.shadeVals, ds.sunVals, ds.now);
+              if (selectionRange) {
+                updateWeatherSummary();
+              }
+            })
+            .catch(() => {});
+        }
+      }
+
+      // Time preset buttons
+      presetTodayBtn && presetTodayBtn.addEventListener("click", () => setTimePreset("today"));
+      presetTomorrowBtn && presetTomorrowBtn.addEventListener("click", () => setTimePreset("tomorrow"));
+      preset3DaysBtn && preset3DaysBtn.addEventListener("click", () => setTimePreset("3days"));
+      presetWeekBtn && presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
       els.solar && els.solar.addEventListener("input", () => { els.solarVal && (els.solarVal.textContent = parseFloat(els.solar.value).toFixed(1)); });
   
       // Unit toggle
@@ -2007,16 +2371,43 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
       zipEls.btn && zipEls.btn.addEventListener("click", async () => {
         const raw = zipEls.input?.value;
         const zip5 = normalizeZip(raw);
-        if (!zip5) { zipEls.status && (zipEls.status.textContent = "Enter a valid US ZIP (e.g., 20001 or 20001-1234)"); return; }
+        if (!zip5) { 
+          showError(
+            "Invalid ZIP Code",
+            "Please enter a valid US ZIP code (e.g., 20001 or 20001-1234).",
+            ""
+          );
+          zipEls.status && (zipEls.status.textContent = "Enter a valid US ZIP (e.g., 20001 or 20001-1234)"); 
+          return; 
+        }
         try {
+          hideError();
           zipEls.status && (zipEls.status.textContent = "Looking up ZIP…");
           const { latitude, longitude, place } = await getCoordsForZip(zip5);
           localStorage.setItem(ZIP_KEY, zip5);
           zipEls.status && (zipEls.status.textContent = `Using ZIP ${zip5} (${place})`);
           await primeWeatherForCoords(latitude, longitude, `ZIP ${zip5} (${place})`);
+          hideError();
         } catch (e) {
           console.warn(e);
-          zipEls.status && (zipEls.status.textContent = "Couldn’t find that ZIP.");
+          let errorTitle = "ZIP Lookup Failed";
+          let errorDetails = "Could not find that ZIP code.";
+          let errorSuggestion = "Please check the ZIP code and try again.";
+          let retryCallback = null;
+          
+          if (e.message === "ZIP_NOT_FOUND") {
+            errorTitle = "ZIP Code Not Found";
+            errorDetails = `The ZIP code "${zip5}" was not found.`;
+            errorSuggestion = "Please verify the ZIP code and try again, or use your device location.";
+          } else if (e.message === "ZIP_LOOKUP_FAILED") {
+            errorTitle = "ZIP Lookup Service Error";
+            errorDetails = "The ZIP lookup service is temporarily unavailable.";
+            errorSuggestion = "Please try again in a moment or use your device location.";
+            retryCallback = () => zipEls.btn?.click();
+          }
+          
+          showError(errorTitle, errorDetails, errorSuggestion, retryCallback);
+          zipEls.status && (zipEls.status.textContent = "Couldn't find that ZIP.");
         }
       });
       zipEls.clear && zipEls.clear.addEventListener("click", () => {
@@ -2036,6 +2427,7 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         clearHighlightBtn.style.display = "none";
         // Hide summary
         if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+        if (copySummaryBtn) copySummaryBtn.style.display = "none";
         
         // Remove start and end from URL but keep other params
         const params = new URLSearchParams(location.search);
@@ -2045,6 +2437,20 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
           ? `${location.pathname}?${params.toString()}`
           : location.pathname;
         history.pushState({}, "", newUrl);
+      });
+
+      // Copy summary button
+      copySummaryBtn && copySummaryBtn.addEventListener("click", async () => {
+        if (!summaryTextEl || !summaryTextEl.textContent) return;
+        const summaryText = summaryTextEl.textContent.trim();
+        if (!summaryText || summaryText === "Generating summary..." || summaryText === "Unable to generate summary at this time.") return;
+        
+        const success = await copyToClipboard(summaryText);
+        if (success) {
+          showNotification("Summary copied to clipboard!", "success");
+        } else {
+          showNotification("Failed to copy summary. Please select and copy manually.", "error", 5000);
+        }
       });
 
       // Expired selection modal buttons
@@ -2062,6 +2468,110 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
       expiredModalEl && expiredModalEl.addEventListener("click", (e) => {
         if (e.target === expiredModalEl) {
           hideExpiredSelectionModal();
+        }
+      });
+
+      // Keyboard shortcuts
+      function showShortcutsModal() {
+        if (shortcutsModalEl) {
+          shortcutsModalEl.style.display = "flex";
+          if (closeShortcutsBtn) closeShortcutsBtn.focus();
+        }
+      }
+
+      function hideShortcutsModal() {
+        if (shortcutsModalEl) {
+          shortcutsModalEl.style.display = "none";
+        }
+      }
+
+      closeShortcutsBtn && closeShortcutsBtn.addEventListener("click", hideShortcutsModal);
+      
+      shortcutsModalEl && shortcutsModalEl.addEventListener("click", (e) => {
+        if (e.target === shortcutsModalEl) {
+          hideShortcutsModal();
+        }
+      });
+
+      // Global keyboard shortcuts
+      document.addEventListener("keydown", (e) => {
+        // Don't trigger shortcuts when typing in inputs
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) {
+          // Allow Escape to work even in inputs
+          if (e.key === "Escape") {
+            e.target.blur();
+            if (shortcutsModalEl && shortcutsModalEl.style.display !== "none") {
+              hideShortcutsModal();
+            }
+            if (expiredModalEl && expiredModalEl.style.display !== "none") {
+              hideExpiredSelectionModal();
+            }
+            if (selectionRange) {
+              selectionRange = null;
+              if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
+              if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+              if (copySummaryBtn) copySummaryBtn.style.display = "none";
+              if (vibeChart) vibeChart.update('none');
+            }
+          }
+          return;
+        }
+
+        // C - Clear highlight
+        if (e.key === "c" || e.key === "C") {
+          if (selectionRange) {
+            selectionRange = null;
+            if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
+            if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
+            if (copySummaryBtn) copySummaryBtn.style.display = "none";
+            if (vibeChart) vibeChart.update('none');
+            
+            // Remove start and end from URL
+            const params = new URLSearchParams(location.search);
+            params.delete("start");
+            params.delete("end");
+            const newUrl = params.toString() 
+              ? `${location.pathname}?${params.toString()}`
+              : location.pathname;
+            history.pushState({}, "", newUrl);
+          }
+        }
+
+        // S - Share/copy selection URL
+        if (e.key === "s" || e.key === "S") {
+          if (selectionRange) {
+            const url = generateShareURL(selectionRange.startTime, selectionRange.endTime);
+            copyToClipboard(url).then(success => {
+              if (success) {
+                showNotification("Link copied to clipboard! Share this URL to show this time range.", "success");
+              } else {
+                showNotification("Failed to copy to clipboard. URL: " + url, "error", 5000);
+              }
+            });
+          }
+        }
+
+        // F - Toggle Fahrenheit
+        if (e.key === "f" || e.key === "F") {
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+            setUnit(unit === "F" ? "C" : "F");
+          }
+        }
+
+        // ? or H - Show shortcuts help
+        if (e.key === "?" || e.key === "h" || e.key === "H") {
+          if (e.key === "?" || (!e.shiftKey && !e.ctrlKey && !e.metaKey)) {
+            showShortcutsModal();
+          }
+        }
+
+        // Escape - Close modals
+        if (e.key === "Escape") {
+          if (shortcutsModalEl && shortcutsModalEl.style.display !== "none") {
+            hideShortcutsModal();
+          } else if (expiredModalEl && expiredModalEl.style.display !== "none") {
+            hideExpiredSelectionModal();
+          }
         }
       });
   
@@ -2128,7 +2638,6 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
             }
             // Still show the highlight if not expired
             selectionRange = { startTime, endTime };
-            if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
             // Update chart if it already exists
             if (vibeChart) {
               vibeChart.update('none');
@@ -2165,5 +2674,5 @@ Provide a brief, conversational summary (2-3 sentences) describing how it will F
         }
       }, 300);
     });
-  })();
-  
+  });
+})();

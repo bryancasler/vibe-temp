@@ -1,223 +1,490 @@
 <html>
-    <head>
-        <link rel="stylesheet" href="styles.css">
-        <script src="scripts.js"></script>
-        <meta
-  name="viewport"
-  content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
-/>
-    </head>
-    <body>
-        <div class="app">
-            <header class="header">
-              <div class="headline-wrap">
-                <h1 class="headline">
-                  Vibe Temp
-                  <span class="sub">How it actually feels in shade and sun</span>
-                </h1>
-              </div>
-          
-              <!-- Unit toggle (saved to localStorage and syncs across tabs) -->
-              <div class="unit-toggle" aria-label="Units">
-                <button id="unitF" class="unit-btn" type="button">°F</button>
-                <button id="unitC" class="unit-btn" type="button">°C</button>
-              </div>
-            </header>
-          
-            <!-- Three cards in one row -->
-            <section class="cards">
-              <article class="card card--now">
-                <h3 class="card-title" id="currentTimeTitle">Current Time</h3>
-                <div class="card-temp card-temp--now">
-                  <span id="nowTime">--:--</span>
-                </div>
-                <div class="card-desc">
-                  <small id="nowSubLabel" class="now-time__sub">—</small>
-                </div>
-              </article>
-          
-              <article class="card card--shade">
-                <h3 class="card-title">Shade Vibe</h3>
-                <div class="card-temp" id="shade">—</div>
-                <div class="card-desc" id="shadeLabel">Loading…</div>
-              </article>
-          
-              <article class="card card--sun" id="sunCard">
-                <h3 class="card-title">Sun Vibe</h3>
-                <div class="card-temp" id="sun">—</div>
-                <div class="card-desc" id="sunLabel">Loading…</div>
-              </article>
-            </section>
-          
-            <!-- Weather Summary -->
-            <section id="weatherSummary" class="weather-summary" style="display: none;">
-              <div class="summary-content">
-                <h3 class="summary-title">Highlighted Vibes</h3>
-                <div id="summaryTimeRange" class="summary-time-range"></div>
-                <div id="summaryText" class="summary-text">Generating summary...</div>
-              </div>
-            </section>
-          
-            <!-- Chart -->
-            <section class="chart-wrap">
-              <div class="chart-head">
-                <div class="chart-title">Today & Tomorrow</div>
-                <div class="chart-status" id="chartStatus">Loading timeline…</div>
-              </div>
-              <div class="chart-box" id="chartBox">
-                <canvas id="vibeChart"></canvas>
-                <button id="clearHighlight" class="clear-highlight-btn" style="display: none;" type="button">Clear Highlight</button>
-              </div>
-              <div class="chart-note">
-                <small>💡 Tip: Hold Shift (or Ctrl/Cmd) and drag on the graph to select a time range and share it</small>
-              </div>
-            </section>
-          
-            <!-- Status & quick controls -->
-            <section class="controls">
-              <div class="controls-left">
-                <button id="use-location" class="btn">Use My Location</button>
-                <div id="status" class="status">Trying to get your local weather…</div>
-              </div>
-              <div class="controls-right">
-                <div class="times">
-                  <div><strong>Last Updated:</strong> <span id="lastUpdated">—</span></div>
-                  <div><strong>Next Update:</strong> <span id="nextUpdated">—</span></div>
-                </div>
-              </div>
-            </section>
-          
-            <!-- Advanced Configuration (collapsed by default) -->
-            <section class="advanced">
-              <button class="adv-toggle" type="button" aria-expanded="false" aria-controls="advPanel">
-                <span class="adv-label">Advanced Configuration</span>
-                <span class="adv-caret" aria-hidden="true"></span>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="scripts.js"></script>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="headline-wrap">
+          <h1 class="headline">
+            Vibe Temp
+            <span class="sub">How it actually feels in shade and sun</span>
+          </h1>
+        </div>
+
+        <!-- Unit toggle (saved to localStorage and syncs across tabs) -->
+        <div class="unit-toggle" aria-label="Units">
+          <button
+            id="unitF"
+            class="unit-btn"
+            type="button"
+            title="Switch to Fahrenheit"
+          >
+            °F
+          </button>
+          <button
+            id="unitC"
+            class="unit-btn"
+            type="button"
+            title="Switch to Celsius"
+          >
+            °C
+          </button>
+        </div>
+      </header>
+
+      <!-- Three cards in one row -->
+      <section class="cards">
+        <article class="card card--now">
+          <h3 class="card-title" id="currentTimeTitle">Current Time</h3>
+          <div class="card-temp card-temp--now">
+            <span id="nowTime" class="skeleton-text">--:--</span>
+          </div>
+          <div class="card-desc">
+            <small id="nowSubLabel" class="now-time__sub skeleton-text"
+              >—</small
+            >
+          </div>
+        </article>
+
+        <article class="card card--shade">
+          <h3 class="card-title">Shade Vibe</h3>
+          <div class="card-temp" id="shade">
+            <span class="skeleton-text">—</span>
+          </div>
+          <div class="card-desc" id="shadeLabel">
+            <span class="skeleton-text">Loading…</span>
+          </div>
+        </article>
+
+        <article class="card card--sun" id="sunCard">
+          <h3 class="card-title">Sun Vibe</h3>
+          <div class="card-temp" id="sun">
+            <span class="skeleton-text">—</span>
+          </div>
+          <div class="card-desc" id="sunLabel">
+            <span class="skeleton-text">Loading…</span>
+          </div>
+        </article>
+      </section>
+
+      <!-- Weather Summary -->
+      <section
+        id="weatherSummary"
+        class="weather-summary"
+        style="display: none"
+      >
+        <div class="summary-content">
+          <div class="summary-header">
+            <h3 class="summary-title">Highlighted Vibes</h3>
+            <div class="summary-actions">
+              <button
+                id="copySummaryBtn"
+                class="copy-summary-btn"
+                type="button"
+                title="Copy summary to clipboard"
+                style="display: none"
+              >
+                📋 Copy
               </button>
-          
-              <div id="advPanel" class="adv-panel" hidden>
-                <div class="adv-grid">
-                  <!-- Inputs -->
-                  <div class="adv-col">
-                    <h4 class="adv-h4">Inputs</h4>
-                    <div class="fields-grid">
-                      <label class="field">
-                        <span class="field-label">Air Temp (<span id="airUnitLabel">°F</span>)</span>
-                        <input id="temp" type="number" step="0.1" placeholder="e.g., 75" />
-                      </label>
-          
-                      <label class="field">
-                        <span class="field-label">Humidity (%)</span>
-                        <input id="humidity" type="number" step="1" min="0" max="100" placeholder="e.g., 50" />
-                      </label>
-          
-                      <label class="field">
-                        <span class="field-label">Wind (mph)</span>
-                        <input id="wind" type="number" step="0.1" min="0" placeholder="e.g., 5" />
-                      </label>
-          
-                      <div class="field span-2">
-                        <label class="field-label">Solar Exposure (0–1)</label>
-                        <div class="range-row">
-                          <input id="solar" type="range" min="0" max="1" step="0.1" value="0.5" />
-                          <output id="solarVal" class="range-val">0.5</output>
-                        </div>
-                        <div class="hint">Auto-calculated from UV Index & cloud cover by default</div>
-                      </div>
-          
-                      <label class="field">
-                        <span class="field-label">Surface Reflectivity</span>
-                        <select id="reflect">
-                          <option value="0.2">Grass (~0.2)</option>
-                          <option value="0.3" selected>Concrete (~0.3)</option>
-                          <option value="0.5">Sand (~0.5)</option>
-                          <option value="0.8">Snow (~0.8)</option>
-                          <option value="0">Custom…</option>
-                        </select>
-                      </label>
-          
-                      <label class="field">
-                        <span class="field-label">Custom Reflectivity (0–1)</span>
-                        <input id="reflectCustom" type="number" min="0" max="1" step="0.05" value="0.3" />
-                      </label>
-                    </div>
+              <button
+                id="clearHighlight"
+                class="clear-highlight-btn"
+                type="button"
+                title="Clear the highlighted time range selection"
+                style="display: none"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          <div id="summaryTimeRange" class="summary-time-range"></div>
+          <div id="summaryText" class="summary-text">Generating summary...</div>
+        </div>
+      </section>
+
+      <!-- Chart -->
+      <section class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Today and Tomorrow</div>
+          <div class="chart-head-right">
+            <div class="time-presets">
+              <button
+                id="presetToday"
+                class="preset-btn"
+                type="button"
+                title="Show today only"
+              >
+                Today
+              </button>
+              <button
+                id="presetTomorrow"
+                class="preset-btn"
+                type="button"
+                title="Show tomorrow only"
+              >
+                Tomorrow
+              </button>
+              <button
+                id="preset3Days"
+                class="preset-btn"
+                type="button"
+                title="Show next 3 days"
+              >
+                3 Days
+              </button>
+              <button
+                id="presetWeek"
+                class="preset-btn"
+                type="button"
+                title="Show next week"
+              >
+                Week
+              </button>
+            </div>
+            <div class="chart-status" id="chartStatus">Loading timeline…</div>
+          </div>
+        </div>
+        <div class="chart-box" id="chartBox">
+          <div id="chartSkeleton" class="chart-skeleton">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+          <canvas id="vibeChart" style="display: none"></canvas>
+        </div>
+        <div class="chart-note">
+          <small
+            >💡 Tip:
+            <span class="desktop-only">Hold Shift (or Ctrl/Cmd) and </span>drag
+            on the graph to select a time range and share it</small
+          >
+        </div>
+      </section>
+
+      <!-- Status & quick controls -->
+      <section class="controls">
+        <div class="controls-left">
+          <button id="use-location" class="btn">Use My Location</button>
+          <div id="status" class="status">
+            Trying to get your local weather…
+          </div>
+        </div>
+        <div class="controls-right">
+          <div class="times">
+            <div>
+              <strong>Last Updated:</strong> <span id="lastUpdated">—</span>
+            </div>
+            <div>
+              <strong>Next Update:</strong> <span id="nextUpdated">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Advanced Configuration (collapsed by default) -->
+      <section class="advanced">
+        <button
+          class="adv-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="advPanel"
+        >
+          <span class="adv-label">Advanced Configuration</span>
+          <span class="adv-caret" aria-hidden="true"></span>
+        </button>
+
+        <div id="advPanel" class="adv-panel" hidden>
+          <div class="adv-grid">
+            <!-- Inputs -->
+            <div class="adv-col">
+              <h4 class="adv-h4">Inputs</h4>
+              <div class="fields-grid">
+                <label class="field">
+                  <span class="field-label"
+                    >Air Temp (<span id="airUnitLabel">°F</span>)</span
+                  >
+                  <input
+                    id="temp"
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g., 75"
+                    title="The actual air temperature in your location"
+                  />
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Humidity (%)</span>
+                  <input
+                    id="humidity"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    placeholder="e.g., 50"
+                    title="Relative humidity percentage. Higher humidity makes it feel warmer in summer and colder in winter."
+                  />
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Wind (mph)</span>
+                  <input
+                    id="wind"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    placeholder="e.g., 5"
+                    title="Wind speed in miles per hour. Wind makes it feel cooler by increasing heat loss."
+                  />
+                </label>
+
+                <div class="field span-2">
+                  <label class="field-label">Solar Exposure (0–1)</label>
+                  <div class="range-row">
+                    <input
+                      id="solar"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value="0.5"
+                      title="How much direct sunlight you're exposed to. 0 = full shade, 1 = direct sun. Auto-calculated from UV Index and cloud cover."
+                    />
+                    <output id="solarVal" class="range-val">0.5</output>
                   </div>
-          
-                  <!-- Location -->
-                  <div class="adv-col">
-                    <h4 class="adv-h4">Location</h4>
-                    <div class="zip-row">
-                      <input id="zipInput" class="zip-input" placeholder="Enter US ZIP (e.g., 20001)" />
-                      <div class="zip-actions">
-                        <button id="use-zip" class="btn btn--sm" type="button">Use ZIP</button>
-                        <button id="clear-zip" class="btn btn--sm btn--ghost" type="button">Clear</button>
-                      </div>
-                    </div>
-                    <div id="zipStatus" class="hint">Using device location if allowed.</div>
-          
-                    <hr class="adv-sep" />
-          
-                    <h4 class="adv-h4">Auto Updates</h4>
-                    <div class="row">
-                      <label class="inline">
-                        <span>Update every</span>
-                        <input id="updateInterval" type="number" min="0.5" step="0.5" value="1" class="w-6ch" />
-                        <span>minutes</span>
-                      </label>
-                    </div>
-                    <div class="row">
-                      <label class="inline">
-                        <input id="updateHourlyToggle" type="checkbox" checked />
-                        <span>Refresh hourly forecast too</span>
-                      </label>
-                    </div>
-                    <div class="row">
-                      <button id="updateNow" class="btn btn--sm" type="button">Update Now</button>
-                    </div>
-                    <hr class="adv-sep" />
-                    <h4 class="adv-h4">Graph Display</h4>
-                    <div class="row">
-                      <label class="inline">
-                        <span>Days ahead</span>
-                        <input id="daysAhead" type="number" min="1" max="7" step="1" value="2" class="w-6ch" />
-                      </label>
-                    </div>
-                    <div class="row">
-                      <label class="inline">
-                        <input id="nightShadingToggle" type="checkbox" />
-                        <span>Show night shading</span>
-                      </label>
-                    </div>
+                  <div class="hint">
+                    Auto-calculated from UV Index & cloud cover by default
                   </div>
-          
-                  <!-- Formula -->
-                  <div class="adv-col">
-                    <h4 class="adv-h4">Formula</h4>
-                    <pre class="formula">
+                </div>
+
+                <label class="field">
+                  <span class="field-label">Surface Reflectivity</span>
+                  <select
+                    id="reflect"
+                    title="How much the ground/surfaces reflect heat back at you. Higher values (like snow) make you feel warmer."
+                  >
+                    <option value="0.2">Grass (~0.2)</option>
+                    <option value="0.3" selected>Concrete (~0.3)</option>
+                    <option value="0.5">Sand (~0.5)</option>
+                    <option value="0.8">Snow (~0.8)</option>
+                    <option value="0">Custom…</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Custom Reflectivity (0–1)</span>
+                  <input
+                    id="reflectCustom"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value="0.3"
+                    title="Custom reflectivity value. 0 = no reflection, 1 = maximum reflection. Used when 'Custom…' is selected above."
+                  />
+                </label>
+              </div>
+            </div>
+
+            <!-- Location -->
+            <div class="adv-col">
+              <h4 class="adv-h4">Location</h4>
+              <div class="zip-row">
+                <input
+                  id="zipInput"
+                  class="zip-input"
+                  placeholder="Enter US ZIP (e.g., 20001)"
+                />
+                <div class="zip-actions">
+                  <button id="use-zip" class="btn btn--sm" type="button">
+                    Use ZIP
+                  </button>
+                  <button
+                    id="clear-zip"
+                    class="btn btn--sm btn--ghost"
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div id="zipStatus" class="hint">
+                Using device location if allowed.
+              </div>
+
+              <hr class="adv-sep" />
+
+              <h4 class="adv-h4">Auto Updates</h4>
+              <div class="row">
+                <label class="inline">
+                  <span>Update every</span>
+                  <input
+                    id="updateInterval"
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value="1"
+                    class="w-6ch"
+                  />
+                  <span>minutes</span>
+                </label>
+              </div>
+              <div class="row">
+                <label class="inline">
+                  <input id="updateHourlyToggle" type="checkbox" checked />
+                  <span>Refresh hourly forecast too</span>
+                </label>
+              </div>
+              <div class="row">
+                <button id="updateNow" class="btn btn--sm" type="button">
+                  Update Now
+                </button>
+              </div>
+              <hr class="adv-sep" />
+              <h4 class="adv-h4">Graph Display</h4>
+              <div class="row">
+                <label class="inline">
+                  <span>Days ahead</span>
+                  <input
+                    id="daysAhead"
+                    type="number"
+                    min="1"
+                    max="7"
+                    step="1"
+                    value="2"
+                    class="w-6ch"
+                    title="How many days into the future to show on the graph (1-7 days)"
+                  />
+                </label>
+              </div>
+              <div class="row">
+                <label class="inline">
+                  <input
+                    id="nightShadingToggle"
+                    type="checkbox"
+                    title="Show darker shading on the graph for nighttime periods (between sunset and sunrise)"
+                  />
+                  <span>Show night shading</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Formula -->
+            <div class="adv-col">
+              <h4 class="adv-h4">Formula</h4>
+              <pre class="formula">
           ShadeVibe(T, RH, Wind) = T + (RH - 40) / 15 - 0.7 × Wind
           
           SunVibe(ShadeVibe, Solar, Reflect) = ShadeVibe + 8 × Solar + 4 × Reflect
-                    </pre>
-                    <div class="hint">
-                      Solar is auto-derived from UV Index (vs clear-sky UV) and cloud cover, and zeroed at night.
-                      Reflectivity influences how much extra radiant heat you feel.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-          <div id="notification" class="notification" style="display: none;"></div>
-          
-          <!-- Expired Selection Modal -->
-          <div id="expiredModal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
-            <div class="modal-dialog">
-              <h3 id="modalTitle" class="modal-title">Time Range Expired</h3>
-              <p class="modal-message">The highlighted time range has passed.</p>
-              <div class="modal-buttons">
-                <button id="keepCustomBtn" class="modal-btn modal-btn-primary" type="button">Keep Custom Settings</button>
-                <button id="useDefaultsBtn" class="modal-btn" type="button">Use Defaults</button>
+                    </pre
+              >
+              <div class="hint">
+                Solar is auto-derived from UV Index (vs clear-sky UV) and cloud
+                cover, and zeroed at night. Reflectivity influences how much
+                extra radiant heat you feel.
               </div>
             </div>
           </div>
-    </body>
+        </div>
+      </section>
+    </div>
+    <div id="notification" class="notification" style="display: none"></div>
+
+    <!-- Error Message with Retry -->
+    <div id="errorMessage" class="error-message" style="display: none">
+      <div class="error-content">
+        <div class="error-icon">⚠️</div>
+        <div class="error-text">
+          <div class="error-title"></div>
+          <div class="error-details"></div>
+          <div class="error-suggestion"></div>
+        </div>
+      </div>
+      <button
+        id="errorRetryBtn"
+        class="error-retry-btn"
+        type="button"
+        style="display: none"
+      >
+        Retry
+      </button>
+    </div>
+
+    <!-- Expired Selection Modal -->
+    <div
+      id="expiredModal"
+      class="modal-overlay"
+      style="display: none"
+      role="dialog"
+      aria-labelledby="modalTitle"
+      aria-modal="true"
+    >
+      <div class="modal-dialog">
+        <h3 id="modalTitle" class="modal-title">Time Range Expired</h3>
+        <p class="modal-message">The highlighted time range has passed.</p>
+        <div class="modal-buttons">
+          <button
+            id="keepCustomBtn"
+            class="modal-btn modal-btn-primary"
+            type="button"
+          >
+            Keep Custom Settings
+          </button>
+          <button id="useDefaultsBtn" class="modal-btn" type="button">
+            Use Defaults
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div
+      id="shortcutsModal"
+      class="modal-overlay"
+      style="display: none"
+      role="dialog"
+      aria-labelledby="shortcutsModalTitle"
+      aria-modal="true"
+    >
+      <div class="modal-dialog">
+        <h3 id="shortcutsModalTitle" class="modal-title">Keyboard Shortcuts</h3>
+        <div class="shortcuts-list">
+          <div class="shortcut-item">
+            <kbd>C</kbd>
+            <span>Clear highlight</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>S</kbd>
+            <span>Share/copy selection URL</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>F</kbd>
+            <span>Toggle Fahrenheit</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>?</kbd> or <kbd>H</kbd>
+            <span>Show this help</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>Esc</kbd>
+            <span>Close modals/clear selection</span>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button
+            id="closeShortcutsBtn"
+            class="modal-btn modal-btn-primary"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>
