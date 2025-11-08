@@ -204,8 +204,9 @@
       }
       const shadeCard = els.shadeCard;
 
-      if (selectionRange) {
-        // Hide cards when selection is active
+      // Only hide cards if selection is finalized (not during active selection)
+      if (selectionRange && !isSelectingActive) {
+        // Hide cards when selection is finalized
         if (els.sunCard) els.sunCard.style.display = "none";
         if (shadeCard) shadeCard.style.display = "none";
       } else {
@@ -421,6 +422,7 @@
     window.timelineState = null; // expose for tooltip use
     let simActive = false;
     let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
+    let isSelectingActive = false; // Flag to track if user is actively selecting (dragging)
     let summaryGenerationInProgress = false;
     let lastSummaryRange = null; // Track last selectionRange that summary was generated for
     let lastSummaryTimelineHash = null; // Track hash of timelineState to detect data changes
@@ -457,6 +459,7 @@
     function handleKeepCustomSettings() {
       // Clear the selection but keep other URL params
       selectionRange = null;
+      isSelectingActive = false;
       lastSummaryRange = null; // Reset tracking when clearing selection
       lastSummaryTimelineHash = null;
       if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
@@ -484,6 +487,7 @@
       // Reset everything to app defaults
       // Clear selection
       selectionRange = null;
+      isSelectingActive = false;
       lastSummaryRange = null; // Reset tracking when clearing selection
       lastSummaryTimelineHash = null;
       if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
@@ -3800,6 +3804,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         // Check if shift key is held for selection mode
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
           isSelecting = true;
+          isSelectingActive = true; // Mark that selection is in progress
           selectionStartX = e.clientX;
           selectionStartTime = getTimeFromClientX(e.clientX);
           try {
@@ -3833,7 +3838,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 ? currentTime
                 : selectionStartTime;
             selectionRange = { startTime, endTime };
-            updateCardVisibility();
+            // Don't call updateCardVisibility() here - keep cards visible during selection
             vibeChart.update("none");
           }
         } else {
@@ -3870,7 +3875,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             const duration = Math.abs(finalEndTime - startTime);
             if (duration >= 5 * 60 * 1000) {
               selectionRange = { startTime, endTime: finalEndTime };
-              updateCardVisibility();
+              isSelectingActive = false; // Selection is now finalized
+              updateCardVisibility(); // Now hide the cards
               vibeChart.update("none");
 
               // Copy URL to clipboard and update browser URL
@@ -3906,6 +3912,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             }
           }
           isSelecting = false;
+          isSelectingActive = false; // Selection is complete (either finalized or cancelled)
           selectionStartX = null;
           selectionStartTime = null;
           hasMoved = false;
@@ -5339,6 +5346,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       clearHighlightBtn &&
         clearHighlightBtn.addEventListener("click", () => {
           selectionRange = null;
+          isSelectingActive = false;
           lastSummaryRange = null; // Reset tracking when clearing selection
           lastSummaryTimelineHash = null;
           updateCardVisibility();
@@ -5551,6 +5559,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       clearHighlightBtn &&
         clearHighlightBtn.addEventListener("click", () => {
           selectionRange = null;
+          isSelectingActive = false;
           lastSummaryRange = null; // Reset tracking when clearing selection
           lastSummaryTimelineHash = null;
           updateCardVisibility();
@@ -5686,6 +5695,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             }
             if (selectionRange) {
               selectionRange = null;
+              isSelectingActive = false;
               lastSummaryRange = null; // Reset tracking when clearing selection
               lastSummaryTimelineHash = null;
               if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
@@ -5703,6 +5713,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (e.key === "c" || e.key === "C") {
           if (selectionRange) {
             selectionRange = null;
+            isSelectingActive = false;
             if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
             if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
             if (copySummaryBtn) copySummaryBtn.style.display = "none";
