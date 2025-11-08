@@ -78,6 +78,7 @@
     const themeToggle = $("#themeToggle");
 
     // Theme management - respect browser preference by default
+    // Note: Use localStorage directly here since storageCache isn't initialized yet
     const THEME_KEY = "vibeTheme";
     function getDefaultTheme() {
       // Check if user has a saved preference
@@ -100,6 +101,8 @@
     function applyTheme(theme) {
       document.documentElement.setAttribute("data-theme", theme);
       currentTheme = theme;
+      // Use localStorage directly since storageCache may not be initialized yet
+      // The cache will be populated automatically on first access via storageCacheGet
       localStorage.setItem(THEME_KEY, theme);
       if (themeToggle) {
         themeToggle.textContent =
@@ -122,7 +125,7 @@
         .matchMedia("(prefers-color-scheme: light)")
         .addEventListener("change", (e) => {
           // Only auto-update if user hasn't manually set a preference
-          if (!localStorage.getItem(THEME_KEY)) {
+          if (!storageCacheGet(THEME_KEY)) {
             applyTheme(e.matches ? "light" : "dark");
           }
         });
@@ -150,7 +153,7 @@
       const chartLocationEl = $("#chartLocation");
       if (chartLocationEl) {
         // Show ZIP code if saved, otherwise show place name or empty
-        const savedZip = localStorage.getItem(ZIP_KEY);
+        const savedZip = storageCacheGet(ZIP_KEY);
         if (savedZip) {
           // Show ZIP code value
           chartLocationEl.value = savedZip;
@@ -195,7 +198,11 @@
     }
 
     function updateCardVisibility() {
-      const shadeCard = document.querySelector(".card--shade");
+      // Cache shade card element to avoid repeated queries
+      if (!els.shadeCard) {
+        els.shadeCard = document.querySelector(".card--shade");
+      }
+      const shadeCard = els.shadeCard;
 
       if (selectionRange) {
         // Hide cards when selection is active
@@ -303,24 +310,44 @@
     const FAVORITES_KEY = "vibeFavorites";
     const CHART_COLORS_KEY = "vibeChartColors";
     const TEMP_ZONES_KEY = "vibeTempZones";
-    let unit = localStorage.getItem(UNIT_KEY) === "C" ? "C" : "F";
-    let daysAhead = parseInt(localStorage.getItem(DAYS_AHEAD_KEY) || "2", 10);
     const HUMIDITY_VIS_KEY = "vibeHumidityVis";
     const SUN_MARKERS_KEY = "vibeSunMarkers";
     const RAIN_ICONS_KEY = "vibeRainIcons";
     const SNOW_ICONS_KEY = "vibeSnowIcons";
     const ICE_ICONS_KEY = "vibeIceIcons";
     const CALIBRATION_KEY = "vibeCalibration";
-    let nightShadingEnabled =
-      localStorage.getItem(NIGHT_SHADING_KEY) === "true"; // Default false, but we'll set it to true
-    let temperatureZonesEnabled =
-      localStorage.getItem(TEMP_ZONES_KEY) === "true"; // Default false
+    // THEME_KEY is defined earlier (line 82) for getDefaultTheme()
+
+    // localStorage cache layer to reduce repeated access
+    const storageCache = new Map();
+    const storageCacheGet = (key, defaultValue = null) => {
+      if (!storageCache.has(key)) {
+        const value = localStorage.getItem(key);
+        storageCache.set(key, value !== null ? value : defaultValue);
+      }
+      return storageCache.get(key);
+    };
+    const storageCacheSet = (key, value) => {
+      localStorage.setItem(key, value);
+      storageCache.set(key, value);
+    };
+    const storageCacheRemove = (key) => {
+      localStorage.removeItem(key);
+      storageCache.delete(key);
+    };
+
+    // Initialize cached values
+    let unit = storageCacheGet(UNIT_KEY, "F") === "C" ? "C" : "F";
+    let daysAhead = parseInt(storageCacheGet(DAYS_AHEAD_KEY, "2"), 10);
+    let nightShadingEnabled = storageCacheGet(NIGHT_SHADING_KEY) === "true";
+    let temperatureZonesEnabled = storageCacheGet(TEMP_ZONES_KEY) === "true";
     let humidityVisualizationEnabled =
-      localStorage.getItem(HUMIDITY_VIS_KEY) === "true"; // Default false
-    let sunMarkersEnabled = localStorage.getItem(SUN_MARKERS_KEY) !== "false"; // Default true
-    let rainIconsEnabled = localStorage.getItem(RAIN_ICONS_KEY) !== "false"; // Default true
-    let snowIconsEnabled = localStorage.getItem(SNOW_ICONS_KEY) !== "false"; // Default true
-    let iceIconsEnabled = localStorage.getItem(ICE_ICONS_KEY) !== "false"; // Default true
+      storageCacheGet(HUMIDITY_VIS_KEY) === "true";
+    let sunMarkersEnabled =
+      storageCacheGet(SUN_MARKERS_KEY, "true") !== "false";
+    let rainIconsEnabled = storageCacheGet(RAIN_ICONS_KEY, "true") !== "false";
+    let snowIconsEnabled = storageCacheGet(SNOW_ICONS_KEY, "true") !== "false";
+    let iceIconsEnabled = storageCacheGet(ICE_ICONS_KEY, "true") !== "false";
 
     // Calibration defaults
     const defaultCalibration = {
@@ -335,7 +362,7 @@
     // Load calibration from localStorage or use defaults
     let calibration = defaultCalibration;
     try {
-      const saved = localStorage.getItem(CALIBRATION_KEY);
+      const saved = storageCacheGet(CALIBRATION_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         calibration = { ...defaultCalibration, ...parsed };
@@ -345,14 +372,14 @@
     }
 
     // Set night shading to true by default if not set
-    if (localStorage.getItem(NIGHT_SHADING_KEY) === null) {
+    if (storageCacheGet(NIGHT_SHADING_KEY) === null) {
       nightShadingEnabled = true;
-      localStorage.setItem(NIGHT_SHADING_KEY, "true");
+      storageCacheSet(NIGHT_SHADING_KEY, "true");
     }
     let lastCoords = null;
-    let favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+    let favorites = JSON.parse(storageCacheGet(FAVORITES_KEY, "[]"));
     let chartColors = JSON.parse(
-      localStorage.getItem(CHART_COLORS_KEY) ||
+      storageCacheGet(CHART_COLORS_KEY) ||
         JSON.stringify({
           sun: { start: "#ffb86b", end: "#ff9500" },
           shade: { start: "#6ea8fe", end: "#4a90e2" },
@@ -363,6 +390,30 @@
     let nextUpdateAt = null;
 
     let sunTimes = { sunrises: [], sunsets: [] }; // Arrays of all sunrise/sunset times for visible range
+
+    // Debouncing for chart updates and compute operations
+    let chartUpdateTimeout = null;
+    let computeTimeout = null;
+
+    // Debounced chart update function
+    function debouncedChartUpdate(mode = "none", delay = 100) {
+      if (chartUpdateTimeout) clearTimeout(chartUpdateTimeout);
+      chartUpdateTimeout = setTimeout(() => {
+        if (vibeChart) {
+          vibeChart.update(mode);
+        }
+        chartUpdateTimeout = null;
+      }, delay);
+    }
+
+    // Debounced compute function
+    function debouncedCompute(delay = 150) {
+      if (computeTimeout) clearTimeout(computeTimeout);
+      computeTimeout = setTimeout(() => {
+        compute();
+        computeTimeout = null;
+      }, delay);
+    }
     let currentIsDay = null;
     let currentPlaceName = "";
 
@@ -479,7 +530,7 @@
         params.set("lat", String(lastCoords.latitude));
         params.set("lon", String(lastCoords.longitude));
       }
-      const savedZip = localStorage.getItem(ZIP_KEY);
+      const savedZip = storageCacheGet(ZIP_KEY);
       if (savedZip) params.set("zip", savedZip);
 
       // Add time range (ISO strings)
@@ -946,22 +997,57 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
     }
 
     // Helper to create a hash of timelineState for the selected range
+    // Optimized: Uses binary search for sorted arrays and samples data to reduce computation
     function getTimelineHashForRange(startTime, endTime) {
       if (!timelineState) return null;
       const { labels, shadeVals, sunVals } = timelineState;
-      if (!labels || !shadeVals || !sunVals) return null;
+      if (!labels || !shadeVals || !sunVals || labels.length === 0) return null;
 
-      // Find indices for the range
-      const startIdx = labels.findIndex((d) => d >= startTime);
-      const endIdx = labels.findIndex((d) => d >= endTime);
-      if (startIdx === -1 || endIdx === -1) return null;
+      // Binary search for start index (labels are sorted chronologically)
+      let startIdx = 0;
+      let left = 0,
+        right = labels.length - 1;
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        if (labels[mid] < startTime) {
+          left = mid + 1;
+        } else {
+          startIdx = mid;
+          right = mid - 1;
+        }
+      }
 
-      // Create a simple hash from the data in this range
+      // Binary search for end index
+      let endIdx = labels.length;
+      left = startIdx;
+      right = labels.length - 1;
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        if (labels[mid] < endTime) {
+          left = mid + 1;
+        } else {
+          endIdx = mid;
+          right = mid - 1;
+        }
+      }
+
+      if (startIdx >= endIdx || startIdx < 0) return null;
+
+      // Sample data points (every Nth value) to reduce hash computation for large ranges
+      const rangeSize = endIdx - startIdx;
+      const step = Math.max(1, Math.floor(rangeSize / 20)); // Sample up to 20 points
+      const sampledShade = [];
+      const sampledSun = [];
+      for (let i = startIdx; i < endIdx; i += step) {
+        sampledShade.push(shadeVals[i].toFixed(1));
+        sampledSun.push(sunVals[i].toFixed(1));
+      }
+
       const rangeData = {
         start: startIdx,
         end: endIdx,
-        shade: shadeVals.slice(startIdx, endIdx).join(","),
-        sun: sunVals.slice(startIdx, endIdx).join(","),
+        shade: sampledShade.join(","),
+        sun: sampledSun.join(","),
       };
       return JSON.stringify(rangeData);
     }
@@ -1459,76 +1545,151 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       return solar;
     }
 
-    // API with error handling
+    // API request cache and deduplication
+    const apiRequestCache = new Map();
+    const pendingRequests = new Map();
+    const CACHE_TTL = 60000; // 1 minute cache TTL
+
+    function getCacheKey(type, lat, lon, extra = "") {
+      return `${type}_${lat.toFixed(4)}_${lon.toFixed(4)}_${extra}`;
+    }
+
+    function isCacheValid(entry) {
+      return Date.now() - entry.timestamp < CACHE_TTL;
+    }
+
+    // API with error handling and request deduplication
     async function getCurrentWeather(lat, lon) {
-      try {
-        const params = new URLSearchParams({
-          latitude: lat,
-          longitude: lon,
-          current:
-            "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
-          temperature_unit: "fahrenheit",
-          wind_speed_unit: "mph",
-          timezone: "auto",
-        });
-        const r = await fetch(
-          `https://api.open-meteo.com/v1/forecast?${params}`
-        );
-        if (!r.ok) {
-          if (r.status === 429) {
-            throw new Error("RATE_LIMIT");
-          } else if (r.status >= 500) {
-            throw new Error("SERVER_ERROR");
-          } else {
-            throw new Error(`API_ERROR_${r.status}`);
-          }
+      const cacheKey = getCacheKey("current", lat, lon);
+
+      // Check cache
+      if (apiRequestCache.has(cacheKey)) {
+        const cached = apiRequestCache.get(cacheKey);
+        if (isCacheValid(cached)) {
+          return cached.data;
         }
-        const data = await r.json();
-        if (!data.current) throw new Error("INVALID_RESPONSE");
-        return data.current;
-      } catch (e) {
-        if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
-        if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
-        if (e.message.startsWith("API_ERROR_")) throw e;
-        if (e.message === "INVALID_RESPONSE")
-          throw new Error("INVALID_RESPONSE");
-        throw new Error("NETWORK_ERROR");
       }
+
+      // Check for pending request
+      if (pendingRequests.has(cacheKey)) {
+        return pendingRequests.get(cacheKey);
+      }
+
+      // Create new request
+      const requestPromise = (async () => {
+        try {
+          const params = new URLSearchParams({
+            latitude: lat,
+            longitude: lon,
+            current:
+              "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+            temperature_unit: "fahrenheit",
+            wind_speed_unit: "mph",
+            timezone: "auto",
+          });
+          const r = await fetch(
+            `https://api.open-meteo.com/v1/forecast?${params}`
+          );
+          if (!r.ok) {
+            if (r.status === 429) {
+              throw new Error("RATE_LIMIT");
+            } else if (r.status >= 500) {
+              throw new Error("SERVER_ERROR");
+            } else {
+              throw new Error(`API_ERROR_${r.status}`);
+            }
+          }
+          const data = await r.json();
+          if (!data.current) throw new Error("INVALID_RESPONSE");
+          const result = data.current;
+
+          // Cache the result
+          apiRequestCache.set(cacheKey, {
+            data: result,
+            timestamp: Date.now(),
+          });
+          pendingRequests.delete(cacheKey);
+
+          return result;
+        } catch (e) {
+          pendingRequests.delete(cacheKey);
+          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
+          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
+          if (e.message.startsWith("API_ERROR_")) throw e;
+          if (e.message === "INVALID_RESPONSE")
+            throw new Error("INVALID_RESPONSE");
+          throw new Error("NETWORK_ERROR");
+        }
+      })();
+
+      pendingRequests.set(cacheKey, requestPromise);
+      return requestPromise;
     }
     async function getHourlyWeather(lat, lon) {
-      try {
-        const params = new URLSearchParams({
-          latitude: lat,
-          longitude: lon,
-          hourly:
-            "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day,precipitation,weathercode",
-          temperature_unit: "fahrenheit",
-          wind_speed_unit: "mph",
-          timezone: "auto",
-        });
-        const r = await fetch(
-          `https://api.open-meteo.com/v1/forecast?${params}`
-        );
-        if (!r.ok) {
-          if (r.status === 429) {
-            throw new Error("RATE_LIMIT");
-          } else if (r.status >= 500) {
-            throw new Error("SERVER_ERROR");
-          } else {
-            throw new Error(`API_ERROR_${r.status}`);
-          }
+      const cacheKey = getCacheKey("hourly", lat, lon);
+
+      // Check cache
+      if (apiRequestCache.has(cacheKey)) {
+        const cached = apiRequestCache.get(cacheKey);
+        if (isCacheValid(cached)) {
+          return cached.data;
         }
-        const data = await r.json();
-        if (!data.hourly) throw new Error("INVALID_RESPONSE");
-        return data.hourly;
-      } catch (e) {
-        if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
-        if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
-        if (e.message.startsWith("API_ERROR_")) throw e;
-        if (e.message === "INVALID_RESPONSE")
-          throw new Error("INVALID_RESPONSE");
-        throw new Error("NETWORK_ERROR");
       }
+
+      // Check for pending request
+      if (pendingRequests.has(cacheKey)) {
+        return pendingRequests.get(cacheKey);
+      }
+
+      // Create new request
+      const requestPromise = (async () => {
+        try {
+          const params = new URLSearchParams({
+            latitude: lat,
+            longitude: lon,
+            hourly:
+              "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day,precipitation,weathercode",
+            temperature_unit: "fahrenheit",
+            wind_speed_unit: "mph",
+            timezone: "auto",
+          });
+          const r = await fetch(
+            `https://api.open-meteo.com/v1/forecast?${params}`
+          );
+          if (!r.ok) {
+            if (r.status === 429) {
+              throw new Error("RATE_LIMIT");
+            } else if (r.status >= 500) {
+              throw new Error("SERVER_ERROR");
+            } else {
+              throw new Error(`API_ERROR_${r.status}`);
+            }
+          }
+          const data = await r.json();
+          if (!data.hourly) throw new Error("INVALID_RESPONSE");
+          const result = data.hourly;
+
+          // Cache the result
+          apiRequestCache.set(cacheKey, {
+            data: result,
+            timestamp: Date.now(),
+          });
+          pendingRequests.delete(cacheKey);
+
+          return result;
+        } catch (e) {
+          pendingRequests.delete(cacheKey);
+          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
+          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
+          if (e.message.startsWith("API_ERROR_")) throw e;
+          if (e.message === "INVALID_RESPONSE")
+            throw new Error("INVALID_RESPONSE");
+          throw new Error("NETWORK_ERROR");
+        }
+      })();
+
+      pendingRequests.set(cacheKey, requestPromise);
+      return requestPromise;
     }
     async function getDailySun(lat, lon, daysAheadParam = daysAhead) {
       try {
@@ -1805,7 +1966,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               const { latitude, longitude, place } = await getCoordsForZip(
                 zip5
               );
-              localStorage.setItem(ZIP_KEY, zip5);
+              storageCacheSet(ZIP_KEY, zip5);
               await primeWeatherForCoords(
                 latitude,
                 longitude,
@@ -4148,14 +4309,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
     function saveFavorite(name, lat, lon) {
       const favorite = { name, lat, lon, id: Date.now() };
       favorites.push(favorite);
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+      storageCacheSet(FAVORITES_KEY, JSON.stringify(favorites));
       updateFavoritesUI();
       showNotification(`Saved "${name}" to favorites`, "success");
     }
 
     function deleteFavorite(id) {
       favorites = favorites.filter((f) => f.id !== id);
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+      storageCacheSet(FAVORITES_KEY, JSON.stringify(favorites));
       updateFavoritesUI();
     }
 
@@ -4351,7 +4512,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const el = els[id];
           el &&
             el.addEventListener(evt, () => {
-              compute();
+              // Debounce compute for input events to avoid excessive calculations
+              if (evt === "input") {
+                debouncedCompute(200);
+              } else {
+                compute(); // Change events fire less frequently, no debounce needed
+              }
               if ((id === "reflect" || id === "reflectCustom") && lastCoords) {
                 getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
                   .then(async (hourly) => {
@@ -4430,7 +4596,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
         daysAhead = newDaysAhead;
         if (els.daysAhead) els.daysAhead.value = daysAhead;
-        localStorage.setItem(DAYS_AHEAD_KEY, String(daysAhead));
+        storageCacheSet(DAYS_AHEAD_KEY, String(daysAhead));
 
         // Update chart title
         if (preset === "tomorrow") {
@@ -4572,7 +4738,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (newUnit === unit) return;
         convertTempInputIfPresent(newUnit);
         unit = newUnit;
-        persist && localStorage.setItem(UNIT_KEY, unit);
+        persist && storageCacheSet(UNIT_KEY, unit);
         paintUnitToggle();
         applyUnitLabels();
         if (rerender) {
@@ -4667,7 +4833,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const newValue = parseInt(els.daysAhead.value, 10);
           if (newValue >= 1 && newValue <= 7) {
             daysAhead = newValue;
-            localStorage.setItem(DAYS_AHEAD_KEY, String(daysAhead));
+            storageCacheSet(DAYS_AHEAD_KEY, String(daysAhead));
             updateChartTitle();
             if (lastCoords) {
               Promise.all([
@@ -4702,11 +4868,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       els.nightShadingToggle &&
         els.nightShadingToggle.addEventListener("change", () => {
           nightShadingEnabled = els.nightShadingToggle.checked;
-          localStorage.setItem(NIGHT_SHADING_KEY, String(nightShadingEnabled));
-          // Update chart if it exists
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          storageCacheSet(NIGHT_SHADING_KEY, String(nightShadingEnabled));
+          // Update chart if it exists (debounced)
+          debouncedChartUpdate("none");
         });
 
       // Temperature zones toggle
@@ -4715,10 +4879,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       tempZonesToggle &&
         tempZonesToggle.addEventListener("change", () => {
           temperatureZonesEnabled = tempZonesToggle.checked;
-          localStorage.setItem(TEMP_ZONES_KEY, String(temperatureZonesEnabled));
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          storageCacheSet(TEMP_ZONES_KEY, String(temperatureZonesEnabled));
+          debouncedChartUpdate("none");
         });
 
       // Humidity visualization toggle
@@ -4728,13 +4890,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       humidityVisToggle &&
         humidityVisToggle.addEventListener("change", () => {
           humidityVisualizationEnabled = humidityVisToggle.checked;
-          localStorage.setItem(
+          storageCacheSet(
             HUMIDITY_VIS_KEY,
             String(humidityVisualizationEnabled)
           );
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          debouncedChartUpdate("none");
         });
 
       // Sun markers toggle
@@ -4743,10 +4903,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       sunMarkersToggle &&
         sunMarkersToggle.addEventListener("change", () => {
           sunMarkersEnabled = sunMarkersToggle.checked;
-          localStorage.setItem(SUN_MARKERS_KEY, String(sunMarkersEnabled));
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          storageCacheSet(SUN_MARKERS_KEY, String(sunMarkersEnabled));
+          debouncedChartUpdate("none");
         });
 
       // Rain icons toggle
@@ -4755,10 +4913,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       rainIconsToggle &&
         rainIconsToggle.addEventListener("change", () => {
           rainIconsEnabled = rainIconsToggle.checked;
-          localStorage.setItem(RAIN_ICONS_KEY, String(rainIconsEnabled));
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          storageCacheSet(RAIN_ICONS_KEY, String(rainIconsEnabled));
+          debouncedChartUpdate("none");
         });
 
       // Snow icons toggle
@@ -4767,10 +4923,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       snowIconsToggle &&
         snowIconsToggle.addEventListener("change", () => {
           snowIconsEnabled = snowIconsToggle.checked;
-          localStorage.setItem(SNOW_ICONS_KEY, String(snowIconsEnabled));
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          storageCacheSet(SNOW_ICONS_KEY, String(snowIconsEnabled));
+          debouncedChartUpdate("none");
         });
 
       // Ice icons toggle
@@ -4779,10 +4933,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       iceIconsToggle &&
         iceIconsToggle.addEventListener("change", () => {
           iceIconsEnabled = iceIconsToggle.checked;
-          localStorage.setItem(ICE_ICONS_KEY, String(iceIconsEnabled));
-          if (vibeChart) {
-            vibeChart.update("none");
-          }
+          storageCacheSet(ICE_ICONS_KEY, String(iceIconsEnabled));
+          debouncedChartUpdate("none");
         });
 
       // Color customization
@@ -4805,15 +4957,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (sunColorEnd) chartColors.sun.end = sunColorEnd.value;
         if (shadeColorStart) chartColors.shade.start = shadeColorStart.value;
         if (shadeColorEnd) chartColors.shade.end = shadeColorEnd.value;
-        localStorage.setItem(CHART_COLORS_KEY, JSON.stringify(chartColors));
+        storageCacheSet(CHART_COLORS_KEY, JSON.stringify(chartColors));
 
         // Debounce rapid color changes
         if (colorUpdateTimeout) clearTimeout(colorUpdateTimeout);
         colorUpdateTimeout = setTimeout(() => {
           // Optimize: Just trigger chart update - gradient plugin will use updated chartColors
-          if (vibeChart) {
-            vibeChart.update("none");
-          } else if (lastCoords) {
+          debouncedChartUpdate("none", 300);
+          if (!vibeChart && lastCoords) {
             // Fallback: recreate if chart doesn't exist
             getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
               .then(async (hourly) => {
@@ -4920,7 +5071,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (calibCloudExp)
           calibration.cloudExp = parseFloat(calibCloudExp.value);
 
-        localStorage.setItem(CALIBRATION_KEY, JSON.stringify(calibration));
+        storageCacheSet(CALIBRATION_KEY, JSON.stringify(calibration));
 
         // Debounce recalculation
         if (calibrationUpdateTimeout) clearTimeout(calibrationUpdateTimeout);
@@ -5041,7 +5192,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
         // If empty, clear ZIP and use device location
         if (!raw) {
-          localStorage.removeItem(ZIP_KEY);
+          storageCacheRemove(ZIP_KEY);
           currentPlaceName = null;
           updateChartTitle();
           updateAdvStats();
@@ -5077,7 +5228,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         try {
           hideError();
           const { latitude, longitude, place } = await getCoordsForZip(zip5);
-          localStorage.setItem(ZIP_KEY, zip5);
+          storageCacheSet(ZIP_KEY, zip5);
           await primeWeatherForCoords(
             latitude,
             longitude,
@@ -5153,7 +5304,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         zipEls.input.addEventListener("blur", () => {
           // Only submit if value changed
           const currentValue = zipEls.input.value.trim();
-          const savedZip = localStorage.getItem(ZIP_KEY);
+          const savedZip = storageCacheGet(ZIP_KEY);
           if (currentValue !== savedZip && currentValue !== currentPlaceName) {
             if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
             zipSubmitTimeout = setTimeout(handleZipSubmit, 300);
@@ -5208,7 +5359,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
           // If we don't have location yet, request it now
           if (!lastCoords) {
-            const savedZip = localStorage.getItem(ZIP_KEY);
+            const savedZip = storageCacheGet(ZIP_KEY);
             if (savedZip && zipEls.input) {
               getCoordsForZip(savedZip)
                 .then(({ latitude, longitude, place }) =>
@@ -5420,7 +5571,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
           // If we don't have location yet, request it now
           if (!lastCoords) {
-            const savedZip = localStorage.getItem(ZIP_KEY);
+            const savedZip = storageCacheGet(ZIP_KEY);
             if (savedZip && zipEls.input) {
               getCoordsForZip(savedZip)
                 .then(({ latitude, longitude, place }) =>
@@ -5637,7 +5788,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const days = parseInt(urlDays, 10);
           if (days >= 1 && days <= 7) {
             daysAhead = days;
-            localStorage.setItem(DAYS_AHEAD_KEY, String(daysAhead));
+            storageCacheSet(DAYS_AHEAD_KEY, String(daysAhead));
             if (els.daysAhead) els.daysAhead.value = daysAhead;
             updateChartTitle();
           }
@@ -5663,7 +5814,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             // Populate ZIP in input field
             if (zipEls.input) zipEls.input.value = zip5;
             // Save ZIP to localStorage
-            localStorage.setItem(ZIP_KEY, zip5);
+            storageCacheSet(ZIP_KEY, zip5);
 
             // Only fetch weather if there's no highlight (highlight will wait for location)
             if (!hasHighlight) {
@@ -5750,7 +5901,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         } else if (!lastCoords) {
           // If no location was set from URL, use saved ZIP or prompt for browser location
-          const savedZip = localStorage.getItem(ZIP_KEY);
+          const savedZip = storageCacheGet(ZIP_KEY);
           if (savedZip && zipEls.input) {
             zipEls.input.value = savedZip;
             getCoordsForZip(savedZip)
@@ -5775,6 +5926,30 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           updateChartTitle();
         }
       }, 300);
+    });
+
+    // Cleanup on page unload to prevent memory leaks
+    window.addEventListener("beforeunload", () => {
+      // Destroy chart instance
+      if (vibeChart) {
+        try {
+          vibeChart.destroy();
+          vibeChart = null;
+        } catch (e) {
+          console.warn("Error destroying chart:", e);
+        }
+      }
+
+      // Clear timeouts
+      if (chartUpdateTimeout) clearTimeout(chartUpdateTimeout);
+      if (computeTimeout) clearTimeout(computeTimeout);
+      if (pollTimer) clearTimeout(pollTimer);
+      if (colorUpdateTimeout) clearTimeout(colorUpdateTimeout);
+      if (calibrationUpdateTimeout) clearTimeout(calibrationUpdateTimeout);
+
+      // Clear API cache (optional - could keep for faster reload)
+      apiRequestCache.clear();
+      pendingRequests.clear();
     });
   });
 })();
