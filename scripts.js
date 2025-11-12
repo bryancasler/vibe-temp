@@ -249,6 +249,8 @@
       updateHourlyToggle: $("#updateHourlyToggle"),
       updateNow: $("#updateNow"),
       daysAhead: $("#daysAhead"),
+      lineSmoothing: $("#lineSmoothing"),
+      lineSmoothingVal: $("#lineSmoothingVal"),
       nightShadingToggle: $("#nightShadingToggle"),
       nightLineDarkeningToggle: $("#nightLineDarkeningToggle"),
       useLocationBtn: $("#use-location"),
@@ -310,6 +312,7 @@
     const DAYS_AHEAD_KEY = "vibeDaysAhead";
     const NIGHT_SHADING_KEY = "vibeNightShading";
     const NIGHT_LINE_DARKENING_KEY = "vibeNightLineDarkening";
+    const LINE_SMOOTHING_KEY = "vibeLineSmoothing";
     const FAVORITES_KEY = "vibeFavorites";
     const CHART_COLORS_KEY = "vibeChartColors";
     const TEMP_ZONES_KEY = "vibeTempZones";
@@ -344,6 +347,7 @@
     let daysAhead = parseInt(storageCacheGet(DAYS_AHEAD_KEY, "2"), 10);
     let nightShadingEnabled = storageCacheGet(NIGHT_SHADING_KEY) === "true";
     let nightLineDarkeningEnabled = storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
+    let lineSmoothing = parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1")) || 1;
     let temperatureZonesEnabled = storageCacheGet(TEMP_ZONES_KEY) === "true";
     let humidityVisualizationEnabled =
       storageCacheGet(HUMIDITY_VIS_KEY) === "true";
@@ -3397,7 +3401,32 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
                   ctx.beginPath();
                   ctx.moveTo(p1.x, p1.y);
-                  ctx.lineTo(p2.x, p2.y);
+
+                  // Use smoothing if enabled
+                  if (lineSmoothing > 0 && uniqueDrawPoints.length > 2) {
+                    // Calculate control points for bezier curve
+                    const p0 = i > 0 ? uniqueDrawPoints[i - 1] : p1;
+                    const p3 = i < uniqueDrawPoints.length - 2 ? uniqueDrawPoints[i + 2] : p2;
+
+                    // Calculate direction vectors
+                    const dx1 = p2.x - p0.x;
+                    const dy1 = p2.y - p0.y;
+                    const dx2 = p3.x - p1.x;
+                    const dy2 = p3.y - p1.y;
+
+                    // Control points based on smoothing factor
+                    const cp1x = p1.x + (dx1 / 6) * lineSmoothing;
+                    const cp1y = p1.y + (dy1 / 6) * lineSmoothing;
+                    const cp2x = p2.x - (dx2 / 6) * lineSmoothing;
+                    const cp2y = p2.y - (dy2 / 6) * lineSmoothing;
+
+                    // Draw bezier curve
+                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+                  } else {
+                    // Draw straight line (no smoothing)
+                    ctx.lineTo(p2.x, p2.y);
+                  }
+
                   ctx.stroke();
                 }
               }
@@ -4762,6 +4791,18 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 .catch(() => {});
             }
           }
+        });
+
+      // Line smoothing setting
+      els.lineSmoothing && (els.lineSmoothing.value = lineSmoothing);
+      els.lineSmoothingVal && (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
+      els.lineSmoothing &&
+        els.lineSmoothing.addEventListener("input", () => {
+          lineSmoothing = parseFloat(els.lineSmoothing.value) || 0;
+          els.lineSmoothingVal && (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
+          storageCacheSet(LINE_SMOOTHING_KEY, String(lineSmoothing));
+          // Update chart if it exists (debounced)
+          debouncedChartUpdate("none");
         });
 
       // Night shading toggle (default to true)
