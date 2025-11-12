@@ -250,6 +250,7 @@
       updateNow: $("#updateNow"),
       daysAhead: $("#daysAhead"),
       nightShadingToggle: $("#nightShadingToggle"),
+      nightLineDarkeningToggle: $("#nightLineDarkeningToggle"),
       useLocationBtn: $("#use-location"),
       sunCard: $("#sunCard"),
     };
@@ -308,6 +309,7 @@
     const ZIP_KEY = "vibeZip";
     const DAYS_AHEAD_KEY = "vibeDaysAhead";
     const NIGHT_SHADING_KEY = "vibeNightShading";
+    const NIGHT_LINE_DARKENING_KEY = "vibeNightLineDarkening";
     const FAVORITES_KEY = "vibeFavorites";
     const CHART_COLORS_KEY = "vibeChartColors";
     const TEMP_ZONES_KEY = "vibeTempZones";
@@ -341,6 +343,7 @@
     let unit = storageCacheGet(UNIT_KEY, "F") === "C" ? "C" : "F";
     let daysAhead = parseInt(storageCacheGet(DAYS_AHEAD_KEY, "2"), 10);
     let nightShadingEnabled = storageCacheGet(NIGHT_SHADING_KEY) === "true";
+    let nightLineDarkeningEnabled = storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
     let temperatureZonesEnabled = storageCacheGet(TEMP_ZONES_KEY) === "true";
     let humidityVisualizationEnabled =
       storageCacheGet(HUMIDITY_VIS_KEY) === "true";
@@ -376,6 +379,11 @@
     if (storageCacheGet(NIGHT_SHADING_KEY) === null) {
       nightShadingEnabled = true;
       storageCacheSet(NIGHT_SHADING_KEY, "true");
+    }
+    // Set night line darkening to false by default if not set
+    if (storageCacheGet(NIGHT_LINE_DARKENING_KEY) === null) {
+      nightLineDarkeningEnabled = false;
+      storageCacheSet(NIGHT_LINE_DARKENING_KEY, "false");
     }
     let lastCoords = null;
     let favorites = JSON.parse(storageCacheGet(FAVORITES_KEY, "[]"));
@@ -3064,6 +3072,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         {
           label: "Sun Vibe",
           data: sunVals,
+          showLine: false, // Completely disable Chart.js line drawing - our plugin will draw it
           borderWidth: 0, // Hide default border, gradient plugin will draw it
           borderColor: "transparent",
           backgroundColor: "transparent", // Hide default fill, gradient plugin will draw it
@@ -3074,6 +3083,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         {
           label: "Shade Vibe",
           data: shadeVals,
+          showLine: false, // Completely disable Chart.js line drawing - our plugin will draw it
           borderWidth: 0, // Hide default border, gradient plugin will draw it
           borderColor: "transparent",
           backgroundColor: "transparent", // Hide default fill, gradient plugin will draw it
@@ -3172,6 +3182,52 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             );
           }
 
+          // Helper function to subdivide a bezier curve at parameter t using de Casteljau's algorithm
+          // Returns control points for the first portion of the curve (from p1 to point at t)
+          // Parameters: p1 (start point), p2 (end point), cp1x/cp1y (first control point), cp2x/cp2y (second control point), t (0-1)
+          // Returns: { cp1x, cp1y, cp2x, cp2y, endX, endY } where endX/endY is the point at t
+          function subdivideBezier(p1, p2, cp1x, cp1y, cp2x, cp2y, t) {
+            // De Casteljau's algorithm for cubic bezier subdivision
+            // For a cubic bezier: P(t) = (1-t)^3*P0 + 3*(1-t)^2*t*P1 + 3*(1-t)*t^2*P2 + t^3*P3
+            // Where P0=p1, P1=cp1, P2=cp2, P3=p2
+            
+            // Intermediate points for subdivision
+            const q0x = p1.x;
+            const q0y = p1.y;
+            const q1x = (1 - t) * p1.x + t * cp1x;
+            const q1y = (1 - t) * p1.y + t * cp1y;
+            const q2x = (1 - t) * cp1x + t * cp2x;
+            const q2y = (1 - t) * cp1y + t * cp2y;
+            const q3x = (1 - t) * cp2x + t * p2.x;
+            const q3y = (1 - t) * cp2y + t * p2.y;
+            
+            const r0x = (1 - t) * q0x + t * q1x;
+            const r0y = (1 - t) * q0y + t * q1y;
+            const r1x = (1 - t) * q1x + t * q2x;
+            const r1y = (1 - t) * q1y + t * q2y;
+            const r2x = (1 - t) * q2x + t * q3x;
+            const r2y = (1 - t) * q2y + t * q3y;
+            
+            const s0x = (1 - t) * r0x + t * r1x;
+            const s0y = (1 - t) * r0y + t * r1y;
+            const s1x = (1 - t) * r1x + t * r2x;
+            const s1y = (1 - t) * r1y + t * r2y;
+            
+            // The point at t
+            const endX = (1 - t) * s0x + t * s1x;
+            const endY = (1 - t) * s0y + t * s1y;
+            
+            // Control points for the first portion: p1 (q0), r0, s0, end point
+            return {
+              cp1x: r0x,
+              cp1y: r0y,
+              cp2x: s0x,
+              cp2y: s0y,
+              endX: endX,
+              endY: endY
+            };
+          }
+
           // Helper function to check if a time is nighttime (between sunset and sunrise)
           function isNighttime(time) {
             if (!time || !sunTimes.sunrises || !sunTimes.sunsets) return false;
@@ -3221,8 +3277,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               if (!meta || !meta.data || meta.data.length === 0) return;
 
               ctx.save();
+              ctx.lineWidth = 3;
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
 
-              const tension = dataset.tension || 0.4;
               const points = meta.data;
 
               // Dark blue color for night
@@ -3234,275 +3292,113 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   ? chartColors.sun
                   : chartColors.shade;
 
+              if (points.length === 0) {
+                ctx.restore();
+                return;
+              }
+
               if (points.length === 1) {
                 // Single point
                 const time = rawLabels[0];
                 const isDay = !isNighttime(time);
-                ctx.strokeStyle = isDay ? dayColors.start : nightColor;
-                ctx.lineWidth = 3;
+                ctx.strokeStyle = isDay || !nightLineDarkeningEnabled ? dayColors.start : nightColor;
                 ctx.beginPath();
                 ctx.moveTo(points[0].x, points[0].y);
                 ctx.lineTo(points[0].x, points[0].y);
                 ctx.stroke();
-              } else if (points.length === 2) {
-                // Two points - check if both are day or night
-                const time0 = rawLabels[0];
-                const time1 = rawLabels[1];
-                const isDay0 = !isNighttime(time0);
-                const isDay1 = !isNighttime(time1);
+                ctx.restore();
+                return;
+              }
 
-                if (isDay0 && isDay1) {
-                  // Both day - use gradient
-                  const gradient = ctx.createLinearGradient(
-                    points[0].x,
-                    0,
-                    points[1].x,
-                    0
+              // Build list of all points to draw, including sunset/sunrise splits
+              const drawPoints = [];
+
+              // Get all sunrise/sunset events
+              const allEvents = [
+                ...sunTimes.sunsets.map((t) => ({
+                  time: new Date(t).getTime(),
+                  type: "sunset",
+                })),
+                ...sunTimes.sunrises.map((t) => ({
+                  time: new Date(t).getTime(),
+                  type: "sunrise",
+                })),
+              ].sort((a, b) => a.time - b.time);
+
+              // Process each segment between consecutive data points
+              for (let i = 0; i < points.length; i++) {
+                const point = points[i];
+                const time = rawLabels[i];
+                const timeMs = new Date(time).getTime();
+                const isDay = !isNighttime(time);
+
+                // Add the data point
+                drawPoints.push({
+                  x: point.x,
+                  y: point.y,
+                  time: timeMs,
+                  isDay: isDay,
+                });
+
+                // If this is not the last point, check for events between this and next point
+                if (i < points.length - 1) {
+                  const nextTime = rawLabels[i + 1];
+                  const nextTimeMs = new Date(nextTime).getTime();
+
+                  // Find events between this point and the next
+                  const eventsBetween = allEvents.filter(
+                    (e) => e.time > timeMs && e.time < nextTimeMs
                   );
-                  gradient.addColorStop(0, dayColors.start);
-                  gradient.addColorStop(1, dayColors.end);
-                  ctx.strokeStyle = gradient;
-                } else {
-                  // At least one is night - use dark blue
-                  ctx.strokeStyle = nightColor;
+
+                  // Add split points for each event
+                  for (const event of eventsBetween) {
+                    const eventX = getPixelForExactTime(new Date(event.time));
+                    // Linear interpolation for y value between current and next point
+                    const nextPoint = points[i + 1];
+                    const t = (event.time - timeMs) / (nextTimeMs - timeMs);
+                    const eventY = point.y + (nextPoint.y - point.y) * t;
+
+                    drawPoints.push({
+                      x: eventX,
+                      y: eventY,
+                      time: event.time,
+                      isDay: event.type === "sunrise",
+                    });
+                  }
                 }
+              }
 
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(points[0].x, points[0].y);
-                ctx.lineTo(points[1].x, points[1].y);
-                ctx.stroke();
-              } else {
-                // Multiple points - draw segments with proper connection and exact sunrise/sunset splits
-                ctx.lineWidth = 3;
-                ctx.lineJoin = "round";
-                ctx.lineCap = "round";
+              // Sort all points by time to ensure correct order
+              drawPoints.sort((a, b) => a.time - b.time);
 
-                // Get all sunrise/sunset events for checking splits
-                const allEvents = [
-                  ...sunTimes.sunsets.map((t) => ({
-                    time: new Date(t).getTime(),
-                    type: "sunset",
-                  })),
-                  ...sunTimes.sunrises.map((t) => ({
-                    time: new Date(t).getTime(),
-                    type: "sunrise",
-                  })),
-                ].sort((a, b) => a.time - b.time);
+              // Remove duplicates (points at the same time)
+              const uniqueDrawPoints = [];
+              const seenTimes = new Set();
+              for (const dp of drawPoints) {
+                const timeKey = Math.floor(dp.time / 1000); // Round to nearest second
+                if (!seenTimes.has(timeKey)) {
+                  seenTimes.add(timeKey);
+                  uniqueDrawPoints.push(dp);
+                }
+              }
 
-                for (let i = 0; i < points.length - 1; i++) {
-                  const p0 = i > 0 ? points[i - 1] : points[i];
-                  const p1 = points[i];
-                  const p2 = points[i + 1];
-                  const p3 =
-                    i < points.length - 2 ? points[i + 2] : points[i + 1];
+              // Draw lines between consecutive points
+              if (uniqueDrawPoints.length > 1) {
+                for (let i = 0; i < uniqueDrawPoints.length - 1; i++) {
+                  const p1 = uniqueDrawPoints[i];
+                  const p2 = uniqueDrawPoints[i + 1];
 
-                  const time1 = rawLabels[i];
-                  const time2 = rawLabels[i + 1];
-                  const time1Ms = new Date(time1).getTime();
-                  const time2Ms = new Date(time2).getTime();
-
-                  // Calculate control points using improved Catmull-Rom to Bezier conversion
-                  const t = tension;
-                  const dx1 = p2.x - p0.x;
-                  const dy1 = p2.y - p0.y;
-                  const dx2 = p3.x - p1.x;
-                  const dy2 = p3.y - p1.y;
-
-                  const cp1x = p1.x + (dx1 / 6) * t;
-                  const cp1y = p1.y + (dy1 / 6) * t;
-                  const cp2x = p2.x - (dx2 / 6) * t;
-                  const cp2y = p2.y - (dy2 / 6) * t;
-
-                  const smoothFactor = 0.15;
-                  const avgX = (p1.x + p2.x) / 2;
-                  const avgY = (p1.y + p2.y) / 2;
-                  const cp1xSmooth = cp1x + (avgX - cp1x) * smoothFactor;
-                  const cp1ySmooth = cp1y + (avgY - cp1y) * smoothFactor;
-                  const cp2xSmooth = cp2x + (avgX - cp2x) * smoothFactor;
-                  const cp2ySmooth = cp2y + (avgY - cp2y) * smoothFactor;
-
-                  // Find any sunrise/sunset events within this segment (excluding exact boundaries to avoid duplicates)
-                  // Events exactly at boundaries will be handled by the split points
-                  const eventsInSegment = allEvents.filter(
-                    (e) => e.time > time1Ms && e.time < time2Ms
-                  );
-
-                  // Check if we need to split (either events in segment or day/night transition)
-                  const isDay1 = !isNighttime(time1);
-                  const isDay2 = !isNighttime(time2);
-                  const hasTransition = isDay1 !== isDay2;
-
-                  // If there's a transition, we MUST find the event causing it
-                  // Even if eventsInSegment is empty, there must be an event between these times
-                  let transitionEvent = null;
-                  if (hasTransition) {
-                    // Find the event that causes the transition
-                    // It should be between time1 and time2
-                    transitionEvent = allEvents.find(
-                      (e) => e.time > time1Ms && e.time < time2Ms
-                    );
-
-                    // If not found with strict comparison, the event list might be incomplete
-                    // In this case, we'll need to interpolate the transition point
-                    if (!transitionEvent) {
-                      console.warn(
-                        `Transition detected between ${new Date(
-                          time1Ms
-                        ).toISOString()} and ${new Date(
-                          time2Ms
-                        ).toISOString()} but no event found`
-                      );
-                    }
-                  }
-
-                  if (
-                    eventsInSegment.length === 0 &&
-                    !hasTransition &&
-                    !transitionEvent
-                  ) {
-                    // No events and no transition - draw as single segment
-                    if (isDay1 && isDay2) {
-                      // Both day - use gradient
-                      const gradient = ctx.createLinearGradient(
-                        p1.x,
-                        0,
-                        p2.x,
-                        0
-                      );
-                      gradient.addColorStop(0, dayColors.start);
-                      gradient.addColorStop(1, dayColors.end);
-                      ctx.strokeStyle = gradient;
-                    } else {
-                      // Both night - use dark blue
-                      ctx.strokeStyle = nightColor;
-                    }
-
-                    ctx.beginPath();
-                    if (i === 0) {
-                      ctx.moveTo(p1.x, p1.y);
-                    } else {
-                      ctx.moveTo(p0.x, p0.y);
-                      ctx.lineTo(p1.x, p1.y);
-                    }
-                    ctx.bezierCurveTo(
-                      cp1xSmooth,
-                      cp1ySmooth,
-                      cp2xSmooth,
-                      cp2ySmooth,
-                      p2.x,
-                      p2.y
-                    );
-                    ctx.stroke();
+                  // Determine color based on day/night status
+                  if ((p1.isDay && p2.isDay) || !nightLineDarkeningEnabled) {
+                    ctx.strokeStyle = dayColors.start;
                   } else {
-                    // Split segment at sunrise/sunset events or transitions
-                    // Build split points: start point, all events in segment, end point
-                    const splitPoints = [
-                      { time: time1Ms, x: p1.x, y: p1.y, isDay: isDay1 },
-                    ];
-
-                    // Add transition event if found
-                    if (transitionEvent) {
-                      const x = getPixelForExactTime(
-                        new Date(transitionEvent.time)
-                      );
-                      const y = getYOnBezierCurve(
-                        p1,
-                        p2,
-                        cp1xSmooth,
-                        cp1ySmooth,
-                        cp2xSmooth,
-                        cp2ySmooth,
-                        x
-                      );
-                      splitPoints.push({
-                        time: transitionEvent.time,
-                        x,
-                        y,
-                        isDay: transitionEvent.type === "sunrise",
-                      });
-                    }
-
-                    // Add events in segment
-                    eventsInSegment.forEach((e) => {
-                      const x = getPixelForExactTime(new Date(e.time));
-                      const y = getYOnBezierCurve(
-                        p1,
-                        p2,
-                        cp1xSmooth,
-                        cp1ySmooth,
-                        cp2xSmooth,
-                        cp2ySmooth,
-                        x
-                      );
-                      splitPoints.push({
-                        time: e.time,
-                        x,
-                        y,
-                        isDay: e.type === "sunrise",
-                      });
-                    });
-
-                    // Add end point
-                    splitPoints.push({
-                      time: time2Ms,
-                      x: p2.x,
-                      y: p2.y,
-                      isDay: isDay2,
-                    });
-
-                    // Sort by time to ensure correct order
-                    splitPoints.sort((a, b) => a.time - b.time);
-
-                    // Draw each sub-segment
-                    for (let j = 0; j < splitPoints.length - 1; j++) {
-                      const sp1 = splitPoints[j];
-                      const sp2 = splitPoints[j + 1];
-
-                      // Determine color for this sub-segment
-                      if (sp1.isDay && sp2.isDay) {
-                        const gradient = ctx.createLinearGradient(
-                          sp1.x,
-                          0,
-                          sp2.x,
-                          0
-                        );
-                        gradient.addColorStop(0, dayColors.start);
-                        gradient.addColorStop(1, dayColors.end);
-                        ctx.strokeStyle = gradient;
-                      } else {
-                        ctx.strokeStyle = nightColor;
-                      }
-
-                      ctx.beginPath();
-                      if (j === 0 && i === 0) {
-                        ctx.moveTo(sp1.x, sp1.y);
-                      } else if (j === 0) {
-                        ctx.moveTo(p0.x, p0.y);
-                        ctx.lineTo(sp1.x, sp1.y);
-                      } else {
-                        ctx.moveTo(sp1.x, sp1.y);
-                      }
-
-                      // Draw line to next split point (or use bezier if it's the full segment)
-                      if (j === 0 && splitPoints.length === 2) {
-                        // Full segment with one split - use bezier to split point, then line to end
-                        ctx.bezierCurveTo(
-                          cp1xSmooth,
-                          cp1ySmooth,
-                          cp2xSmooth,
-                          cp2ySmooth,
-                          sp2.x,
-                          sp2.y
-                        );
-                      } else {
-                        // Simple line between split points
-                        ctx.lineTo(sp2.x, sp2.y);
-                      }
-
-                      ctx.stroke();
-                    }
+                    ctx.strokeStyle = nightColor;
                   }
+
+                  ctx.beginPath();
+                  ctx.moveTo(p1.x, p1.y);
+                  ctx.lineTo(p2.x, p2.y);
+                  ctx.stroke();
                 }
               }
 
@@ -4875,6 +4771,17 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         els.nightShadingToggle.addEventListener("change", () => {
           nightShadingEnabled = els.nightShadingToggle.checked;
           storageCacheSet(NIGHT_SHADING_KEY, String(nightShadingEnabled));
+          // Update chart if it exists (debounced)
+          debouncedChartUpdate("none");
+        });
+
+      // Night line darkening toggle (default to false)
+      els.nightLineDarkeningToggle &&
+        (els.nightLineDarkeningToggle.checked = nightLineDarkeningEnabled);
+      els.nightLineDarkeningToggle &&
+        els.nightLineDarkeningToggle.addEventListener("change", () => {
+          nightLineDarkeningEnabled = els.nightLineDarkeningToggle.checked;
+          storageCacheSet(NIGHT_LINE_DARKENING_KEY, String(nightLineDarkeningEnabled));
           // Update chart if it exists (debounced)
           debouncedChartUpdate("none");
         });
