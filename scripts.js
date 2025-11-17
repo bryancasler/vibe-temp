@@ -198,32 +198,13 @@
     }
 
     function updateCardVisibility() {
-      // Cache shade card element to avoid repeated queries
-      if (!els.shadeCard) {
-        els.shadeCard = document.querySelector(".card--shade");
-      }
-      const shadeCard = els.shadeCard;
-
-      // Only hide cards if selection is finalized (not during active selection)
+      // Hide the combined card only when selection is finalized (not during active selection)
       if (selectionRange && !isSelectingActive) {
-        // Hide cards when selection is finalized
+        // Hide card when selection is finalized
         if (els.sunCard) els.sunCard.style.display = "none";
-        if (shadeCard) shadeCard.style.display = "none";
       } else {
-        // Show cards when no selection
-        // Sun card visibility depends on daylight
-        if (els.sunCard) {
-          els.sunCard.style.display = isDaylightNow() ? "" : "none";
-        }
-        if (shadeCard) shadeCard.style.display = "";
-
-        // Update cards container class for dynamic width
-        if (cardsContainer) {
-          cardsContainer.classList.toggle(
-            "sun-card-hidden",
-            els.sunCard && els.sunCard.style.display === "none"
-          );
-        }
+        // Show card otherwise
+        if (els.sunCard) els.sunCard.style.display = "";
       }
     }
 
@@ -239,6 +220,7 @@
       sun: $("#sun"),
       shadeLabel: $("#shadeLabel"),
       sunLabel: $("#sunLabel"),
+      combinedLabel: $("#combinedLabel"),
       chartCanvas: $("#vibeChart"),
       lastUpdated: $("#lastUpdated"),
       nextUpdated: $("#nextUpdated"),
@@ -252,7 +234,6 @@
       lineSmoothing: $("#lineSmoothing"),
       lineSmoothingVal: $("#lineSmoothingVal"),
       nightShadingToggle: $("#nightShadingToggle"),
-      nightLineDarkeningToggle: $("#nightLineDarkeningToggle"),
       useLocationBtn: $("#use-location"),
       sunCard: $("#sunCard"),
     };
@@ -321,6 +302,7 @@
     const RAIN_ICONS_KEY = "vibeRainIcons";
     const SNOW_ICONS_KEY = "vibeSnowIcons";
     const ICE_ICONS_KEY = "vibeIceIcons";
+    const WIND_ICONS_KEY = "vibeWindIcons";
     const CALIBRATION_KEY = "vibeCalibration";
     // THEME_KEY is defined earlier (line 82) for getDefaultTheme()
 
@@ -356,6 +338,7 @@
     let rainIconsEnabled = storageCacheGet(RAIN_ICONS_KEY, "true") !== "false";
     let snowIconsEnabled = storageCacheGet(SNOW_ICONS_KEY, "true") !== "false";
     let iceIconsEnabled = storageCacheGet(ICE_ICONS_KEY, "true") !== "false";
+    let windIconsEnabled = storageCacheGet(WIND_ICONS_KEY, "true") !== "false";
 
     // Calibration defaults
     const defaultCalibration = {
@@ -1387,16 +1370,19 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       if (tempF < 55) return "Crisp sweater weather";
       if (tempF < 60)
         return context === "sun"
-          ? "Great in sun, cool in shade"
+          ? "Great in the sun"
           : "Cool in shade, warm in sun";
       if (tempF < 65)
         return context === "sun"
-          ? "Perfect in sun, cool otherwise"
+          ? "Perfect in the sun"
           : "Cool; find sun";
       if (tempF < 70) return "Balanced, light layers";
       if (tempF < 75) return "Mild and comfy";
       if (tempF < 80) return "Warm and glowy";
-      if (tempF < 85) return "Quite warm; shade helps";
+      if (tempF < 85)
+        return context === "sun"
+          ? "Quite warm in the sun"
+          : "Quite warm; shade helps";
       if (tempF < 90) return "Hot; hydrate";
       if (tempF < 95) return "Baking in the sun";
       if (tempF < 100) return "Very hot; limit exertion";
@@ -1447,6 +1433,64 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       else if (s < 0.4) suffix = "mostly cloudy";
       else if (s < 0.7) suffix = "partly sunny";
       return suffix ? `${base} (${suffix})` : base;
+    }
+    function combinedVibeDescriptor(
+      shadeF,
+      sunF,
+      solar = 0,
+      isDay = true,
+      currentTime = null
+    ) {
+      // At night, sun and shade are the same - return just shade description
+      if (!isDay || Math.abs(sunF - shadeF) < 0.1) {
+        return vibeDescriptor(shadeF, { solar, isDay, context: "shade" });
+      }
+
+      const diff = sunF - shadeF;
+      const s = clamp(Number.isFinite(solar) ? solar : 0, 0, 1);
+
+      // Get base descriptions
+      const sunBase = describeDay(sunF, "sun");
+      const shadeBase = describeDay(shadeF, "shade");
+
+      let description = "";
+
+      // Adjust wording based on temperature difference
+      if (diff < 2) {
+        // Very similar - use single description
+        description = sunBase;
+      } else if (diff >= 15) {
+        // Large contrast - emphasize the difference
+        description = `${sunBase} in sun, but ${shadeBase} in shade`;
+      } else if (diff >= 8) {
+        // Moderate difference
+        description = `${sunBase} in sun, ${shadeBase} in shade`;
+      } else {
+        // Small difference (2-8°F) - mention both with similarity emphasis
+        description = `${sunBase} in sun, similar ${shadeBase} in shade`;
+      }
+
+      // Add sunset time if within 3 hours
+      if (currentTime && sunTimes && sunTimes.sunsets) {
+        const currentMs = currentTime.getTime();
+        const threeHoursMs = 3 * 60 * 60 * 1000;
+        const nextSunset = sunTimes.sunsets
+          .map((t) => new Date(t).getTime())
+          .find((sunsetMs) => sunsetMs > currentMs);
+
+        if (nextSunset && nextSunset - currentMs <= threeHoursMs) {
+          const sunsetTime = fmtHM(new Date(nextSunset));
+          description += `, sunset at ${sunsetTime}`;
+        }
+      }
+
+      // Add cloud condition suffix
+      let cloudSuffix = "";
+      if (s < 0.2) cloudSuffix = "overcast";
+      else if (s < 0.4) cloudSuffix = "mostly cloudy";
+      else if (s < 0.7) cloudSuffix = "partly sunny";
+
+      return cloudSuffix ? `${description} (${cloudSuffix})` : description;
     }
 
     // Formulas
@@ -1517,6 +1561,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       els.sun &&
         (els.sun.innerHTML = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
 
+      if (els.combinedLabel) {
+        els.combinedLabel.innerHTML = combinedVibeDescriptor(
+          shadeF,
+          sunF,
+          solarValue,
+          isDaylightNow(),
+          new Date()
+        );
+      }
+      // Keep backward compatibility for separate labels
       els.shadeLabel &&
         (els.shadeLabel.innerHTML = vibeDescriptor(shadeF, {
           solar: solarValue,
@@ -1536,20 +1590,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       // Remove skeleton loading state
       hideCardLoading();
 
-      if (!simActive && els.sunCard) {
-        // Hide sun card if selection is active, otherwise show based on daylight
-        if (selectionRange) {
-          els.sunCard.style.display = "none";
-        } else {
-          els.sunCard.style.display = isDaylightNow() ? "" : "none";
-        }
-        // Update cards container class based on sun card visibility
-        if (cardsContainer) {
-          cardsContainer.classList.toggle(
-            "sun-card-hidden",
-            els.sunCard.style.display === "none"
-          );
-        }
+      if (!simActive) {
+        updateCardVisibility();
       }
       statusEl && (statusEl.textContent = "Computed from current inputs.");
     }
@@ -2071,7 +2113,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
 
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
-      const sunVals = sunValsFF.map((v) => toUserTemp(v));
+      const sunValsRaw = sunValsFF.map((v) => toUserTemp(v));
+      
+      // If Sun Vibe is less than 5% different from Shade Vibe, treat it as the same (only on graph)
+      const sunVals = sunValsRaw.map((sunVal, i) => {
+        const shadeVal = shadeVals[i];
+        if (shadeVal === 0) return sunVal; // Avoid division by zero
+        const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
+        return percentDiff < 0.05 ? shadeVal : sunVal;
+      });
+      
       const displayLabels = labels.map((d) =>
         d.toLocaleString([], { weekday: "short", hour: "numeric" })
       );
@@ -2768,6 +2819,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const windChillPlugin = {
         id: "windChill",
         afterDatasetsDraw(chart) {
+          if (!windIconsEnabled) return; // Don't draw if disabled
           if (!timelineState || !timelineState.windByHour) return;
           const { ctx, chartArea, scales } = chart;
           const { labels, shadeVals, windByHour } = timelineState;
@@ -3237,14 +3289,26 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             if (!time || !sunTimes.sunrises || !sunTimes.sunsets) return false;
             const timeMs = new Date(time).getTime();
 
+            // Helper function to round time down to current hour, then add 2 hours
+            function roundDownAndAddTwoHours(date) {
+              const rounded = new Date(date);
+              rounded.setMinutes(0);
+              rounded.setSeconds(0);
+              rounded.setMilliseconds(0);
+              rounded.setHours(rounded.getHours() + 2); // Add 2 hours (1 hour later than rounding up to next hour)
+              return rounded.getTime();
+            }
+
             // Get all sunrise and sunset times, sorted
             const allEvents = [
               ...sunTimes.sunsets.map((t) => ({
                 time: new Date(t).getTime(),
+                roundedTime: roundDownAndAddTwoHours(t), // Round sunset down to current hour, then add 2 hours
                 type: "sunset",
               })),
               ...sunTimes.sunrises.map((t) => ({
                 time: new Date(t).getTime(),
+                roundedTime: new Date(t).getTime(), // Sunrise stays as-is
                 type: "sunrise",
               })),
             ].sort((a, b) => a.time - b.time);
@@ -3264,12 +3328,20 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             // If no event found, check if we're before the first event
             if (!lastEvent) {
               // Before first event - check if it's a sunrise (day) or sunset (night)
-              return allEvents[0].type === "sunset";
+              // For sunset, check if we're past the rounded time
+              if (allEvents[0].type === "sunset") {
+                return timeMs >= allEvents[0].roundedTime;
+              }
+              return false; // Before sunrise means it's still night from previous day
             }
 
-            // If last event was a sunset, we're in nighttime
+            // If last event was a sunset, check if we're past the rounded sunset time
+            if (lastEvent.type === "sunset") {
+              return timeMs >= lastEvent.roundedTime;
+            }
+
             // If last event was a sunrise, we're in daytime
-            return lastEvent.type === "sunset";
+            return false;
           }
 
           datasets.forEach((dataset, datasetIndex) => {
@@ -3287,9 +3359,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
               const points = meta.data;
 
-              // Dark blue color for night
-              const nightColor = "#2d4a6b";
-
               // Day colors
               const dayColors =
                 dataset.label === "Sun Vibe"
@@ -3303,9 +3372,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
               if (points.length === 1) {
                 // Single point
-                const time = rawLabels[0];
-                const isDay = !isNighttime(time);
-                ctx.strokeStyle = isDay || !nightLineDarkeningEnabled ? dayColors.start : nightColor;
+                ctx.strokeStyle = dayColors.start;
                 ctx.beginPath();
                 ctx.moveTo(points[0].x, points[0].y);
                 ctx.lineTo(points[0].x, points[0].y);
@@ -3392,12 +3459,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   const p1 = uniqueDrawPoints[i];
                   const p2 = uniqueDrawPoints[i + 1];
 
-                  // Determine color based on day/night status
-                  if ((p1.isDay && p2.isDay) || !nightLineDarkeningEnabled) {
-                    ctx.strokeStyle = dayColors.start;
-                  } else {
-                    ctx.strokeStyle = nightColor;
-                  }
+                  // Always use day colors (night lines removed)
+                  ctx.strokeStyle = dayColors.start;
 
                   ctx.beginPath();
                   ctx.moveTo(p1.x, p1.y);
@@ -3886,21 +3949,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
     function paintRealtimeCards() {
       compute();
-      if (els.sunCard) {
-        // Hide sun card if selection is active, otherwise show based on daylight
-        if (selectionRange) {
-          els.sunCard.style.display = "none";
-        } else {
-          els.sunCard.style.display = isDaylightNow() ? "" : "none";
-        }
-        // Update cards container class based on sun card visibility
-        if (cardsContainer) {
-          cardsContainer.classList.toggle(
-            "sun-card-hidden",
-            els.sunCard.style.display === "none"
-          );
-        }
-      }
+      updateCardVisibility();
     }
 
     function paintSimulatedIndex(i) {
@@ -3921,44 +3970,21 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       els.shade &&
         (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
-
-      // Update sun card content during hover (make it visible even at night to show sunrise time)
-      // But don't show it if a highlight is active
-      if (els.sun && els.sunCard && !selectionRange) {
-        // Make card visible during hover if it's night (to show sunrise time)
-        if (!isDay && els.sunCard.style.display === "none") {
-          els.sunCard.style.display = "";
-          if (cardsContainer) {
-            cardsContainer.classList.remove("sun-card-hidden");
-          }
-        }
-
-        if (!isDay) {
-          // At night: show next sunrise time
-          const hoverTimeMs = dt.getTime();
-          const nextSunrise = (sunTimes.sunrises || [])
-            .map((t) => new Date(t).getTime())
-            .find((sunriseMs) => sunriseMs > hoverTimeMs);
-
-          if (nextSunrise) {
-            els.sun.innerHTML = `\u{1F31E} at ${fmtHMWithSmallAMPM(
-              new Date(nextSunrise)
-            )}`;
-            // Hide description section when showing sunrise time
-            if (els.sunLabel) els.sunLabel.style.display = "none";
-          } else {
-            // No sunrise found, fallback to temp
-            els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
-            // Show description section when showing temperature
-            if (els.sunLabel) els.sunLabel.style.display = "";
-          }
-        } else {
-          // During day: show temperature
-          els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`;
-        }
-      }
+      els.sun &&
+        (els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`);
 
       const simSolar = solarByHour[i];
+      if (els.combinedLabel) {
+        els.combinedLabel.style.display = "";
+        els.combinedLabel.innerHTML = combinedVibeDescriptor(
+          shadeVals[i],
+          sunVals[i],
+          simSolar,
+          isDay,
+          dt
+        );
+      }
+      // Keep backward compatibility for separate labels
       els.shadeLabel &&
         (els.shadeLabel.innerHTML = vibeDescriptor(shadeVals[i], {
           solar: simSolar,
@@ -4816,17 +4842,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           debouncedChartUpdate("none");
         });
 
-      // Night line darkening toggle (default to false)
-      els.nightLineDarkeningToggle &&
-        (els.nightLineDarkeningToggle.checked = nightLineDarkeningEnabled);
-      els.nightLineDarkeningToggle &&
-        els.nightLineDarkeningToggle.addEventListener("change", () => {
-          nightLineDarkeningEnabled = els.nightLineDarkeningToggle.checked;
-          storageCacheSet(NIGHT_LINE_DARKENING_KEY, String(nightLineDarkeningEnabled));
-          // Update chart if it exists (debounced)
-          debouncedChartUpdate("none");
-        });
-
       // Temperature zones toggle
       const tempZonesToggle = $("#temperatureZonesToggle");
       tempZonesToggle && (tempZonesToggle.checked = temperatureZonesEnabled);
@@ -4888,6 +4903,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         iceIconsToggle.addEventListener("change", () => {
           iceIconsEnabled = iceIconsToggle.checked;
           storageCacheSet(ICE_ICONS_KEY, String(iceIconsEnabled));
+          debouncedChartUpdate("none");
+        });
+
+      // Wind icons toggle
+      const windIconsToggle = $("#windIconsToggle");
+      windIconsToggle && (windIconsToggle.checked = windIconsEnabled);
+      windIconsToggle &&
+        windIconsToggle.addEventListener("change", () => {
+          windIconsEnabled = windIconsToggle.checked;
+          storageCacheSet(WIND_ICONS_KEY, String(windIconsEnabled));
           debouncedChartUpdate("none");
         });
 

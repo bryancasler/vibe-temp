@@ -15,6 +15,22 @@
         <div class="headline-wrap">
           <h1 class="headline">
             Vibe Temp
+            <span class="zip-inline-wrapper">
+              at ZIP
+              <div style="position: relative; display: inline-block;">
+                <input
+                  type="text"
+                  id="chartLocation"
+                  class="chart-location-input"
+                  placeholder="12345"
+                  maxlength="5"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  title="Enter 5-digit ZIP code"
+                />
+                <div class="zip-loading-spinner" id="zipLoadingSpinner" style="display: none;"></div>
+              </div>
+            </span>
             <span class="sub">How it actually feels in shade and sun</span>
           </h1>
         </div>
@@ -108,24 +124,24 @@
         </div>
       </div>
 
-      <!-- Two cards in one row -->
+      <!-- Combined temperature card -->
       <section class="cards">
-        <article class="card card--sun" id="sunCard">
-          <h3 class="card-title">Sun Vibe</h3>
-          <div class="card-temp" id="sun">
-            <span class="skeleton-text">—</span>
+        <article class="card card--combined" id="sunCard">
+          <div class="card-temps">
+            <div class="card-temp-wrapper">
+              <div class="card-temp-label">Sun</div>
+              <div class="card-temp card-temp-sun" id="sun">
+                <span class="skeleton-text">—</span>
+              </div>
+            </div>
+            <div class="card-temp-wrapper">
+              <div class="card-temp-label">Shade</div>
+              <div class="card-temp card-temp-shade" id="shade">
+                <span class="skeleton-text">—</span>
+              </div>
+            </div>
           </div>
-          <div class="card-desc" id="sunLabel">
-            <span class="skeleton-text">Loading…</span>
-          </div>
-        </article>
-
-        <article class="card card--shade">
-          <h3 class="card-title">Shade Vibe</h3>
-          <div class="card-temp" id="shade">
-            <span class="skeleton-text">—</span>
-          </div>
-          <div class="card-desc" id="shadeLabel">
+          <div class="card-desc" id="combinedLabel">
             <span class="skeleton-text">Loading…</span>
           </div>
         </article>
@@ -171,22 +187,6 @@
         <div class="chart-head">
           <div class="chart-title">24-Hour Forecast</div>
           <div class="chart-head-right">
-            <div class="zip-input-wrapper">
-              <label for="chartLocation" class="zip-label">ZIP</label>
-              <div style="position: relative;">
-                <input
-                  type="text"
-                  id="chartLocation"
-                  class="chart-location-input"
-                  placeholder="12345"
-                  maxlength="5"
-                  inputmode="numeric"
-                  pattern="[0-9]*"
-                  title="Enter 5-digit ZIP code"
-                />
-                <div class="zip-loading-spinner" id="zipLoadingSpinner" style="display: none;"></div>
-              </div>
-            </div>
             <div class="chart-status" id="chartStatus"></div>
           </div>
         </div>
@@ -260,15 +260,6 @@
           </label>
           <label class="shading-toggle-label">
             <input
-              id="nightLineDarkeningToggle"
-              type="checkbox"
-              title="Darken temperature lines during nighttime hours (between sunset and sunrise)"
-            />
-            <span class="toggle-switch"></span>
-            <span>Night Lines</span>
-          </label>
-          <label class="shading-toggle-label">
-            <input
               id="temperatureZonesToggle"
               type="checkbox"
               title="Show color-coded temperature comfort zones"
@@ -325,6 +316,16 @@
               />
               <span class="toggle-switch"></span>
               <span>Ice</span>
+            </label>
+            <label class="shading-toggle-label">
+              <input
+                id="windIconsToggle"
+                type="checkbox"
+                checked
+                title="Show wind icons on the chart when wind speed exceeds 15 mph"
+              />
+              <span class="toggle-switch"></span>
+              <span>Wind</span>
             </label>
           </div>
         </div>

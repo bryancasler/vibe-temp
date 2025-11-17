@@ -51,6 +51,15 @@ body {
   margin: 0;
   font-size: 28px;
 }
+.headline .zip-inline-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 20px;
+}
 .headline .sub {
   display: block;
   font-weight: 500;
@@ -120,17 +129,12 @@ body {
   outline: 2px solid #fff2;
 }
 
-/* Cards row now holds Shade, Sun */
+/* Cards row now holds combined card */
 .cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
   gap: 12px;
   margin: 10px 0 8px;
-}
-
-/* When sun card is hidden, make shade card full width */
-.cards.sun-card-hidden {
-  grid-template-columns: 1fr;
 }
 .card {
   background: var(--card);
@@ -179,6 +183,34 @@ body {
 .card--sun .card-temp .time-ampm {
   font-size: 0.75em;
   opacity: 0.8;
+}
+.card--combined {
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.card-temps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 4px 0;
+}
+.card-temp-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-temp-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.card-temp-sun {
+  color: var(--sun);
+}
+.card-temp-shade {
+  color: var(--accent);
 }
 .card-desc {
   display: block;
@@ -299,12 +331,14 @@ body {
   background: var(--card);
   border: 1.5px solid var(--border);
   border-radius: 6px;
-  padding: 6px 8px 6px 28px; /* Left padding accounts for spinner space */
-  width: calc(5ch + 48px); /* 5 characters + left padding (28px) + right padding (8px) + extra (12px) */
+  padding: 4px 10px 4px 28px; /* Left padding accounts for spinner space */
+  width: calc(5ch + 48px); /* 5 characters + left padding (28px) + right padding (10px) + extra space for letter-spacing */
   text-align: center;
   transition: all 0.2s ease;
   letter-spacing: 0.5px;
   position: relative;
+  vertical-align: middle;
+  box-sizing: border-box;
 }
 .chart-location-input:focus {
   outline: none;
@@ -340,8 +374,8 @@ body {
   left: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border: 2px solid var(--border);
   border-top-color: var(--good);
   border-radius: 50%;
@@ -1384,5 +1418,14 @@ select {
   }
   .adv-grid {
     grid-template-columns: 1fr;
+  }
+  .headline .zip-inline-wrapper {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
+    font-size: 16px;
+  }
+  .headline {
+    font-size: 24px;
   }
 }
