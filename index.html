@@ -152,12 +152,19 @@
       <section
         id="weatherSummary"
         class="weather-summary"
-        style="display: none"
       >
         <div class="summary-content">
           <div class="summary-header">
-            <h3 class="summary-title">Highlighted Vibes</h3>
+            <h3 class="summary-title" id="summaryTitle">Weather Summary</h3>
             <div class="summary-actions">
+              <button
+                id="expandSummaryBtn"
+                class="expand-summary-btn"
+                type="button"
+                title="Expand to see full details"
+              >
+                ▼ Expand
+              </button>
               <button
                 id="copySummaryBtn"
                 class="copy-summary-btn"
@@ -178,8 +185,140 @@
               </button>
             </div>
           </div>
-          <div id="summaryTimeRange" class="summary-time-range"></div>
-          <div id="summaryText" class="summary-text">Generating summary...</div>
+          <div id="summaryPreview" class="summary-preview">Loading weather summary...</div>
+          <div id="summaryDetails" class="summary-details" style="display: none">
+            <div id="summaryTimeRange" class="summary-time-range"></div>
+            <div id="summaryText" class="summary-text">Generating summary...</div>
+
+          <!-- Current Clothing Recommendations (Always Visible) -->
+          <div id="currentClothingRec" class="current-clothing-rec" style="display: none">
+            <div class="current-clothing-header">
+              <h4 class="current-clothing-title">What to Wear Right Now</h4>
+            </div>
+            <div id="currentClothingSummary" class="current-clothing-summary">
+              <div id="currentClothingFirstSentence" class="current-clothing-first-sentence"></div>
+              <button
+                id="readMoreBtn"
+                class="read-more-btn"
+                type="button"
+                title="Read more fashion details"
+                style="display: none"
+              >
+                Read more
+              </button>
+            </div>
+            <div id="currentClothingDetails" class="current-clothing-details" style="display: none">
+              <div class="clothing-details-layout">
+                <div class="clothing-narrative-column">
+                  <div id="currentClothingNarrative" class="current-clothing-narrative"></div>
+                </div>
+                <div class="clothing-recommendations-column">
+                  <div id="currentClothingStructured" class="current-clothing-structured"></div>
+                </div>
+              </div>
+              <button
+                id="showLessBtn"
+                class="show-less-btn"
+                type="button"
+                title="Show less"
+              >
+                Show less
+              </button>
+            </div>
+          </div>
+
+          <!-- Clothing Recommendations (For Time Range Selection) -->
+          <div id="clothingRecommendations" class="clothing-recommendations" style="display: none">
+            <div class="clothing-header">
+              <h4 class="clothing-title">What to Wear</h4>
+              <button
+                id="copyClothingBtn"
+                class="copy-clothing-btn"
+                type="button"
+                title="Copy clothing recommendations to clipboard"
+                style="display: none"
+              >
+                📋 Copy
+              </button>
+            </div>
+
+            <!-- Activity Level Selector -->
+            <div class="activity-selector">
+              <label class="activity-label">Activity Level:</label>
+              <select id="activityLevel" class="activity-select">
+                <option value="sitting">Sitting</option>
+                <option value="walking" selected>Walking</option>
+                <option value="active">Physically Active</option>
+                <option value="both">Both Inside and Outside</option>
+              </select>
+            </div>
+
+            <!-- Quick Current Recommendation -->
+            <div id="quickCurrentRec" class="quick-current-rec" style="display: none">
+              <div class="quick-current-header">
+                <span class="quick-current-icon">👕</span>
+                <strong>Right Now:</strong>
+              </div>
+              <div class="quick-current-content"></div>
+            </div>
+
+            <!-- Detailed Layers -->
+            <div id="detailedLayers" class="detailed-layers" style="display: none">
+              <h5 class="layers-title">Layers</h5>
+              <div class="layers-grid">
+                <div class="layer-item" id="baseLayer">
+                  <div class="layer-label">Base:</div>
+                  <div class="layer-content"></div>
+                </div>
+                <div class="layer-item" id="midLayer">
+                  <div class="layer-label">Mid:</div>
+                  <div class="layer-content"></div>
+                </div>
+                <div class="layer-item" id="outerLayer">
+                  <div class="layer-label">Outer:</div>
+                  <div class="layer-content"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Accessories -->
+            <div id="accessoriesSection" class="accessories-section" style="display: none">
+              <h5 class="section-title">Accessories</h5>
+              <div class="accessories-grid" id="accessoriesGrid"></div>
+            </div>
+
+            <!-- Footwear -->
+            <div id="footwearSection" class="footwear-section" style="display: none">
+              <h5 class="section-title">Footwear</h5>
+              <div class="footwear-list" id="footwearList"></div>
+            </div>
+
+            <!-- Material Hints -->
+            <div id="materialHints" class="material-hints" style="display: none">
+              <h5 class="section-title">Fabric Tips</h5>
+              <ul class="hints-list" id="materialHintsList"></ul>
+            </div>
+
+            <!-- Color Suggestions -->
+            <div id="colorSuggestions" class="color-suggestions" style="display: none">
+              <h5 class="section-title">Color Suggestions</h5>
+              <ul class="hints-list" id="colorSuggestionsList"></ul>
+            </div>
+
+            <!-- Time-Specific Breakdown -->
+            <div id="timeBreakdown" class="time-breakdown" style="display: none">
+              <h5 class="section-title">Throughout the Day</h5>
+              <div class="time-breakdown-grid" id="timeBreakdownGrid"></div>
+            </div>
+
+            <!-- Transition Warnings -->
+            <div id="transitionWarnings" class="transition-warnings" style="display: none">
+              <div class="warnings-title">⚠️ Changes Ahead</div>
+              <div class="warnings-list" id="transitionWarningsList"></div>
+            </div>
+          </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -586,6 +725,33 @@
               <div class="row">
                 <button id="resetColors" class="btn btn--sm" type="button">
                   Reset to Defaults
+                </button>
+              </div>
+              <hr class="adv-sep" />
+              <h4 class="adv-h4">AI Enhancement (Gemini)</h4>
+              <div class="hint" style="margin-bottom: 16px;">
+                Enter your Google Gemini API key to get AI-enhanced clothing recommendations. Get your key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
+              </div>
+              <div class="row">
+                <label class="field">
+                  <span class="field-label">Gemini API Key</span>
+                  <input
+                    id="geminiApiKey"
+                    type="password"
+                    placeholder="Enter your Gemini API key"
+                    title="Google Gemini API key for enhanced recommendations"
+                  />
+                </label>
+              </div>
+              <div class="row">
+                <button id="saveGeminiKey" class="btn btn--sm" type="button">
+                  Save API Key
+                </button>
+                <button id="clearGeminiKey" class="btn btn--sm" type="button" style="margin-left: 8px;">
+                  Clear
+                </button>
+                <button id="copyUrlWithKey" class="btn btn--sm" type="button" style="margin-left: 8px;" title="Copy URL with API key">
+                  📋 Copy URL
                 </button>
               </div>
               <hr class="adv-sep" />

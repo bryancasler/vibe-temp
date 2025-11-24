@@ -48,7 +48,10 @@
     const weatherSummaryEl = $("#weatherSummary");
     const summaryTextEl = $("#summaryText");
     const summaryTimeRangeEl = $("#summaryTimeRange");
-    const summaryTitleEl = $("#weatherSummary .summary-title");
+    const summaryTitleEl = $("#summaryTitle");
+    const summaryPreviewEl = $("#summaryPreview");
+    const summaryDetailsEl = $("#summaryDetails");
+    const expandSummaryBtn = $("#expandSummaryBtn");
     const expiredModalEl = $("#expiredModal");
     const keepCustomBtn = $("#keepCustomBtn");
     const useDefaultsBtn = $("#useDefaultsBtn");
@@ -63,6 +66,30 @@
     const errorZipSubmitBtn = $("#errorZipSubmitBtn");
     const errorDismissBtn = $("#errorDismissBtn");
     const copySummaryBtn = $("#copySummaryBtn");
+    const clothingRecommendationsEl = $("#clothingRecommendations");
+    const activityLevelSelect = $("#activityLevel");
+    const quickCurrentRecEl = $("#quickCurrentRec");
+    const quickCurrentContentEl = $(".quick-current-content");
+    const detailedLayersEl = $("#detailedLayers");
+    const baseLayerEl = $("#baseLayer .layer-content");
+    const midLayerEl = $("#midLayer .layer-content");
+    const outerLayerEl = $("#outerLayer .layer-content");
+    const accessoriesSectionEl = $("#accessoriesSection");
+    const accessoriesGridEl = $("#accessoriesGrid");
+    const footwearSectionEl = $("#footwearSection");
+    const footwearListEl = $("#footwearList");
+    const materialHintsEl = $("#materialHints");
+    const materialHintsListEl = $("#materialHintsList");
+    const colorSuggestionsEl = $("#colorSuggestions");
+    const colorSuggestionsListEl = $("#colorSuggestionsList");
+    const timeBreakdownEl = $("#timeBreakdown");
+    const timeBreakdownGridEl = $("#timeBreakdownGrid");
+    const transitionWarningsEl = $("#transitionWarnings");
+    const transitionWarningsListEl = $("#transitionWarningsList");
+    const copyClothingBtn = $("#copyClothingBtn");
+    const saveGeminiKeyBtn = $("#saveGeminiKey");
+    const clearGeminiKeyBtn = $("#clearGeminiKey");
+    const copyUrlWithKeyBtn = $("#copyUrlWithKey");
     const shortcutsModalEl = $("#shortcutsModal");
     const closeShortcutsBtn = $("#closeShortcutsBtn");
     const presetTodayBtn = $("#presetToday");
@@ -236,6 +263,7 @@
       nightShadingToggle: $("#nightShadingToggle"),
       useLocationBtn: $("#use-location"),
       sunCard: $("#sunCard"),
+      geminiApiKey: $("#geminiApiKey"),
     };
 
     // Advanced Configuration Modal
@@ -297,6 +325,8 @@
     const FAVORITES_KEY = "vibeFavorites";
     const CHART_COLORS_KEY = "vibeChartColors";
     const TEMP_ZONES_KEY = "vibeTempZones";
+    const ACTIVITY_KEY = "vibeActivityLevel";
+    const GEMINI_API_KEY = "vibeGeminiApiKey";
     const HUMIDITY_VIS_KEY = "vibeHumidityVis";
     const SUN_MARKERS_KEY = "vibeSunMarkers";
     const RAIN_ICONS_KEY = "vibeRainIcons";
@@ -324,12 +354,91 @@
       storageCache.delete(key);
     };
 
+    // Cookie helper functions for API key
+    function setCookie(name, value, days = 365) {
+      const expires = new Date();
+      expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+      document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+    }
+
+    function getCookie(name) {
+      const nameEQ = name + "=";
+      const ca = document.cookie.split(";");
+      for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === " ") c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0)
+          return c.substring(nameEQ.length, c.length);
+      }
+      return null;
+    }
+
+    function deleteCookie(name) {
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+    }
+
+    // API Key Management
+    function getGeminiApiKey() {
+      // Check URL parameter first
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlKey = urlParams.get("gemini_key");
+      if (urlKey) {
+        setCookie(GEMINI_API_KEY, urlKey);
+        storageCacheSet(GEMINI_API_KEY, urlKey);
+        // Remove from URL to avoid exposing in history
+        urlParams.delete("gemini_key");
+        const newUrl = urlParams.toString()
+          ? `${window.location.pathname}?${urlParams.toString()}`
+          : window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+        // Return object with key and flag indicating it came from URL
+        return { key: urlKey, fromUrl: true };
+      }
+      // Check cookie
+      const cookieKey = getCookie(GEMINI_API_KEY);
+      if (cookieKey) {
+        storageCacheSet(GEMINI_API_KEY, cookieKey);
+        return { key: cookieKey, fromUrl: false };
+      }
+      // Check localStorage
+      const localKey = storageCacheGet(GEMINI_API_KEY, null);
+      return { key: localKey, fromUrl: false };
+    }
+
+    function setGeminiApiKey(key) {
+      if (key) {
+        setCookie(GEMINI_API_KEY, key);
+        storageCacheSet(GEMINI_API_KEY, key);
+      } else {
+        deleteCookie(GEMINI_API_KEY);
+        storageCacheRemove(GEMINI_API_KEY);
+      }
+    }
+
+    // Initialize API key from URL/cookie/localStorage
+    const apiKeyResult = getGeminiApiKey();
+    let geminiApiKey = apiKeyResult.key;
+
+    // Show notification if key was loaded from URL
+    if (apiKeyResult.fromUrl && geminiApiKey) {
+      // Use setTimeout to ensure notification system is ready
+      setTimeout(() => {
+        showNotification(
+          "Gemini API key successfully added from URL!",
+          "success",
+          4000
+        );
+      }, 500);
+    }
+
     // Initialize cached values
     let unit = storageCacheGet(UNIT_KEY, "F") === "C" ? "C" : "F";
     let daysAhead = parseInt(storageCacheGet(DAYS_AHEAD_KEY, "2"), 10);
     let nightShadingEnabled = storageCacheGet(NIGHT_SHADING_KEY) === "true";
-    let nightLineDarkeningEnabled = storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
-    let lineSmoothing = parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1")) || 1;
+    let nightLineDarkeningEnabled =
+      storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
+    let lineSmoothing =
+      parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1")) || 1;
     let temperatureZonesEnabled = storageCacheGet(TEMP_ZONES_KEY) === "true";
     let humidityVisualizationEnabled =
       storageCacheGet(HUMIDITY_VIS_KEY) === "true";
@@ -413,7 +522,7 @@
     let currentIsDay = null;
     let currentPlaceName = "";
 
-    let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, now } all in °F
+    let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, uvIndexByHour, now } all in °F
     window.timelineState = null; // expose for tooltip use
     let simActive = false;
     let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
@@ -460,8 +569,11 @@
       lastSummaryRange = null; // Reset tracking when clearing selection
       lastSummaryTimelineHash = null;
       if (clearHighlightBtn) clearHighlightBtn.style.display = "none";
-      if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
       if (copySummaryBtn) copySummaryBtn.style.display = "none";
+      if (summaryDetailsEl) summaryDetailsEl.style.display = "none";
+      if (expandSummaryBtn) expandSummaryBtn.textContent = "▼ Expand";
+      // Update preview to show current conditions
+      updateWeatherSummaryPreview();
       updateCardVisibility();
       if (vibeChart) vibeChart.update("none");
 
@@ -569,9 +681,20 @@
     function extractWeatherDataForRange(startTime, endTime) {
       if (!timelineState) return null;
 
-      const { labels, shadeVals, sunVals, solarByHour, isDayByHour } =
-        timelineState;
+      const {
+        labels,
+        shadeVals,
+        sunVals,
+        solarByHour,
+        isDayByHour,
+        windByHour,
+        precipitationByHour,
+        weathercodeByHour,
+      } = timelineState;
       const dataPoints = [];
+
+      // Get UV index from timelineState
+      const uvIndexByHour = timelineState.uvIndexByHour || [];
 
       for (let i = 0; i < labels.length; i++) {
         const time = new Date(labels[i]);
@@ -580,6 +703,10 @@
           const sunF = sunVals[i];
           const solar = solarByHour[i] ?? 0;
           const isDay = !!isDayByHour[i];
+          const wind = windByHour[i] ?? 0;
+          const precipitation = precipitationByHour[i] ?? 0;
+          const weathercode = weathercodeByHour[i] ?? 0;
+          const uvIndex = uvIndexByHour[i] ?? 0;
 
           dataPoints.push({
             time: time.toISOString(),
@@ -588,6 +715,10 @@
             sunVibe: toUserTemp(sunF),
             solar: solar,
             isDay: isDay,
+            wind: wind,
+            precipitation: precipitation,
+            weathercode: weathercode,
+            uvIndex: uvIndex,
             description: vibeDescriptor(shadeF, {
               solar,
               isDay,
@@ -602,6 +733,10 @@
       // Calculate statistics
       const shadeTemps = dataPoints.map((d) => d.shadeVibe);
       const sunTemps = dataPoints.map((d) => d.sunVibe);
+      const winds = dataPoints.map((d) => d.wind);
+      const precipitations = dataPoints.map((d) => d.precipitation);
+      const uvIndices = dataPoints.map((d) => d.uvIndex);
+
       const minShade = Math.min(...shadeTemps);
       const maxShade = Math.max(...shadeTemps);
       const minSun = Math.min(...sunTemps);
@@ -609,8 +744,24 @@
       const avgShade =
         shadeTemps.reduce((a, b) => a + b, 0) / shadeTemps.length;
       const avgSun = sunTemps.reduce((a, b) => a + b, 0) / sunTemps.length;
+      const maxWind = Math.max(...winds);
+      const avgWind = winds.reduce((a, b) => a + b, 0) / winds.length;
+      const maxPrecipitation = Math.max(...precipitations);
+      const avgPrecipitation =
+        precipitations.reduce((a, b) => a + b, 0) / precipitations.length;
+      const maxUV = Math.max(...uvIndices);
+      const avgUV = uvIndices.reduce((a, b) => a + b, 0) / uvIndices.length;
+
       const dayHours = dataPoints.filter((d) => d.isDay).length;
       const nightHours = dataPoints.length - dayHours;
+
+      // Track temperature transitions
+      const tempTrend =
+        dataPoints.length > 1
+          ? dataPoints[dataPoints.length - 1].shadeVibe -
+            dataPoints[0].shadeVibe
+          : 0;
+      const tempRange = maxShade - minShade;
 
       // Calculate weighted average vibe based on day/night hours
       // During day, people are more likely in sun, so weight sun vibe more
@@ -639,6 +790,14 @@
           dayHours,
           nightHours,
           avgRepresentative, // More representative average for the period
+          maxWind,
+          avgWind,
+          maxPrecipitation,
+          avgPrecipitation,
+          maxUV,
+          avgUV,
+          tempTrend, // Positive = warming, negative = cooling
+          tempRange,
         },
       };
     }
@@ -924,6 +1083,1061 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       return `${icon} ${sentences.join(". ")}.`;
     }
 
+    // Generate comprehensive clothing recommendations
+    function generateClothingRecommendations(
+      weatherData,
+      activityLevel = "walking"
+    ) {
+      if (
+        !weatherData ||
+        !weatherData.dataPoints ||
+        weatherData.dataPoints.length === 0
+      ) {
+        return null;
+      }
+
+      const { stats, dataPoints } = weatherData;
+      const repTemp = stats.avgRepresentative || stats.avgShade;
+      const repTempF = unit === "F" ? repTemp : cToF(repTemp);
+      const currentPoint = dataPoints[0];
+      const currentTempF =
+        unit === "F" ? currentPoint.shadeVibe : cToF(currentPoint.shadeVibe);
+
+      // Helper to determine temperature category
+      function getTempCategory(tempF) {
+        if (tempF < 32) return "very_cold";
+        if (tempF < 50) return "cold";
+        if (tempF < 65) return "cool";
+        if (tempF < 75) return "mild";
+        if (tempF < 85) return "warm";
+        return "hot";
+      }
+
+      // Activity level adjustments
+      function getActivityAdjustment(activity) {
+        switch (activity) {
+          case "sitting":
+            return { layers: +1, description: "Add an extra layer" };
+          case "walking":
+            return { layers: 0, description: "" };
+          case "active":
+            return { layers: -1, description: "One less layer needed" };
+          case "both":
+            return {
+              layers: 0,
+              description: "Layers you can easily add/remove",
+            };
+          default:
+            return { layers: 0, description: "" };
+        }
+      }
+
+      const activityAdj = getActivityAdjustment(activityLevel);
+      const currentCategory = getTempCategory(
+        currentTempF + activityAdj.layers * 5
+      ); // Adjust for activity
+
+      // Get current conditions
+      const hasRain = stats.maxPrecipitation > 0.1;
+      const hasSnow = dataPoints.some((p) => {
+        const wmo = p.weathercode;
+        return (wmo >= 71 && wmo <= 77) || (wmo >= 85 && wmo <= 86);
+      });
+      const highWind = stats.maxWind > 15;
+      const avgWind = stats.avgWind;
+      const highUV = stats.maxUV > 3;
+      const isCurrentlyDay = currentPoint.isDay;
+
+      // Quick current recommendation
+      function getQuickCurrent() {
+        const tempCat = getTempCategory(currentTempF);
+        let base = "";
+        let outer = "";
+        let accessories = [];
+
+        // Base layer
+        switch (tempCat) {
+          case "very_cold":
+            base = "Thermal base layer or long-sleeve shirt";
+            break;
+          case "cold":
+            base = "Long-sleeve shirt or sweater";
+            break;
+          case "cool":
+            base = "Long-sleeve shirt or light sweater";
+            break;
+          case "mild":
+            base = "T-shirt or light long-sleeve";
+            break;
+          case "warm":
+            base = "T-shirt or tank top";
+            break;
+          case "hot":
+            base = "Tank top or light T-shirt";
+            break;
+        }
+
+        // Adjust for activity
+        if (activityLevel === "sitting" && tempCat !== "hot") {
+          base = base
+            .replace("T-shirt", "Long-sleeve")
+            .replace("tank top", "T-shirt");
+        } else if (activityLevel === "active" && tempCat !== "very_cold") {
+          base = base
+            .replace("Long-sleeve", "T-shirt")
+            .replace("sweater", "T-shirt");
+        }
+
+        // Outer layer
+        if (tempCat === "very_cold" || tempCat === "cold") {
+          outer =
+            hasRain || hasSnow
+              ? "Heavy waterproof coat"
+              : "Heavy coat or parka";
+        } else if (tempCat === "cool") {
+          outer = hasRain ? "Light rain jacket" : "Light jacket or fleece";
+        } else if (tempCat === "mild") {
+          outer = hasRain
+            ? "Light rain jacket"
+            : activityLevel === "both"
+            ? "Light jacket (optional)"
+            : "";
+        } else {
+          outer = hasRain ? "Light rain jacket or umbrella" : "";
+        }
+
+        // Accessories
+        if (tempCat === "very_cold" || tempCat === "cold") {
+          accessories.push("🧤 Gloves", "🧣 Scarf", "🧢 Beanie");
+        } else if (highWind && tempCat !== "hot") {
+          accessories.push("🧣 Scarf");
+        }
+        if (isCurrentlyDay && highUV) {
+          accessories.push("🕶️ Sunglasses", "🧴 Sunscreen");
+        }
+        if (hasRain && !hasSnow) {
+          accessories.push("☂️ Umbrella");
+        }
+
+        return { base, outer, accessories };
+      }
+
+      // Detailed layers
+      function getDetailedLayers() {
+        const tempCat = getTempCategory(repTempF + activityAdj.layers * 5);
+        const layers = { base: "", mid: "", outer: "" };
+
+        // Base layer
+        switch (tempCat) {
+          case "very_cold":
+            layers.base = "Thermal underwear or long-sleeve base layer";
+            break;
+          case "cold":
+            layers.base = "Long-sleeve shirt or thermal";
+            break;
+          case "cool":
+            layers.base = "Long-sleeve shirt or light sweater";
+            break;
+          case "mild":
+            layers.base = "T-shirt or light long-sleeve";
+            break;
+          case "warm":
+            layers.base = "T-shirt or tank top";
+            break;
+          case "hot":
+            layers.base = "Tank top or light, breathable T-shirt";
+            break;
+        }
+
+        // Mid layer
+        if (tempCat === "very_cold" || tempCat === "cold") {
+          layers.mid = "Sweater, fleece, or hoodie";
+        } else if (tempCat === "cool") {
+          layers.mid = "Light sweater or fleece";
+        } else if (tempCat === "mild") {
+          layers.mid =
+            activityLevel === "both"
+              ? "Light jacket or cardigan (optional)"
+              : "";
+        } else {
+          layers.mid = "";
+        }
+
+        // Outer layer
+        if (tempCat === "very_cold" || tempCat === "cold") {
+          if (hasRain || hasSnow) {
+            layers.outer = "Heavy waterproof/windproof coat";
+          } else {
+            layers.outer = "Heavy coat, parka, or winter jacket";
+          }
+        } else if (tempCat === "cool") {
+          if (hasRain) {
+            layers.outer = "Light rain jacket or windbreaker";
+          } else if (highWind) {
+            layers.outer = "Windbreaker or light jacket";
+          } else {
+            layers.outer = "Light jacket";
+          }
+        } else if (tempCat === "mild") {
+          if (hasRain) {
+            layers.outer = "Light rain jacket";
+          } else if (highWind) {
+            layers.outer = "Windbreaker (optional)";
+          } else {
+            layers.outer =
+              activityLevel === "both" ? "Light jacket (for transitions)" : "";
+          }
+        } else if (tempCat === "warm") {
+          layers.outer = hasRain ? "Light rain jacket" : "";
+        } else {
+          layers.outer = "";
+        }
+
+        // Activity adjustments
+        if (activityLevel === "sitting") {
+          if (layers.mid === "") layers.mid = "Light sweater or cardigan";
+          if (layers.outer === "" && tempCat !== "hot") {
+            layers.outer = "Light jacket or cardigan";
+          }
+        } else if (activityLevel === "active") {
+          if (tempCat !== "very_cold" && tempCat !== "cold") {
+            layers.mid = layers.mid
+              .replace("Light sweater", "Light layer")
+              .replace(" or fleece", "");
+          }
+        } else if (activityLevel === "both") {
+          if (layers.outer === "" && tempCat !== "hot") {
+            layers.outer = "Light removable layer";
+          }
+        }
+
+        return layers;
+      }
+
+      // Accessories
+      function getAccessories() {
+        const accessories = [];
+        const tempCat = getTempCategory(repTempF);
+
+        // Hat
+        if (tempCat === "very_cold" || tempCat === "cold") {
+          accessories.push({
+            item: "Beanie or warm hat",
+            icon: "🧢",
+            reason: "Keep head warm",
+          });
+        } else if (isCurrentlyDay && highUV) {
+          accessories.push({
+            item: "Sun hat or cap",
+            icon: "🧢",
+            reason: "UV protection",
+          });
+        }
+
+        // Gloves
+        if (
+          tempCat === "very_cold" ||
+          tempCat === "cold" ||
+          (highWind && tempCat === "cool")
+        ) {
+          accessories.push({
+            item: "Gloves",
+            icon: "🧤",
+            reason: "Protect hands from cold",
+          });
+        }
+
+        // Sunglasses
+        if (isCurrentlyDay && (highUV || stats.avgUV > 2)) {
+          accessories.push({
+            item: "Sunglasses",
+            icon: "🕶️",
+            reason: "Protect eyes from UV",
+          });
+        }
+
+        // Umbrella
+        if (hasRain && !hasSnow) {
+          accessories.push({
+            item: "Umbrella",
+            icon: "☂️",
+            reason: "Rain expected",
+          });
+        }
+
+        // Scarf
+        if (
+          tempCat === "very_cold" ||
+          tempCat === "cold" ||
+          (highWind && tempCat !== "hot")
+        ) {
+          accessories.push({
+            item: "Scarf",
+            icon: "🧣",
+            reason: "Protect neck from cold/wind",
+          });
+        }
+
+        // Sunscreen
+        if (isCurrentlyDay && stats.maxUV > 3) {
+          accessories.push({
+            item: "Sunscreen (SPF 30+)",
+            icon: "🧴",
+            reason: `UV index up to ${stats.maxUV}`,
+          });
+        }
+
+        return accessories;
+      }
+
+      // Footwear
+      function getFootwear() {
+        const tempCat = getTempCategory(repTempF);
+        const footwear = [];
+
+        if (tempCat === "very_cold" || hasSnow) {
+          footwear.push({
+            item: "Insulated boots",
+            icon: "🥾",
+            reason: "Cold and/or snow",
+          });
+        } else if (hasRain && stats.maxPrecipitation > 2) {
+          footwear.push({
+            item: "Waterproof boots or shoes",
+            icon: "👢",
+            reason: "Heavy rain expected",
+          });
+        } else if (
+          tempCat === "cold" ||
+          (hasRain && stats.maxPrecipitation <= 2)
+        ) {
+          footwear.push({
+            item: "Closed-toe shoes or boots",
+            icon: "👟",
+            reason: "Cold or light rain",
+          });
+        } else if (tempCat === "cool" || tempCat === "mild") {
+          footwear.push({
+            item: "Sneakers or comfortable shoes",
+            icon: "👟",
+            reason: "Moderate temperatures",
+          });
+        } else if (tempCat === "warm" || tempCat === "hot") {
+          footwear.push({
+            item: "Sandals or breathable shoes",
+            icon: "👡",
+            reason: "Warm weather",
+          });
+        }
+
+        if (
+          hasRain &&
+          footwear.length > 0 &&
+          !footwear[0].item.includes("Waterproof") &&
+          !footwear[0].item.includes("waterproof")
+        ) {
+          footwear[0].reason += " (waterproof recommended)";
+        }
+
+        return footwear;
+      }
+
+      // Material/fabric hints
+      function getMaterialHints() {
+        const hints = [];
+        const tempCat = getTempCategory(repTempF);
+
+        if (tempCat === "warm" || tempCat === "hot") {
+          hints.push(
+            "Light, breathable fabrics (cotton, linen, moisture-wicking)"
+          );
+        } else if (tempCat === "cold" || tempCat === "very_cold") {
+          hints.push("Insulating materials (wool, fleece, down)");
+          if (highWind) hints.push("Wind-resistant outer layer");
+        } else {
+          hints.push("Layered fabrics for versatility");
+        }
+
+        if (hasRain) {
+          hints.push("Waterproof or water-resistant outer layer");
+        }
+
+        if (activityLevel === "active") {
+          hints.push("Moisture-wicking base layer");
+        }
+
+        return hints;
+      }
+
+      // Color suggestions
+      function getColorSuggestions() {
+        const tempCat = getTempCategory(repTempF);
+        const suggestions = [];
+
+        if (tempCat === "warm" || tempCat === "hot") {
+          suggestions.push(
+            "Light colors (white, light gray, pastels) to reflect heat"
+          );
+        } else if (tempCat === "cold" || tempCat === "very_cold") {
+          suggestions.push(
+            "Darker colors (black, navy, dark gray) to absorb heat"
+          );
+        }
+
+        if (hasRain) {
+          suggestions.push("Avoid light colors that show water stains");
+        }
+
+        return suggestions;
+      }
+
+      // Time-specific breakdown
+      function getTimeBreakdown() {
+        const breakdown = [];
+        const significantChange = stats.tempRange > (unit === "F" ? 10 : 5.6);
+        const hasPrecipChange = dataPoints.some((p, i) => {
+          if (i === 0) return false;
+          const prevPrecip = dataPoints[i - 1].precipitation;
+          return (
+            (prevPrecip === 0 && p.precipitation > 0.1) ||
+            (prevPrecip > 0.1 && p.precipitation === 0)
+          );
+        });
+
+        if (!significantChange && !hasPrecipChange && stats.dayHours === 0) {
+          return null; // No significant variation
+        }
+
+        // Group by time periods
+        const morning = dataPoints.filter((p) => {
+          const hour = new Date(p.time).getHours();
+          return hour >= 5 && hour < 12;
+        });
+        const afternoon = dataPoints.filter((p) => {
+          const hour = new Date(p.time).getHours();
+          return hour >= 12 && hour < 17;
+        });
+        const evening = dataPoints.filter((p) => {
+          const hour = new Date(p.time).getHours();
+          return hour >= 17 && hour < 21;
+        });
+        const night = dataPoints.filter((p) => {
+          const hour = new Date(p.time).getHours();
+          return hour >= 21 || hour < 5;
+        });
+
+        function getPeriodRec(tempF, isDay, hasPrecip, hasWind) {
+          const cat = getTempCategory(tempF);
+          const rec = { base: "", outer: "", accessories: [] };
+
+          if (cat === "very_cold" || cat === "cold") {
+            rec.base = "Long-sleeve + sweater";
+            rec.outer = hasPrecip ? "Heavy waterproof coat" : "Heavy coat";
+            if (cat === "very_cold")
+              rec.accessories.push("Gloves", "Scarf", "Beanie");
+          } else if (cat === "cool") {
+            rec.base = "Long-sleeve";
+            rec.outer = hasPrecip ? "Rain jacket" : "Light jacket";
+          } else if (cat === "mild") {
+            rec.base = "T-shirt or light long-sleeve";
+            rec.outer = hasPrecip ? "Rain jacket" : "";
+          } else if (cat === "warm") {
+            rec.base = "T-shirt";
+            rec.outer = hasPrecip ? "Light rain jacket" : "";
+            if (isDay) rec.accessories.push("Sunglasses");
+          } else {
+            rec.base = "Tank top or light T-shirt";
+            if (isDay) rec.accessories.push("Sun hat", "Sunglasses");
+          }
+
+          return rec;
+        }
+
+        if (morning.length > 0) {
+          const avgTemp =
+            morning.reduce((sum, p) => sum + p.shadeVibe, 0) / morning.length;
+          const avgTempF = unit === "F" ? avgTemp : cToF(avgTemp);
+          const hasPrecip = morning.some((p) => p.precipitation > 0.1);
+          const hasWind = morning.some((p) => p.wind > 15);
+          breakdown.push({
+            period: "Morning",
+            time: "5 AM - 12 PM",
+            recommendation: getPeriodRec(avgTempF, true, hasPrecip, hasWind),
+            temp: avgTempF,
+          });
+        }
+
+        if (afternoon.length > 0) {
+          const avgTemp =
+            afternoon.reduce((sum, p) => sum + p.shadeVibe, 0) /
+            afternoon.length;
+          const avgTempF = unit === "F" ? avgTemp : cToF(avgTemp);
+          const hasPrecip = afternoon.some((p) => p.precipitation > 0.1);
+          const hasWind = afternoon.some((p) => p.wind > 15);
+          breakdown.push({
+            period: "Afternoon",
+            time: "12 PM - 5 PM",
+            recommendation: getPeriodRec(avgTempF, true, hasPrecip, hasWind),
+            temp: avgTempF,
+          });
+        }
+
+        if (evening.length > 0) {
+          const avgTemp =
+            evening.reduce((sum, p) => sum + p.shadeVibe, 0) / evening.length;
+          const avgTempF = unit === "F" ? avgTemp : cToF(avgTemp);
+          const hasPrecip = evening.some((p) => p.precipitation > 0.1);
+          const hasWind = evening.some((p) => p.wind > 15);
+          breakdown.push({
+            period: "Evening",
+            time: "5 PM - 9 PM",
+            recommendation: getPeriodRec(avgTempF, true, hasPrecip, hasWind),
+            temp: avgTempF,
+          });
+        }
+
+        if (night.length > 0) {
+          const avgTemp =
+            night.reduce((sum, p) => sum + p.shadeVibe, 0) / night.length;
+          const avgTempF = unit === "F" ? avgTemp : cToF(avgTemp);
+          const hasPrecip = night.some((p) => p.precipitation > 0.1);
+          const hasWind = night.some((p) => p.wind > 15);
+          breakdown.push({
+            period: "Night",
+            time: "9 PM - 5 AM",
+            recommendation: getPeriodRec(avgTempF, false, hasPrecip, hasWind),
+            temp: avgTempF,
+          });
+        }
+
+        return breakdown.length > 1 ? breakdown : null; // Only return if multiple periods
+      }
+
+      // Transition warnings
+      function getTransitionWarnings() {
+        const warnings = [];
+        const tempChange = stats.tempTrend;
+        const tempChangeThreshold = unit === "F" ? 10 : 5.6;
+
+        if (Math.abs(tempChange) > tempChangeThreshold) {
+          const direction = tempChange > 0 ? "warmer" : "colder";
+          warnings.push({
+            type: "temperature",
+            message: `Temperature will get ${direction} by ${Math.abs(
+              tempChange
+            ).toFixed(1)}${unitSuffix()}`,
+            suggestion: `Bring layers you can ${
+              tempChange > 0 ? "remove" : "add"
+            } as it gets ${direction}`,
+          });
+        }
+
+        const precipStarts =
+          dataPoints.findIndex((p) => p.precipitation > 0.1) !== -1;
+        const precipEnds =
+          dataPoints[dataPoints.length - 1].precipitation === 0 &&
+          dataPoints.some((p) => p.precipitation > 0.1);
+        if (precipStarts && !dataPoints[0].precipitation) {
+          warnings.push({
+            type: "precipitation",
+            message: "Rain/snow expected later",
+            suggestion: "Bring waterproof outer layer or umbrella",
+          });
+        }
+        if (precipEnds) {
+          warnings.push({
+            type: "precipitation",
+            message: "Rain/snow will stop",
+            suggestion: "You can remove waterproof layers later",
+          });
+        }
+
+        const windChange = Math.abs(stats.maxWind - (dataPoints[0].wind || 0));
+        if (windChange > 10) {
+          warnings.push({
+            type: "wind",
+            message: `Wind speed will change significantly (up to ${stats.maxWind.toFixed(
+              0
+            )} mph)`,
+            suggestion: "Consider wind-resistant layers",
+          });
+        }
+
+        return warnings;
+      }
+
+      const quickCurrent = getQuickCurrent();
+      const detailedLayers = getDetailedLayers();
+      const accessories = getAccessories();
+      const footwear = getFootwear();
+      const materialHints = getMaterialHints();
+      const colorSuggestions = getColorSuggestions();
+      const timeBreakdown = getTimeBreakdown();
+      const transitionWarnings = getTransitionWarnings();
+
+      return {
+        quickCurrent,
+        detailedLayers,
+        accessories,
+        footwear,
+        materialHints,
+        colorSuggestions,
+        timeBreakdown,
+        transitionWarnings,
+        activityLevel,
+        currentTemp: currentTempF,
+        repTemp: repTempF,
+      };
+    }
+
+    // Get current weather data for recommendations
+    function getCurrentWeatherData() {
+      const Traw = parseFloat(els.temp?.value ?? "NaN");
+      const RH = parseFloat(els.humidity?.value ?? "NaN");
+      const Wind = parseFloat(els.wind?.value ?? "NaN");
+      const Solar = parseFloat(els.solar?.value ?? "NaN");
+
+      if ([Traw, RH, Wind].some((v) => Number.isNaN(v))) {
+        return null;
+      }
+
+      const tempF = unit === "F" ? Traw : cToF(Traw);
+      const shadeF = shadeVibeOf(tempF, RH, Wind);
+      const solarValue = Number.isNaN(Solar) ? 0 : clamp(Solar, 0, 1);
+      const sunF = sunVibeOf(shadeF, solarValue, reflectivity());
+      const isDay = isDaylightNow();
+
+      // Estimate UV from solar (rough approximation)
+      const uvIndex = isDay ? Math.round(solarValue * 10) : 0;
+
+      // Create a minimal data point structure
+      const currentPoint = {
+        time: new Date().toISOString(),
+        hour: new Date().getHours(),
+        shadeVibe: toUserTemp(shadeF),
+        sunVibe: toUserTemp(sunF),
+        solar: solarValue,
+        isDay: isDay,
+        wind: Wind,
+        precipitation: 0, // Would need to get from weather API
+        weathercode: 0, // Would need to get from weather API
+        uvIndex: uvIndex,
+      };
+
+      // Create minimal weatherData structure
+      const weatherData = {
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        duration: 0,
+        dataPoints: [currentPoint],
+        stats: {
+          minShade: toUserTemp(shadeF),
+          maxShade: toUserTemp(shadeF),
+          avgShade: toUserTemp(shadeF),
+          minSun: toUserTemp(sunF),
+          maxSun: toUserTemp(sunF),
+          avgSun: toUserTemp(sunF),
+          dayHours: isDay ? 1 : 0,
+          nightHours: isDay ? 0 : 1,
+          avgRepresentative: toUserTemp(
+            isDay ? sunF * 0.7 + shadeF * 0.3 : shadeF
+          ),
+          maxWind: Wind,
+          avgWind: Wind,
+          maxPrecipitation: 0,
+          avgPrecipitation: 0,
+          maxUV: uvIndex,
+          avgUV: uvIndex,
+          tempTrend: 0,
+          tempRange: 0,
+        },
+      };
+
+      return weatherData;
+    }
+
+    // Call Gemini API to enhance clothing recommendations
+    async function enhanceWithGemini(recommendations, weatherData) {
+      const currentApiKey =
+        geminiApiKey || storageCacheGet(GEMINI_API_KEY, null);
+      if (!currentApiKey) return null;
+
+      try {
+        const activityLevel = storageCacheGet(ACTIVITY_KEY, "walking");
+        const currentTemp = recommendations.currentTemp;
+        const repTemp = recommendations.repTemp;
+        const tempUnit = unitSuffix();
+
+        // Build fashion-focused prompt for Gemini
+        const prompt = `You are a fashion-forward clothing advisor with expertise in style, aesthetics, and seasonal trends. Based on the following weather conditions and clothing recommendations, provide fashion-focused advice that emphasizes style, color coordination, material choices, and outfit coordination.
+
+Current Conditions:
+- Temperature: ${currentTemp.toFixed(
+          1
+        )}${tempUnit} (feels like ${repTemp.toFixed(1)}${tempUnit})
+- Activity Level: ${activityLevel}
+- Time of Day: ${weatherData.dataPoints[0].isDay ? "Daytime" : "Nighttime"}
+- UV Index: ${weatherData.stats.maxUV}
+- Wind: ${weatherData.stats.avgWind.toFixed(1)} mph
+
+Recommended Clothing:
+- Base Layer: ${recommendations.detailedLayers.base || "Not needed"}
+- Mid Layer: ${recommendations.detailedLayers.mid || "Not needed"}
+- Outer Layer: ${recommendations.detailedLayers.outer || "Not needed"}
+- Accessories: ${
+          recommendations.accessories.map((a) => a.item).join(", ") || "None"
+        }
+- Footwear: ${recommendations.footwear.map((f) => f.item).join(", ") || "None"}
+- Material Hints: ${recommendations.materialHints.join("; ") || "None"}
+- Color Suggestions: ${recommendations.colorSuggestions.join("; ") || "None"}
+
+Provide fashion-focused advice that covers:
+1. Style and aesthetics - how to look polished and put-together
+2. Color coordination - which colors work well together and why
+3. Material choices - fabrics that are both functional and fashionable
+4. Seasonal trends - current style considerations for this time of year
+5. Outfit coordination - how pieces work together as a cohesive look
+6. Personal style considerations - versatile options for different occasions
+
+Format your response as:
+SUMMARY: [A concise, stylish summary starting with a compelling first sentence about the overall look, followed by 1-2 sentences about key style points]
+
+DETAILS: [A detailed fashion-focused explanation with paragraphs covering style tips, color coordination, material choices, seasonal trends, and outfit coordination. Make it engaging and helpful for someone who wants to look good, not just be comfortable]`;
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${currentApiKey}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [{ text: prompt }],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.7,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 1024,
+              },
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Gemini API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+        if (!text) return null;
+
+        // Parse summary and details
+        const summaryMatch = text.match(/SUMMARY:\s*(.+?)(?=DETAILS:|$)/is);
+        const detailsMatch = text.match(/DETAILS:\s*(.+?)$/is);
+
+        return {
+          summary: summaryMatch
+            ? summaryMatch[1].trim()
+            : text.split("DETAILS:")[0].trim(),
+          details: detailsMatch
+            ? detailsMatch[1].trim()
+            : text.split("DETAILS:")[1]?.trim() || "",
+          fullText: text,
+        };
+      } catch (error) {
+        console.warn("Gemini API error:", error);
+        return null;
+      }
+    }
+
+    // Display current clothing recommendations
+    async function displayCurrentClothingRecommendations() {
+      const currentClothingRecEl = $("#currentClothingRec");
+      const currentClothingSummaryEl = $("#currentClothingSummary");
+      const currentClothingFirstSentenceEl = $("#currentClothingFirstSentence");
+      const readMoreBtn = $("#readMoreBtn");
+      const currentClothingDetailsEl = $("#currentClothingDetails");
+      const currentClothingNarrativeEl = $("#currentClothingNarrative");
+      const currentClothingStructuredEl = $("#currentClothingStructured");
+      const showLessBtn = $("#showLessBtn");
+
+      if (!currentClothingRecEl) return;
+
+      const weatherData = getCurrentWeatherData();
+      if (!weatherData) {
+        currentClothingRecEl.style.display = "none";
+        return;
+      }
+
+      const activityLevel = storageCacheGet(ACTIVITY_KEY, "walking");
+      const recommendations = generateClothingRecommendations(
+        weatherData,
+        activityLevel
+      );
+
+      if (!recommendations) {
+        currentClothingRecEl.style.display = "none";
+        return;
+      }
+
+      // Show the section
+      currentClothingRecEl.style.display = "block";
+
+      // Try to enhance with Gemini if API key is available
+      let geminiResponse = null;
+      const currentApiKey =
+        geminiApiKey || storageCacheGet(GEMINI_API_KEY, null);
+      if (currentApiKey) {
+        geminiResponse = await enhanceWithGemini(recommendations, weatherData);
+      }
+
+      // Helper function to extract first sentence
+      function extractFirstSentence(text) {
+        if (!text) return "";
+        // Match first sentence ending with . ! or ?
+        const match = text.match(/^[^.!?]+[.!?]/);
+        return match ? match[0].trim() : text.split(/[.!?]/)[0].trim() + ".";
+      }
+
+      // Build structured recommendations HTML for right column
+      function buildStructuredHtml(recs) {
+        if (!recs) return "";
+
+        return `
+          <div class="structured-recommendations">
+            ${
+              recs.detailedLayers
+                ? `
+            <div class="structured-section">
+              <h5 class="structured-title">Layers</h5>
+              ${
+                recs.detailedLayers.base
+                  ? `
+              <div class="structured-item">
+                <span class="structured-label">Base:</span>
+                <span class="structured-value">${recs.detailedLayers.base}</span>
+              </div>
+              `
+                  : ""
+              }
+              ${
+                recs.detailedLayers.mid
+                  ? `
+              <div class="structured-item">
+                <span class="structured-label">Mid:</span>
+                <span class="structured-value">${recs.detailedLayers.mid}</span>
+              </div>
+              `
+                  : ""
+              }
+              ${
+                recs.detailedLayers.outer
+                  ? `
+              <div class="structured-item">
+                <span class="structured-label">Outer:</span>
+                <span class="structured-value">${recs.detailedLayers.outer}</span>
+              </div>
+              `
+                  : ""
+              }
+            </div>
+            `
+                : ""
+            }
+            ${
+              recs.accessories && recs.accessories.length > 0
+                ? `
+            <div class="structured-section">
+              <h5 class="structured-title">Accessories</h5>
+              ${recs.accessories
+                .map(
+                  (a) => `
+                <div class="structured-item">
+                  <span class="structured-icon">${a.icon || ""}</span>
+                  <span class="structured-value">${a.item || ""}</span>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+            `
+                : ""
+            }
+            ${
+              recs.footwear && recs.footwear.length > 0
+                ? `
+            <div class="structured-section">
+              <h5 class="structured-title">Footwear</h5>
+              ${recs.footwear
+                .map(
+                  (f) => `
+                <div class="structured-item">
+                  <span class="structured-icon">${f.icon || ""}</span>
+                  <span class="structured-value">${f.item || ""}</span>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+            `
+                : ""
+            }
+            ${
+              recs.materialHints && recs.materialHints.length > 0
+                ? `
+            <div class="structured-section">
+              <h5 class="structured-title">Fabric Tips</h5>
+              <ul class="structured-list">
+                ${recs.materialHints.map((h) => `<li>${h || ""}</li>`).join("")}
+              </ul>
+            </div>
+            `
+                : ""
+            }
+            ${
+              recs.colorSuggestions && recs.colorSuggestions.length > 0
+                ? `
+            <div class="structured-section">
+              <h5 class="structured-title">Color Suggestions</h5>
+              <ul class="structured-list">
+                ${recs.colorSuggestions
+                  .map((s) => `<li>${s || ""}</li>`)
+                  .join("")}
+              </ul>
+            </div>
+            `
+                : ""
+            }
+            ${
+              recs.quickCurrent
+                ? `
+            <div class="structured-section">
+              <h5 class="structured-title">Quick Outfit</h5>
+              <div class="structured-item">
+                <span class="structured-label">Base:</span>
+                <span class="structured-value">${
+                  recs.quickCurrent.base || ""
+                }</span>
+              </div>
+              ${
+                recs.quickCurrent.outer
+                  ? `
+              <div class="structured-item">
+                <span class="structured-label">Outer:</span>
+                <span class="structured-value">${recs.quickCurrent.outer}</span>
+              </div>
+              `
+                  : ""
+              }
+              ${
+                recs.quickCurrent.accessories &&
+                recs.quickCurrent.accessories.length > 0
+                  ? `
+              <div class="structured-item">
+                <span class="structured-label">Accessories:</span>
+                <span class="structured-value">${recs.quickCurrent.accessories.join(
+                  ", "
+                )}</span>
+              </div>
+              `
+                  : ""
+              }
+            </div>
+            `
+                : ""
+            }
+          </div>
+        `;
+      }
+
+      // Display summary with first sentence only
+      if (geminiResponse && geminiResponse.summary) {
+        const firstSentence = extractFirstSentence(geminiResponse.summary);
+        if (currentClothingFirstSentenceEl) {
+          currentClothingFirstSentenceEl.textContent = firstSentence;
+        }
+        if (readMoreBtn) {
+          readMoreBtn.style.display = "inline-block";
+        }
+
+        // Store full narrative and structured recommendations
+        if (currentClothingNarrativeEl && geminiResponse.details) {
+          currentClothingNarrativeEl.innerHTML = `<div class="gemini-narrative">${geminiResponse.details.replace(
+            /\n/g,
+            "<br>"
+          )}</div>`;
+        }
+        if (currentClothingStructuredEl) {
+          currentClothingStructuredEl.innerHTML =
+            buildStructuredHtml(recommendations);
+        }
+      } else {
+        // Fallback to basic summary
+        const { base, outer, accessories } = recommendations.quickCurrent;
+        let summaryText = `${base}`;
+        if (outer) summaryText += ` with ${outer}`;
+        if (accessories.length > 0) {
+          summaryText += `. Accessories: ${accessories.join(", ")}`;
+        }
+
+        if (currentClothingFirstSentenceEl) {
+          currentClothingFirstSentenceEl.textContent = summaryText;
+        }
+        if (readMoreBtn) {
+          readMoreBtn.style.display = "none";
+        }
+
+        if (currentClothingNarrativeEl) {
+          currentClothingNarrativeEl.innerHTML = `<div class="gemini-narrative"><p>For current conditions, focus on ${base}${
+            outer ? ` with ${outer}` : ""
+          }${
+            accessories.length > 0
+              ? ` and consider ${accessories.join(", ")}`
+              : ""
+          }.</p></div>`;
+        }
+        if (currentClothingStructuredEl) {
+          currentClothingStructuredEl.innerHTML =
+            buildStructuredHtml(recommendations);
+        }
+      }
+
+      // Read more / Show less functionality - use addEventListener to prevent multiple bindings
+      if (readMoreBtn) {
+        // Remove existing listeners by cloning and replacing
+        const newReadMoreBtn = readMoreBtn.cloneNode(true);
+        readMoreBtn.parentNode.replaceChild(newReadMoreBtn, readMoreBtn);
+        newReadMoreBtn.addEventListener("click", () => {
+          if (currentClothingDetailsEl) {
+            currentClothingDetailsEl.style.display = "block";
+          }
+          if (newReadMoreBtn) {
+            newReadMoreBtn.style.display = "none";
+          }
+        });
+      }
+
+      if (showLessBtn) {
+        // Remove existing listeners by cloning and replacing
+        const newShowLessBtn = showLessBtn.cloneNode(true);
+        showLessBtn.parentNode.replaceChild(newShowLessBtn, showLessBtn);
+        newShowLessBtn.addEventListener("click", () => {
+          if (currentClothingDetailsEl) {
+            currentClothingDetailsEl.style.display = "none";
+          }
+          const readMoreBtnAfter = $("#readMoreBtn");
+          if (readMoreBtnAfter) {
+            readMoreBtnAfter.style.display = "inline-block";
+          }
+        });
+      }
+    }
+
     // Generate smart title for highlighted range
     function generateHighlightTitle(startTime, endTime) {
       const start = new Date(startTime);
@@ -1051,10 +2265,222 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       return JSON.stringify(rangeData);
     }
 
+    // Display clothing recommendations
+    function displayClothingRecommendations(recs) {
+      if (!recs) return;
+
+      // Quick current recommendation
+      if (quickCurrentRecEl && quickCurrentContentEl) {
+        const { base, outer, accessories } = recs.quickCurrent;
+        let content = `<strong>Base:</strong> ${base}`;
+        if (outer) content += `<br><strong>Outer:</strong> ${outer}`;
+        if (accessories.length > 0) {
+          content += `<br><strong>Accessories:</strong> ${accessories.join(
+            ", "
+          )}`;
+        }
+        quickCurrentContentEl.innerHTML = content;
+        quickCurrentRecEl.style.display = "block";
+      }
+
+      // Detailed layers
+      if (detailedLayersEl) {
+        if (baseLayerEl)
+          baseLayerEl.textContent = recs.detailedLayers.base || "Not needed";
+        if (midLayerEl)
+          midLayerEl.textContent = recs.detailedLayers.mid || "Not needed";
+        if (outerLayerEl)
+          outerLayerEl.textContent = recs.detailedLayers.outer || "Not needed";
+        detailedLayersEl.style.display = "block";
+      }
+
+      // Accessories
+      if (accessoriesSectionEl && accessoriesGridEl) {
+        if (recs.accessories.length > 0) {
+          accessoriesGridEl.innerHTML = recs.accessories
+            .map(
+              (acc) => `
+            <div class="accessory-item">
+              <span class="accessory-icon">${acc.icon}</span>
+              <div class="accessory-text">
+                <div>${acc.item}</div>
+                <div class="accessory-reason">${acc.reason}</div>
+              </div>
+            </div>
+          `
+            )
+            .join("");
+          accessoriesSectionEl.style.display = "block";
+        } else {
+          accessoriesSectionEl.style.display = "none";
+        }
+      }
+
+      // Footwear
+      if (footwearSectionEl && footwearListEl) {
+        if (recs.footwear.length > 0) {
+          footwearListEl.innerHTML = recs.footwear
+            .map(
+              (foot) => `
+            <div class="footwear-item">
+              <span class="footwear-icon">${foot.icon}</span>
+              <div class="footwear-text">
+                <div>${foot.item}</div>
+                <div class="footwear-reason">${foot.reason}</div>
+              </div>
+            </div>
+          `
+            )
+            .join("");
+          footwearSectionEl.style.display = "block";
+        } else {
+          footwearSectionEl.style.display = "none";
+        }
+      }
+
+      // Material hints
+      if (materialHintsEl && materialHintsListEl) {
+        if (recs.materialHints.length > 0) {
+          materialHintsListEl.innerHTML = recs.materialHints
+            .map((hint) => `<li>${hint}</li>`)
+            .join("");
+          materialHintsEl.style.display = "block";
+        } else {
+          materialHintsEl.style.display = "none";
+        }
+      }
+
+      // Color suggestions
+      if (colorSuggestionsEl && colorSuggestionsListEl) {
+        if (recs.colorSuggestions.length > 0) {
+          colorSuggestionsListEl.innerHTML = recs.colorSuggestions
+            .map((suggestion) => `<li>${suggestion}</li>`)
+            .join("");
+          colorSuggestionsEl.style.display = "block";
+        } else {
+          colorSuggestionsEl.style.display = "none";
+        }
+      }
+
+      // Time breakdown
+      if (timeBreakdownEl && timeBreakdownGridEl) {
+        if (recs.timeBreakdown && recs.timeBreakdown.length > 0) {
+          timeBreakdownGridEl.innerHTML = recs.timeBreakdown
+            .map((period) => {
+              const { base, outer, accessories } = period.recommendation;
+              return `
+              <div class="time-period-card">
+                <div class="time-period-header">
+                  <span class="time-period-name">${period.period}</span>
+                  <span class="time-period-time">${period.time}</span>
+                </div>
+                <div class="time-period-temp">~${period.temp.toFixed(
+                  1
+                )}${unitSuffix()}</div>
+                <div class="time-period-rec">
+                  ${
+                    base
+                      ? `<div class="rec-item"><strong>Base:</strong> ${base}</div>`
+                      : ""
+                  }
+                  ${
+                    outer
+                      ? `<div class="rec-item"><strong>Outer:</strong> ${outer}</div>`
+                      : ""
+                  }
+                  ${
+                    accessories.length > 0
+                      ? `<div class="rec-item"><strong>Accessories:</strong> ${accessories.join(
+                          ", "
+                        )}</div>`
+                      : ""
+                  }
+                </div>
+              </div>
+            `;
+            })
+            .join("");
+          timeBreakdownEl.style.display = "block";
+        } else {
+          timeBreakdownEl.style.display = "none";
+        }
+      }
+
+      // Transition warnings
+      if (transitionWarningsEl && transitionWarningsListEl) {
+        if (recs.transitionWarnings.length > 0) {
+          transitionWarningsListEl.innerHTML = recs.transitionWarnings
+            .map(
+              (warning) => `
+            <div class="warning-item">
+              <div class="warning-message">${warning.message}</div>
+              <div class="warning-suggestion">${warning.suggestion}</div>
+            </div>
+          `
+            )
+            .join("");
+          transitionWarningsEl.style.display = "block";
+        } else {
+          transitionWarningsEl.style.display = "none";
+        }
+      }
+    }
+
+    // Update weather summary preview (always visible)
+    function updateWeatherSummaryPreview() {
+      if (!summaryPreviewEl) return;
+
+      const Traw = parseFloat(els.temp?.value ?? "NaN");
+      const RH = parseFloat(els.humidity?.value ?? "NaN");
+      const Wind = parseFloat(els.wind?.value ?? "NaN");
+      const Solar = parseFloat(els.solar?.value ?? "NaN");
+
+      if ([Traw, RH, Wind].some((v) => Number.isNaN(v))) {
+        summaryPreviewEl.textContent =
+          "Enter temperature, humidity, and wind to see weather summary.";
+        return;
+      }
+
+      const tempF = unit === "F" ? Traw : cToF(Traw);
+      const shadeF = shadeVibeOf(tempF, RH, Wind);
+      const solarValue = Number.isNaN(Solar) ? 0 : clamp(Solar, 0, 1);
+      const sunF = sunVibeOf(shadeF, solarValue, reflectivity());
+
+      const shadeDisplay = toUserTemp(shadeF);
+      const sunDisplay = toUserTemp(sunF);
+      const isDay = isDaylightNow();
+
+      // Create a brief preview
+      const previewText = `Currently feels like ${shadeDisplay.toFixed(
+        1
+      )}${unitSuffix()} in shade, ${sunDisplay.toFixed(
+        1
+      )}${unitSuffix()} in sun. ${
+        isDay ? "Daytime conditions." : "Nighttime conditions."
+      }`;
+      summaryPreviewEl.textContent = previewText;
+
+      // Update title
+      if (summaryTitleEl) {
+        if (selectionRange) {
+          const smartTitle = generateHighlightTitle(
+            selectionRange.startTime,
+            selectionRange.endTime
+          );
+          summaryTitleEl.textContent = smartTitle;
+        } else {
+          summaryTitleEl.textContent = "Weather Summary";
+        }
+      }
+    }
+
     // Update weather summary
     async function updateWeatherSummary() {
-      if (!selectionRange || !timelineState || summaryGenerationInProgress)
+      if (!selectionRange || !timelineState || summaryGenerationInProgress) {
+        // Still update preview even without selection
+        updateWeatherSummaryPreview();
         return;
+      }
 
       // Check if we've already generated a summary for this exact selectionRange and data
       const currentHash = getTimelineHashForRange(
@@ -1069,15 +2495,19 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       ) {
         // Already generated summary for this exact range and data, skip
         // But ensure summary section is visible
-        if (weatherSummaryEl) weatherSummaryEl.style.display = "block";
         if (clearHighlightBtn) clearHighlightBtn.style.display = "block";
+        updateWeatherSummaryPreview();
         return;
       }
 
       summaryGenerationInProgress = true;
 
-      if (weatherSummaryEl) weatherSummaryEl.style.display = "block";
       showSummaryLoading();
+
+      // Update preview while loading
+      if (summaryPreviewEl) {
+        summaryPreviewEl.textContent = "Generating detailed summary...";
+      }
 
       // Show/hide buttons
       if (copySummaryBtn) copySummaryBtn.style.display = "none";
@@ -1137,6 +2567,35 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (summaryTextEl) {
           summaryTextEl.textContent = summary;
           summaryTextEl.className = "summary-text";
+        }
+
+        // Update preview with first sentence of summary
+        if (summaryPreviewEl && summary) {
+          const firstSentence = summary.split(/[.!?]/)[0];
+          summaryPreviewEl.textContent = firstSentence
+            ? firstSentence + "."
+            : summary.substring(0, 100) + "...";
+        }
+
+        // Show details section when summary is ready
+        if (summaryDetailsEl) summaryDetailsEl.style.display = "block";
+        if (expandSummaryBtn) expandSummaryBtn.textContent = "▲ Collapse";
+
+        // Generate and display clothing recommendations
+        const savedActivity = storageCacheGet(ACTIVITY_KEY, "walking");
+        if (activityLevelSelect) {
+          activityLevelSelect.value = savedActivity;
+        }
+        const activityLevel = savedActivity;
+
+        const recommendations = generateClothingRecommendations(
+          weatherData,
+          activityLevel
+        );
+        if (recommendations && clothingRecommendationsEl) {
+          displayClothingRecommendations(recommendations);
+          clothingRecommendationsEl.style.display = "block";
+          if (copyClothingBtn) copyClothingBtn.style.display = "block";
         }
 
         // Show copy and export buttons when summary is ready
@@ -1373,9 +2832,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ? "Great in the sun"
           : "Cool in shade, warm in sun";
       if (tempF < 65)
-        return context === "sun"
-          ? "Perfect in the sun"
-          : "Cool; find sun";
+        return context === "sun" ? "Perfect in the sun" : "Cool; find sun";
       if (tempF < 70) return "Balanced, light layers";
       if (tempF < 75) return "Mild and comfy";
       if (tempF < 80) return "Warm and glowy";
@@ -1594,6 +3051,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         updateCardVisibility();
       }
       statusEl && (statusEl.textContent = "Computed from current inputs.");
+
+      // Update current clothing recommendations
+      displayCurrentClothingRecommendations();
+
+      // Update weather summary preview
+      updateWeatherSummaryPreview();
     }
 
     function autoSolarFromCloudCover(cloudCoverPct) {
@@ -1813,7 +3276,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         windByHour = [],
         humidityByHour = [],
         precipitationByHour = [],
-        weathercodeByHour = [];
+        weathercodeByHour = [],
+        uvIndexByHour = [];
 
       for (let i = s; i < e; i++) {
         const T = hourly.temperature_2m[i];
@@ -1844,6 +3308,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         humidityByHour.push(RH ?? 0);
         precipitationByHour.push(precip);
         weathercodeByHour.push(wmo);
+        uvIndexByHour.push(Math.round(uv)); // Store UV index
       }
       return {
         labels,
@@ -1855,6 +3320,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         humidityByHour,
         precipitationByHour,
         weathercodeByHour,
+        uvIndexByHour,
         now,
       };
     }
@@ -2114,7 +3580,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
       const sunValsRaw = sunValsFF.map((v) => toUserTemp(v));
-      
+
       // If Sun Vibe is less than 5% different from Shade Vibe, treat it as the same (only on graph)
       const sunVals = sunValsRaw.map((sunVal, i) => {
         const shadeVal = shadeVals[i];
@@ -2122,7 +3588,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
         return percentDiff < 0.05 ? shadeVal : sunVal;
       });
-      
+
       const displayLabels = labels.map((d) =>
         d.toLocaleString([], { weekday: "short", hour: "numeric" })
       );
@@ -3246,7 +4712,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             // De Casteljau's algorithm for cubic bezier subdivision
             // For a cubic bezier: P(t) = (1-t)^3*P0 + 3*(1-t)^2*t*P1 + 3*(1-t)*t^2*P2 + t^3*P3
             // Where P0=p1, P1=cp1, P2=cp2, P3=p2
-            
+
             // Intermediate points for subdivision
             const q0x = p1.x;
             const q0y = p1.y;
@@ -3256,23 +4722,23 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             const q2y = (1 - t) * cp1y + t * cp2y;
             const q3x = (1 - t) * cp2x + t * p2.x;
             const q3y = (1 - t) * cp2y + t * p2.y;
-            
+
             const r0x = (1 - t) * q0x + t * q1x;
             const r0y = (1 - t) * q0y + t * q1y;
             const r1x = (1 - t) * q1x + t * q2x;
             const r1y = (1 - t) * q1y + t * q2y;
             const r2x = (1 - t) * q2x + t * q3x;
             const r2y = (1 - t) * q2y + t * q3y;
-            
+
             const s0x = (1 - t) * r0x + t * r1x;
             const s0y = (1 - t) * r0y + t * r1y;
             const s1x = (1 - t) * r1x + t * r2x;
             const s1y = (1 - t) * r1y + t * r2y;
-            
+
             // The point at t
             const endX = (1 - t) * s0x + t * s1x;
             const endY = (1 - t) * s0y + t * s1y;
-            
+
             // Control points for the first portion: p1 (q0), r0, s0, end point
             return {
               cp1x: r0x,
@@ -3280,7 +4746,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               cp2x: s0x,
               cp2y: s0y,
               endX: endX,
-              endY: endY
+              endY: endY,
             };
           }
 
@@ -3469,7 +4935,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   if (lineSmoothing > 0 && uniqueDrawPoints.length > 2) {
                     // Calculate control points for bezier curve
                     const p0 = i > 0 ? uniqueDrawPoints[i - 1] : p1;
-                    const p3 = i < uniqueDrawPoints.length - 2 ? uniqueDrawPoints[i + 2] : p2;
+                    const p3 =
+                      i < uniqueDrawPoints.length - 2
+                        ? uniqueDrawPoints[i + 2]
+                        : p2;
 
                     // Calculate direction vectors
                     const dx1 = p2.x - p0.x;
@@ -3970,8 +5439,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       els.shade &&
         (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
-      els.sun &&
-        (els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`);
+      els.sun && (els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`);
 
       const simSolar = solarByHour[i];
       if (els.combinedLabel) {
@@ -4649,6 +6117,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 updateWeatherSummary();
               }
 
+              // Update current clothing recommendations
+              displayCurrentClothingRecommendations();
+
               // Remove loading state (active state already set synchronously)
               allPresetBtns.forEach((btn) => {
                 if (btn) btn.classList.remove("loading");
@@ -4737,6 +6208,261 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       paintUnitToggle();
       applyUnitLabels();
 
+      // Expand/collapse summary details
+      if (expandSummaryBtn) {
+        expandSummaryBtn.addEventListener("click", () => {
+          const isExpanded =
+            summaryDetailsEl && summaryDetailsEl.style.display !== "none";
+          if (summaryDetailsEl) {
+            summaryDetailsEl.style.display = isExpanded ? "none" : "block";
+          }
+          if (expandSummaryBtn) {
+            expandSummaryBtn.textContent = isExpanded
+              ? "▼ Expand"
+              : "▲ Collapse";
+          }
+        });
+      }
+
+      // Activity level selector
+      if (activityLevelSelect) {
+        const savedActivity = storageCacheGet(ACTIVITY_KEY, "walking");
+        activityLevelSelect.value = savedActivity;
+
+        activityLevelSelect.addEventListener("change", (e) => {
+          const newActivity = e.target.value;
+          storageCacheSet(ACTIVITY_KEY, newActivity);
+
+          // Regenerate recommendations if we have weather data
+          if (selectionRange && timelineState) {
+            const weatherData = extractWeatherDataForRange(
+              selectionRange.startTime,
+              selectionRange.endTime
+            );
+            if (weatherData) {
+              const recommendations = generateClothingRecommendations(
+                weatherData,
+                newActivity
+              );
+              if (recommendations && clothingRecommendationsEl) {
+                displayClothingRecommendations(recommendations);
+              }
+            }
+          }
+
+          // Also update current recommendations
+          displayCurrentClothingRecommendations();
+        });
+      }
+
+      // Gemini API Key management
+      if (els.geminiApiKey) {
+        // Load saved key
+        const savedKey = storageCacheGet(GEMINI_API_KEY, "");
+        if (savedKey) {
+          els.geminiApiKey.value = savedKey;
+          geminiApiKey = savedKey; // Store as string for use
+        }
+      }
+
+      if (saveGeminiKeyBtn) {
+        saveGeminiKeyBtn.addEventListener("click", () => {
+          const key = els.geminiApiKey?.value?.trim() || "";
+          if (key) {
+            setGeminiApiKey(key);
+            geminiApiKey = key;
+            showNotification("Gemini API key saved!", "success");
+            // Refresh recommendations with new key
+            displayCurrentClothingRecommendations();
+          } else {
+            showNotification("Please enter an API key", "error");
+          }
+        });
+      }
+
+      if (clearGeminiKeyBtn) {
+        clearGeminiKeyBtn.addEventListener("click", () => {
+          setGeminiApiKey("");
+          geminiApiKey = null;
+          if (els.geminiApiKey) els.geminiApiKey.value = "";
+          showNotification("Gemini API key cleared", "success");
+          // Refresh recommendations without AI
+          displayCurrentClothingRecommendations();
+        });
+      }
+
+      // Copy URL with API key button
+      if (copyUrlWithKeyBtn) {
+        copyUrlWithKeyBtn.addEventListener("click", async () => {
+          const currentKey =
+            geminiApiKey || storageCacheGet(GEMINI_API_KEY, "");
+          if (!currentKey) {
+            showNotification(
+              "No API key saved. Please save an API key first.",
+              "error"
+            );
+            return;
+          }
+
+          // Get current URL and add API key parameter
+          const url = new URL(window.location.href);
+          // Remove existing gemini_key if present to avoid duplicates
+          url.searchParams.delete("gemini_key");
+          url.searchParams.set("gemini_key", currentKey);
+          const urlWithKey = url.toString();
+
+          const success = await copyToClipboard(urlWithKey);
+          if (success) {
+            showNotification(
+              "URL with API key copied to clipboard!",
+              "success"
+            );
+          } else {
+            showNotification(
+              "Failed to copy URL. Please copy manually.",
+              "error",
+              5000
+            );
+          }
+        });
+      }
+
+      // Copy clothing recommendations button
+      copyClothingBtn &&
+        copyClothingBtn.addEventListener("click", async () => {
+          if (
+            !clothingRecommendationsEl ||
+            clothingRecommendationsEl.style.display === "none"
+          )
+            return;
+
+          let text = "What to Wear:\n\n";
+
+          // Quick current
+          if (quickCurrentContentEl && quickCurrentContentEl.textContent) {
+            text += "Right Now:\n";
+            text += quickCurrentContentEl.textContent + "\n\n";
+          }
+
+          // Layers
+          if (
+            baseLayerEl &&
+            baseLayerEl.textContent &&
+            baseLayerEl.textContent !== "Not needed"
+          ) {
+            text += "Layers:\n";
+            text += `Base: ${baseLayerEl.textContent}\n`;
+            if (
+              midLayerEl &&
+              midLayerEl.textContent &&
+              midLayerEl.textContent !== "Not needed"
+            ) {
+              text += `Mid: ${midLayerEl.textContent}\n`;
+            }
+            if (
+              outerLayerEl &&
+              outerLayerEl.textContent &&
+              outerLayerEl.textContent !== "Not needed"
+            ) {
+              text += `Outer: ${outerLayerEl.textContent}\n`;
+            }
+            text += "\n";
+          }
+
+          // Accessories
+          if (accessoriesGridEl && accessoriesGridEl.children.length > 0) {
+            text += "Accessories:\n";
+            Array.from(accessoriesGridEl.children).forEach((item) => {
+              const icon =
+                item.querySelector(".accessory-icon")?.textContent || "";
+              const itemText =
+                item.querySelector(".accessory-text")?.textContent || "";
+              text += `${icon} ${itemText}\n`;
+            });
+            text += "\n";
+          }
+
+          // Footwear
+          if (footwearListEl && footwearListEl.children.length > 0) {
+            text += "Footwear:\n";
+            Array.from(footwearListEl.children).forEach((item) => {
+              const icon =
+                item.querySelector(".footwear-icon")?.textContent || "";
+              const itemText =
+                item.querySelector(".footwear-text")?.textContent || "";
+              text += `${icon} ${itemText}\n`;
+            });
+            text += "\n";
+          }
+
+          // Material hints
+          if (materialHintsListEl && materialHintsListEl.children.length > 0) {
+            text += "Fabric Tips:\n";
+            Array.from(materialHintsListEl.children).forEach((li) => {
+              text += `• ${li.textContent}\n`;
+            });
+            text += "\n";
+          }
+
+          // Color suggestions
+          if (
+            colorSuggestionsListEl &&
+            colorSuggestionsListEl.children.length > 0
+          ) {
+            text += "Color Suggestions:\n";
+            Array.from(colorSuggestionsListEl.children).forEach((li) => {
+              text += `• ${li.textContent}\n`;
+            });
+            text += "\n";
+          }
+
+          // Time breakdown
+          if (timeBreakdownGridEl && timeBreakdownGridEl.children.length > 0) {
+            text += "Throughout the Day:\n";
+            Array.from(timeBreakdownGridEl.children).forEach((card) => {
+              const period =
+                card.querySelector(".time-period-name")?.textContent || "";
+              const time =
+                card.querySelector(".time-period-time")?.textContent || "";
+              const temp =
+                card.querySelector(".time-period-temp")?.textContent || "";
+              const rec =
+                card.querySelector(".time-period-rec")?.textContent || "";
+              text += `${period} (${time}) - ${temp}\n${rec}\n`;
+            });
+            text += "\n";
+          }
+
+          // Transition warnings
+          if (
+            transitionWarningsListEl &&
+            transitionWarningsListEl.children.length > 0
+          ) {
+            text += "Changes Ahead:\n";
+            Array.from(transitionWarningsListEl.children).forEach((warning) => {
+              const message =
+                warning.querySelector(".warning-message")?.textContent || "";
+              const suggestion =
+                warning.querySelector(".warning-suggestion")?.textContent || "";
+              text += `⚠️ ${message}\n${suggestion}\n`;
+            });
+          }
+
+          const success = await copyToClipboard(text.trim());
+          if (success) {
+            showNotification(
+              "Clothing recommendations copied to clipboard!",
+              "success"
+            );
+          } else {
+            showNotification(
+              "Failed to copy recommendations. Please select and copy manually.",
+              "error",
+              5000
+            );
+          }
+        });
+
       // Storage sync across tabs
       window.addEventListener("storage", (e) => {
         if (e.key === UNIT_KEY) {
@@ -4821,11 +6547,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Line smoothing setting
       els.lineSmoothing && (els.lineSmoothing.value = lineSmoothing);
-      els.lineSmoothingVal && (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
+      els.lineSmoothingVal &&
+        (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
       els.lineSmoothing &&
         els.lineSmoothing.addEventListener("input", () => {
           lineSmoothing = parseFloat(els.lineSmoothing.value) || 0;
-          els.lineSmoothingVal && (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
+          els.lineSmoothingVal &&
+            (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
           storageCacheSet(LINE_SMOOTHING_KEY, String(lineSmoothing));
           // Update chart if it exists (debounced)
           debouncedChartUpdate("none");
@@ -5907,5 +7635,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       apiRequestCache.clear();
       pendingRequests.clear();
     });
+
+    // Initialize weather summary preview on page load
+    updateWeatherSummaryPreview();
   });
 })();
