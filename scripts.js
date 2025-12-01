@@ -69,8 +69,29 @@
     const cardsContainer = $(".cards");
     const presetTomorrowBtn = $("#presetTomorrow");
     const presetDefaultBtn = $("#presetDefault");
-    const preset3DaysBtn = $("#preset3Days");
     const presetWeekBtn = $("#presetWeek");
+    const preset3DayBtn = $("#preset3Day");
+    const preset5DayBtn = $("#preset5Day");
+    const presetOneWeekBtn = $("#presetOneWeek");
+    const presetMoreBtn = $("#presetMoreBtn");
+    const presetDropdownMenu = $("#presetDropdownMenu");
+    const presetDropdown = $(".preset-dropdown");
+    const chartNavPrevBtn = $("#chartNavPrev");
+    const chartNavNextBtn = $("#chartNavNext");
+    
+    // Track date offset for day navigation (0 = today, 1 = tomorrow, -1 = yesterday, etc.)
+    let dateOffset = 0;
+
+    // Function to update navigation arrows visibility based on data availability
+    function updateNavArrowsVisibility() {
+      const hasData = lastCoords !== null && timelineState !== null;
+      if (chartNavPrevBtn) {
+        chartNavPrevBtn.style.display = hasData ? "flex" : "none";
+      }
+      if (chartNavNextBtn) {
+        chartNavNextBtn.style.display = hasData ? "flex" : "none";
+      }
+    }
     const favoritesDropdown = $("#favoritesDropdown");
     const favoritesToggle = $("#favoritesToggle");
     const favoritesList = $("#favoritesList");
@@ -164,6 +185,8 @@
         }
         // Always keep placeholder as "12345"
         chartLocationEl.placeholder = "12345";
+        // Update clear button visibility after setting initial value
+        setTimeout(() => updateZipClearButton(), 0);
       }
     }
 
@@ -302,7 +325,17 @@
     const zipEls = {
       input: $("#chartLocation"), // Now references the input in chart header
       status: null, // Status removed from advanced modal
+      clearBtn: $("#zipClearBtn"),
+      loadingSpinner: $("#zipLoadingSpinner"),
     };
+
+    // Function to update ZIP clear button visibility
+    function updateZipClearButton() {
+      if (!zipEls.clearBtn || !zipEls.input) return;
+      const hasValue = zipEls.input.value.trim().length > 0;
+      const isLoading = zipEls.loadingSpinner?.style.display !== "none";
+      zipEls.clearBtn.style.display = hasValue && !isLoading ? "flex" : "none";
+    }
 
     // State
     const UNIT_KEY = "vibeUnit";
@@ -1587,7 +1620,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const avgTemp = (shadeF + sunF) / 2;
         const avgDisplay = toUserTemp(avgTemp);
         if (els.combinedTemp) {
-          els.combinedTemp.innerHTML = `~${avgDisplay.toFixed(1)}${unitSuffix()}`;
+          els.combinedTemp.innerHTML = `${avgDisplay.toFixed(1)}${unitSuffix()}`;
         }
         if (els.combinedTempWrapper) {
           els.combinedTempWrapper.style.display = "flex";
@@ -2597,6 +2630,29 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       };
 
       // Custom timeline labels plugin - two-line format (times on top, days below)
+      // Hover indicator plugin - red dot at bottom of chart
+      const hoverIndicatorPlugin = {
+        id: "hoverIndicator",
+        afterDraw(chart) {
+          if (chart._hoverX === null || chart._hoverX === undefined) return;
+          
+          const ctx = chart.ctx;
+          const chartArea = chart.chartArea;
+          const x = chart._hoverX;
+          
+          // Ensure x is within chart area
+          if (x < chartArea.left || x > chartArea.right) return;
+          
+          // Draw red dot at bottom of chart
+          ctx.save();
+          ctx.fillStyle = "#ef4444"; // red-500
+          ctx.beginPath();
+          ctx.arc(x, chartArea.bottom, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        },
+      };
+
       const timelineLabelsPlugin = {
         id: "timelineLabels",
         afterDraw(chart) {
@@ -3632,6 +3688,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               },
             },
             tooltip: {
+              backgroundColor: "rgba(0, 0, 0, 0.85)",
+              titleColor: "#ffffff",
+              bodyColor: "#ffffff",
+              borderColor: "rgba(255, 255, 255, 0.2)",
+              borderWidth: 1,
+              padding: 12,
+              displayColors: false,
               itemSort: (a, b) => {
                 const order = ["Sun Vibe", "Shade Vibe", "Highlighted Vibes"];
                 return (
@@ -3639,42 +3702,67 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   order.indexOf(b.dataset.label)
                 );
               },
-              filter: (item) => item.dataset.label !== "Highlighted Vibes", // Hide highlight from tooltip
+              filter: (item) => {
+                // Hide highlight from tooltip
+                if (item.dataset.label === "Highlighted Vibes") return false;
+                // Only show Shade Vibe in tooltip (we'll show combined description there)
+                if (item.dataset.label === "Sun Vibe") return false;
+                return true;
+              },
               external: (context) => {
+                // Guard: ensure we have a valid event
+                if (!context || !context.event) {
+                  return;
+                }
+                
                 // Check if hovering near a sun marker
                 const chart = context.chart;
+                if (!chart) return;
+                
                 const markerPositions = chart._sunMarkerPositions || [];
-                if (!markerPositions.length) return;
+                
+                try {
+                  const canvasPosition = Chart.helpers.getRelativePosition(
+                    context.event,
+                    chart
+                  );
+                  const chartArea = chart.chartArea;
 
-                const canvasPosition = Chart.helpers.getRelativePosition(
-                  context.event,
-                  chart
-                );
-                const chartArea = chart.chartArea;
 
-                // Check if mouse is near any marker (within 20px)
-                for (const marker of markerPositions) {
-                  const dx = canvasPosition.x - marker.x;
-                  const dy = canvasPosition.y - marker.y;
-                  const distance = Math.sqrt(dx * dx + dy * dy);
-
-                  if (distance < 20) {
-                    // Show custom tooltip for sun marker
-                    const timeStr = fmtHM(new Date(marker.time));
-                    const tooltip = chart.tooltip;
-                    tooltip.setContent({
-                      title: `${marker.label}`,
-                      body: [{ lines: [timeStr] }],
-                    });
-                    tooltip.opacity = 1;
-                    tooltip.update(true);
+                  if (!markerPositions.length) {
                     return;
                   }
-                }
 
-                // Not near a marker, use default tooltip
-                const tooltip = chart.tooltip;
-                tooltip.opacity = 0;
+                  // Check if mouse is near any marker (within 20px)
+                  for (const marker of markerPositions) {
+                    const dx = canvasPosition.x - marker.x;
+                    const dy = canvasPosition.y - marker.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 20) {
+                      // Show custom tooltip for sun marker
+                      const timeStr = fmtHM(new Date(marker.time));
+                      const tooltip = chart.tooltip;
+                      tooltip.setContent({
+                        title: `${marker.label}`,
+                        body: [{ lines: [timeStr] }],
+                      });
+                      tooltip.opacity = 1;
+                      tooltip.update(true);
+                      chart.draw();
+                      return;
+                    }
+                  }
+
+                  // Not near a marker, use default tooltip
+                  const tooltip = chart.tooltip;
+                  tooltip.opacity = 0;
+                } catch (e) {
+                  // Silently handle errors (e.g., when clicking outside chart)
+                  if (chart) {
+                    chart._hoverX = null;
+                  }
+                }
               },
               callbacks: {
                 // Keep the time label as title, with sunrise/sunset info if near
@@ -3739,17 +3827,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
                   return defaultTitle;
                 },
-                // Custom label with color indicator: "● Sun: 84.9° Balanced, light layers"
+                // Custom label showing combined description
                 label: (ctx) => {
                   if (ctx.dataset.label === "Highlighted Vibes") return null; // Don't show in tooltip
-                  const short =
-                    ctx.dataset.label === "Sun Vibe" ? "Sun" : "Shade";
-                  const tempDisplay = Number(ctx.parsed.y).toFixed(1); // already in current unit
-                  // Get color for the dataset
-                  const isSun = ctx.dataset.label === "Sun Vibe";
-                  const color = isSun
-                    ? chartColors.sun.start
-                    : chartColors.shade.start;
+                  if (ctx.dataset.label === "Sun Vibe") return null; // Only show combined description via Shade Vibe
+                  
                   let desc = "";
                   try {
                     const i = ctx.dataIndex;
@@ -3757,41 +3839,21 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     if (ts && Number.isFinite(i)) {
                       const isDay = !!ts.isDayByHour?.[i];
                       const solar = ts.solarByHour?.[i] ?? 0;
-                      const tempF =
-                        ctx.dataset.label === "Sun Vibe"
-                          ? ts.sunVals?.[i]
-                          : ts.shadeVals?.[i]; // °F
-                      const context =
-                        ctx.dataset.label === "Sun Vibe" ? "sun" : "shade";
-                      if (typeof tempF === "number") {
-                        desc =
-                          vibeDescriptor(tempF, { solar, isDay, context }) ||
-                          "";
+                      const shadeF = ts.shadeVals?.[i];
+                      const sunF = ts.sunVals?.[i];
+                      
+                      // Get the hovered time for sunset info
+                      const chart = ctx.chart;
+                      const rawLabels = chart._rawLabels || [];
+                      const hoveredTime = i < rawLabels.length ? new Date(rawLabels[i]) : new Date();
+                      
+                      if (typeof shadeF === "number" && typeof sunF === "number") {
+                        desc = combinedVibeDescriptor(shadeF, sunF, solar, isDay, hoveredTime) || "";
                       }
                     }
                   } catch {}
-                  // Return label (color is shown via labelColor callback)
-                  return desc
-                    ? `${short}: ${tempDisplay}° ${desc}`
-                    : `${short}: ${tempDisplay}°`;
-                },
-                labelColor: (ctx) => {
-                  // Return color for the tooltip item indicator
-                  if (ctx.dataset.label === "Sun Vibe") {
-                    return {
-                      borderColor: chartColors.sun.start,
-                      backgroundColor: chartColors.sun.start,
-                    };
-                  } else if (ctx.dataset.label === "Shade Vibe") {
-                    return {
-                      borderColor: chartColors.shade.start,
-                      backgroundColor: chartColors.shade.start,
-                    };
-                  }
-                  return {
-                    borderColor: ctx.dataset.borderColor,
-                    backgroundColor: ctx.dataset.backgroundColor,
-                  };
+                  // Return the combined description
+                  return desc;
                 },
               },
             },
@@ -3808,6 +3870,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           windChillPlugin,
           precipitationIconsPlugin,
           timelineLabelsPlugin,
+          hoverIndicatorPlugin,
         ],
       });
 
@@ -3832,6 +3895,38 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       let selectionStartTime = null;
       let touchStartTime = null;
       let hasMoved = false;
+      
+      // Track mouse position for red dot indicator
+      els.chartCanvas.addEventListener("mousemove", (e) => {
+        if (!vibeChart || !timelineState) return;
+        const rect = els.chartCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        
+        // Get the data index from the x position
+        const xScale = vibeChart.scales.x;
+        if (xScale) {
+          const dataIndex = xScale.getValueForPixel(x);
+          // Round to nearest integer for category scale
+          const roundedIndex = Math.round(dataIndex);
+          if (Number.isFinite(roundedIndex) && roundedIndex >= 0 && roundedIndex < timelineState.labels.length) {
+            // Get the pixel position of this data point
+            const pixelX = xScale.getPixelForValue(roundedIndex);
+            vibeChart._hoverX = pixelX;
+            vibeChart.draw();
+          } else {
+            vibeChart._hoverX = null;
+            vibeChart.draw();
+          }
+        }
+      });
+      
+      // Clear hover indicator when mouse leaves chart
+      els.chartCanvas.addEventListener("mouseleave", () => {
+        if (vibeChart) {
+          vibeChart._hoverX = null;
+          vibeChart.draw();
+        }
+      });
 
       function updateFromClientX(clientX) {
         if (!vibeChart || !timelineState) return;
@@ -4049,7 +4144,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const avgTemp = (shadeVals[i] + sunVals[i]) / 2;
         const avgDisplay = toUserTemp(avgTemp);
         if (els.combinedTemp) {
-          els.combinedTemp.innerHTML = `~${avgDisplay.toFixed(1)}${unitSuffix()}`;
+          els.combinedTemp.innerHTML = `${avgDisplay.toFixed(1)}${unitSuffix()}`;
         }
         if (els.combinedTempWrapper) {
           els.combinedTempWrapper.style.display = "flex";
@@ -4232,11 +4327,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           if (selectionRange) {
             updateWeatherSummary();
           }
+          updateNavArrowsVisibility();
         }
 
         const nowTime = new Date();
         els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
         updateAdvStats();
+        updateNavArrowsVisibility();
       } catch (e) {
         console.warn("Update cycle failed", e);
         // Don't show error for update cycle failures, just log them
@@ -4313,6 +4410,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ds.now,
           ds.isDayByHour
         );
+        updateNavArrowsVisibility();
         updateAdvStats(); // Update stats after chart is rendered
         // Update summary if selection exists (weather data may have changed)
         if (selectionRange) {
@@ -4606,6 +4704,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       ds.now,
                       ds.isDayByHour
                     );
+                    updateNavArrowsVisibility();
                   })
                   .catch(() => {});
               }
@@ -4615,13 +4714,18 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Time preset functions
       function setTimePreset(preset) {
+        // Reset date offset when preset is selected
+        dateOffset = 0;
+        
         // Clear active state from all presets
         const allPresetBtns = [
           presetTodayBtn,
           presetTomorrowBtn,
           presetDefaultBtn,
-          preset3DaysBtn,
           presetWeekBtn,
+          preset3DayBtn,
+          preset5DayBtn,
+          presetOneWeekBtn,
         ];
         allPresetBtns.forEach((btn) => {
           if (btn) {
@@ -4629,6 +4733,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             btn.classList.remove("loading");
           }
         });
+        // Also clear active from main buttons
+        if (presetMoreBtn) presetMoreBtn.classList.remove("active");
 
         // Show loading state on the clicked button
         let clickedBtn = null;
@@ -4651,15 +4757,25 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             startFromTomorrow = false;
             clickedBtn = presetDefaultBtn;
             break;
-          case "3days":
-            newDaysAhead = 3;
-            startFromTomorrow = false;
-            clickedBtn = preset3DaysBtn;
-            break;
           case "week":
             newDaysAhead = 7;
             startFromTomorrow = false;
             clickedBtn = presetWeekBtn;
+            break;
+          case "3day":
+            newDaysAhead = 3;
+            startFromTomorrow = false;
+            clickedBtn = preset3DayBtn;
+            break;
+          case "5day":
+            newDaysAhead = 5;
+            startFromTomorrow = false;
+            clickedBtn = preset5DayBtn;
+            break;
+          case "oneWeek":
+            newDaysAhead = 7;
+            startFromTomorrow = false;
+            clickedBtn = presetOneWeekBtn;
             break;
         }
 
@@ -4702,7 +4818,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               const datasetDaysAhead = preset === "tomorrow" ? 2 : daysAhead;
               let ds = buildTimelineDataset(hourly, datasetDaysAhead);
 
-              // Filter data based on preset
+              // Filter data based on preset and date offset
               if (ds.labels.length > 0) {
                 const now = new Date();
                 let filterStart, filterEnd;
@@ -4711,15 +4827,23 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   // Filter to only today (from start of today to end of today)
                   filterStart = new Date(now);
                   filterStart.setHours(0, 0, 0, 0);
+                  filterStart.setDate(filterStart.getDate() + dateOffset);
                   filterEnd = new Date(filterStart);
                   filterEnd.setDate(filterEnd.getDate() + 1);
                 } else if (preset === "tomorrow") {
                   // Filter to only tomorrow (from start of tomorrow to end of tomorrow)
                   filterStart = new Date(now);
-                  filterStart.setDate(filterStart.getDate() + 1);
+                  filterStart.setDate(filterStart.getDate() + 1 + dateOffset);
                   filterStart.setHours(0, 0, 0, 0);
                   filterEnd = new Date(filterStart);
                   filterEnd.setDate(filterEnd.getDate() + 1);
+                } else if (dateOffset !== 0) {
+                  // For other presets, only filter if dateOffset is applied (arrow navigation)
+                  filterStart = new Date(now);
+                  filterStart.setHours(0, 0, 0, 0);
+                  filterStart.setDate(filterStart.getDate() + dateOffset);
+                  filterEnd = new Date(filterStart);
+                  filterEnd.setDate(filterEnd.getDate() + daysAhead);
                 }
 
                 if (filterStart && filterEnd) {
@@ -4788,19 +4912,195 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Time preset buttons
       presetTodayBtn &&
-        presetTodayBtn.addEventListener("click", () => setTimePreset("today"));
+        presetTodayBtn.addEventListener("click", () => {
+          setTimePreset("today");
+          closeDropdown();
+        });
       presetTomorrowBtn &&
-        presetTomorrowBtn.addEventListener("click", () =>
-          setTimePreset("tomorrow")
-        );
+        presetTomorrowBtn.addEventListener("click", () => {
+          setTimePreset("tomorrow");
+          closeDropdown();
+        });
       presetDefaultBtn &&
         presetDefaultBtn.addEventListener("click", () =>
           setTimePreset("default")
         );
-      preset3DaysBtn &&
-        preset3DaysBtn.addEventListener("click", () => setTimePreset("3days"));
       presetWeekBtn &&
         presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
+      preset3DayBtn &&
+        preset3DayBtn.addEventListener("click", () => {
+          setTimePreset("3day");
+          closeDropdown();
+        });
+      preset5DayBtn &&
+        preset5DayBtn.addEventListener("click", () => {
+          setTimePreset("5day");
+          closeDropdown();
+        });
+      presetOneWeekBtn &&
+        presetOneWeekBtn.addEventListener("click", () => {
+          setTimePreset("oneWeek");
+          closeDropdown();
+        });
+
+      // Dropdown toggle
+      function toggleDropdown() {
+        if (!presetDropdown || !presetDropdownMenu) return;
+        
+        const currentDisplay = presetDropdownMenu.style.display;
+        const isOpen = currentDisplay === "block";
+        
+        presetDropdownMenu.style.display = isOpen ? "none" : "block";
+        if (isOpen) {
+          presetDropdown.classList.remove("open");
+        } else {
+          presetDropdown.classList.add("open");
+        }
+      }
+
+      function closeDropdown() {
+        if (presetDropdown && presetDropdownMenu) {
+          presetDropdownMenu.style.display = "none";
+          if (presetDropdown) {
+            presetDropdown.classList.remove("open");
+          }
+        }
+      }
+
+      // Initialize dropdown as closed
+      if (presetDropdownMenu) {
+        presetDropdownMenu.style.display = "none";
+      }
+
+      presetMoreBtn &&
+        presetMoreBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleDropdown();
+        });
+
+      // Close dropdown when clicking outside
+      document.addEventListener("click", (e) => {
+        if (
+          presetDropdown &&
+          !presetDropdown.contains(e.target) &&
+          presetDropdownMenu &&
+          presetDropdownMenu.style.display !== "none"
+        ) {
+          closeDropdown();
+        }
+      });
+
+      // Day navigation function
+      function shiftDateOffset(delta) {
+        // Deselect all preset buttons
+        const allPresetBtns = [
+          presetTodayBtn,
+          presetTomorrowBtn,
+          presetDefaultBtn,
+          presetWeekBtn,
+          preset3DayBtn,
+          preset5DayBtn,
+          presetOneWeekBtn,
+        ];
+        allPresetBtns.forEach((btn) => {
+          if (btn) {
+            btn.classList.remove("active");
+            btn.classList.remove("loading");
+          }
+        });
+        if (presetMoreBtn) presetMoreBtn.classList.remove("active");
+
+        // Update date offset
+        dateOffset += delta;
+
+        // Re-render chart with new offset if we have data
+        if (lastCoords) {
+          getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+            .then(async (hourly) => {
+              try {
+                const dailySun = await getDailySun(
+                  lastCoords.latitude,
+                  lastCoords.longitude,
+                  daysAhead
+                );
+                sunTimes = dailySun;
+              } catch (e) {
+                console.warn("Failed to fetch sun times:", e);
+              }
+              let ds = buildTimelineDataset(hourly, daysAhead);
+
+              // Apply date offset filtering
+              if (ds.labels.length > 0) {
+                const now = new Date();
+                const filterStart = new Date(now);
+                filterStart.setHours(0, 0, 0, 0);
+                filterStart.setDate(filterStart.getDate() + dateOffset);
+                const filterEnd = new Date(filterStart);
+                filterEnd.setDate(filterEnd.getDate() + daysAhead);
+
+                const filteredIndices = [];
+                for (let i = 0; i < ds.labels.length; i++) {
+                  const labelTime = new Date(ds.labels[i]);
+                  if (labelTime >= filterStart && labelTime < filterEnd) {
+                    filteredIndices.push(i);
+                  }
+                }
+
+                if (filteredIndices.length > 0) {
+                  ds = {
+                    labels: filteredIndices.map((i) => ds.labels[i]),
+                    shadeVals: filteredIndices.map((i) => ds.shadeVals[i]),
+                    sunVals: filteredIndices.map((i) => ds.sunVals[i]),
+                    solarByHour: filteredIndices.map(
+                      (i) => ds.solarByHour[i]
+                    ),
+                    isDayByHour: filteredIndices.map(
+                      (i) => ds.isDayByHour[i]
+                    ),
+                    windByHour: filteredIndices.map(
+                      (i) => ds.windByHour?.[i] ?? 0
+                    ),
+                    humidityByHour: filteredIndices.map(
+                      (i) => ds.humidityByHour?.[i] ?? 0
+                    ),
+                    now: ds.now,
+                  };
+                }
+              }
+
+              timelineState = ds;
+              window.timelineState = timelineState;
+              await renderChart(
+                ds.labels,
+                ds.shadeVals,
+                ds.sunVals,
+                ds.now,
+                ds.isDayByHour
+              );
+              if (selectionRange) {
+                updateWeatherSummary();
+              }
+              updateNavArrowsVisibility();
+            })
+            .catch((e) => {
+              console.warn("Failed to update chart:", e);
+              updateNavArrowsVisibility();
+            });
+        } else {
+          // No data available, hide arrows
+          updateNavArrowsVisibility();
+        }
+      }
+
+      // Navigation button event listeners
+      chartNavPrevBtn &&
+        chartNavPrevBtn.addEventListener("click", () => shiftDateOffset(-1));
+      chartNavNextBtn &&
+        chartNavNextBtn.addEventListener("click", () => shiftDateOffset(1));
+
+      // Initialize navigation arrows visibility
+      updateNavArrowsVisibility();
+
       els.solar &&
         els.solar.addEventListener("input", () => {
           els.solarVal &&
@@ -4864,6 +5164,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (e.key === ZIP_KEY) {
           const zipVal = e.newValue;
           zipEls.input && (zipEls.input.value = zipVal ?? "");
+          updateZipClearButton();
           if (zipVal) {
             getCoordsForZip(zipVal)
               .then(({ latitude, longitude, place }) =>
@@ -5315,11 +5616,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         }
 
         // Show loading state
-        const zipLoadingSpinner = $("#zipLoadingSpinner");
-        if (zipLoadingSpinner) zipLoadingSpinner.style.display = "block";
+        if (zipEls.loadingSpinner) zipEls.loadingSpinner.style.display = "block";
         if (zipEls.input) {
           zipEls.input.disabled = true;
         }
+        updateZipClearButton();
         if (!vibeChart) showChartLoading();
 
         try {
@@ -5362,10 +5663,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           });
         } finally {
           // Always clear loading state
-          if (zipLoadingSpinner) zipLoadingSpinner.style.display = "none";
+          if (zipEls.loadingSpinner) zipEls.loadingSpinner.style.display = "none";
           if (zipEls.input) {
             zipEls.input.disabled = false;
           }
+          updateZipClearButton();
         }
       }
 
@@ -5402,8 +5704,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         });
 
+        zipEls.input.addEventListener("input", () => {
+          updateZipClearButton();
+        });
+
         zipEls.input.addEventListener("blur", () => {
           const currentValue = zipEls.input.value.trim();
+          updateZipClearButton();
 
           // If ZIP code is deleted (empty), strip zip from URL and get user's current location
           if (currentValue === "") {
@@ -5446,6 +5753,45 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         });
       }
+
+      // ZIP clear button
+      zipEls.clearBtn &&
+        zipEls.clearBtn.addEventListener("click", () => {
+          // Clear ZIP input
+          if (zipEls.input) {
+            zipEls.input.value = "";
+            updateZipClearButton();
+          }
+          // Clear saved ZIP from storage
+          storageCacheRemove(ZIP_KEY);
+          currentPlaceName = null;
+
+          // Clear API cache to force fresh data fetch for new location
+          apiRequestCache.clear();
+          pendingRequests.clear();
+
+          // Strip zip parameter from URL
+          const params = new URLSearchParams(location.search);
+          params.delete("zip");
+          const newUrl = params.toString()
+            ? `${location.pathname}?${params.toString()}`
+            : location.pathname;
+          history.pushState({}, "", newUrl);
+
+          // Clear highlighted vibe selection
+          clearHighlight();
+
+          // Get user's current location based on browser
+          if (navigator.geolocation) {
+            useLocation();
+          } else {
+            // If geolocation not available, still update the display
+            updateChartTitle();
+            updateAdvStats();
+          }
+
+          updateZipClearButton();
+        });
 
       // Buttons
       els.useLocationBtn &&
@@ -5618,18 +5964,33 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         presetDefaultBtn.addEventListener("click", () =>
           setTimePreset("default")
         );
-      preset3DaysBtn &&
-        preset3DaysBtn.addEventListener("click", () => setTimePreset("3days"));
       presetWeekBtn &&
         presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
 
       // Set initial active preset button based on daysAhead
+      // First, clear all active states to ensure only one is active
+      const allPresetBtns = [
+        presetTodayBtn,
+        presetTomorrowBtn,
+        presetDefaultBtn,
+        presetWeekBtn,
+        preset3DayBtn,
+        preset5DayBtn,
+        presetOneWeekBtn,
+      ];
+      allPresetBtns.forEach((btn) => {
+        if (btn) btn.classList.remove("active");
+      });
+      
+      // Then set the appropriate button as active
       if (daysAhead === 1) {
         if (presetTodayBtn) presetTodayBtn.classList.add("active");
       } else if (daysAhead === 2) {
         if (presetDefaultBtn) presetDefaultBtn.classList.add("active");
       } else if (daysAhead === 3) {
-        if (preset3DaysBtn) preset3DaysBtn.classList.add("active");
+        if (preset3DayBtn) preset3DayBtn.classList.add("active");
+      } else if (daysAhead === 5) {
+        if (preset5DayBtn) preset5DayBtn.classList.add("active");
       } else if (daysAhead === 7) {
         if (presetWeekBtn) presetWeekBtn.classList.add("active");
       }
@@ -5887,6 +6248,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           if (zip5) {
             // Populate ZIP in input field
             if (zipEls.input) zipEls.input.value = zip5;
+            updateZipClearButton();
             // Save ZIP to localStorage
             storageCacheSet(ZIP_KEY, zip5);
 
@@ -5978,6 +6340,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const savedZip = storageCacheGet(ZIP_KEY);
           if (savedZip && zipEls.input) {
             zipEls.input.value = savedZip;
+            updateZipClearButton();
             getCoordsForZip(savedZip)
               .then(({ latitude, longitude, place }) =>
                 primeWeatherForCoords(

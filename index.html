@@ -30,6 +30,15 @@
                   title="Enter 5-digit ZIP code"
                 />
                 <div class="zip-loading-spinner" id="zipLoadingSpinner" style="display: none;"></div>
+                <button
+                  id="zipClearBtn"
+                  class="zip-clear-btn"
+                  type="button"
+                  title="Clear ZIP and use browser location"
+                  style="display: none;"
+                >
+                  ✕
+                </button>
               </div>
             </span>
             <span class="sub">How it actually feels in shade and sun</span>
@@ -155,44 +164,91 @@
       <section class="chart-wrap">
         <div class="time-presets">
           <button
-            id="presetDefault"
-            class="preset-btn active"
+            id="chartNavPrev"
+            class="chart-nav-btn"
             type="button"
-            title="Show 24-hour forecast"
+            title="Previous day"
           >
-            24-Hour Forecast
+            ←
           </button>
+          <div class="preset-buttons-group">
+            <button
+              id="presetDefault"
+              class="preset-btn active"
+              type="button"
+              title="Show 24-hour forecast"
+            >
+              24-Hour Forecast
+            </button>
+            <button
+              id="presetWeek"
+              class="preset-btn"
+              type="button"
+              title="Show next week"
+            >
+              Week
+            </button>
+            <div class="preset-dropdown">
+              <button
+                id="presetMoreBtn"
+                class="preset-btn"
+                type="button"
+                title="More options"
+              >
+                More
+                <span class="dropdown-arrow">▼</span>
+              </button>
+              <div id="presetDropdownMenu" class="preset-dropdown-menu">
+                <button
+                  id="presetToday"
+                  class="preset-dropdown-item"
+                  type="button"
+                  title="Show today only"
+                >
+                  Today
+                </button>
+                <button
+                  id="presetTomorrow"
+                  class="preset-dropdown-item"
+                  type="button"
+                  title="Show tomorrow only"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  id="preset3Day"
+                  class="preset-dropdown-item"
+                  type="button"
+                  title="Show next 3 days"
+                >
+                  3 Day
+                </button>
+                <button
+                  id="preset5Day"
+                  class="preset-dropdown-item"
+                  type="button"
+                  title="Show next 5 days"
+                >
+                  5 Day
+                </button>
+                <button
+                  id="presetOneWeek"
+                  class="preset-dropdown-item"
+                  type="button"
+                  title="Show one week"
+                >
+                  One Week
+                </button>
+              </div>
+            </div>
+          </div>
           <button
-            id="presetToday"
-            class="preset-btn"
+            id="chartNavNext"
+            class="chart-nav-btn"
             type="button"
-            title="Show today only"
+            title="Next day"
           >
-            Today
-          </button>
-          <button
-            id="presetTomorrow"
-            class="preset-btn"
-            type="button"
-            title="Show tomorrow only"
-          >
-            Tomorrow
-          </button>
-          <button
-            id="preset3Days"
-            class="preset-btn"
-            type="button"
-            title="Show next 3 days"
-          >
-            3 Days
-          </button>
-          <button
-            id="presetWeek"
-            class="preset-btn"
-            type="button"
-            title="Show next week"
-          >
-            Week
+            →
           </button>
         </div>
         <div class="chart-status" id="chartStatus"></div>
@@ -203,13 +259,6 @@
             <div class="skeleton-line"></div>
           </div>
           <canvas id="vibeChart" style="display: none"></canvas>
-        </div>
-        <div class="chart-note">
-          <small
-            >💡 Tip:
-            <span class="desktop-only">Hold Shift (or Ctrl/Cmd) and </span>drag
-            on the graph to select a time range and share it</small
-          >
         </div>
       </section>
 
@@ -672,6 +721,17 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Tip Section -->
+      <section class="tip-section">
+        <div class="tip-content">
+          <small
+            >💡 Tip:
+            <span class="desktop-only">Hold Shift (or Ctrl/Cmd) and </span>drag
+            on the graph to select a time range and share it</small
+          >
         </div>
       </section>
 

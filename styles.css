@@ -330,6 +330,33 @@ body {
   border-radius: 16px;
   margin: 10px 0 16px;
   padding: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+.chart-wrap * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+/* Chart.js tooltip max-width and styling */
+.chartjs-tooltip {
+  max-width: min(90vw, 200px) !important;
+}
+.chartjs-tooltip-body {
+  color: #ffffff !important;
+}
+.chartjs-tooltip-body-item {
+  color: #ffffff !important;
+}
+.chartjs-tooltip-title {
+  color: #ffffff !important;
+}
+/* Hide the color indicator square */
+.chartjs-tooltip-body-item span {
+  display: none !important;
 }
 .chart-head {
   display: flex;
@@ -428,6 +455,33 @@ body {
   border-radius: 50%;
   animation: spin-vertical 0.8s linear infinite;
   pointer-events: none;
+}
+.zip-clear-btn {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+.zip-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+[data-theme="light"] .zip-clear-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 @keyframes spin-vertical {
   to {
@@ -608,8 +662,42 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  margin-top: 12px;
+  margin-bottom: 12px;
+}
+.preset-buttons-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.chart-nav-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  transition: all 0.2s;
+  min-width: 36px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.chart-nav-btn:hover {
+  background: #1a2332;
+  border-color: var(--muted);
+}
+[data-theme="light"] .chart-nav-btn:hover {
+  background: #e5e7eb;
+  border-color: var(--muted);
+}
+.chart-nav-btn:active {
+  transform: scale(0.95);
 }
 .preset-btn {
   background: var(--bg);
@@ -666,6 +754,57 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
     transform: rotate(360deg);
   }
 }
+.preset-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dropdown-arrow {
+  font-size: 8px;
+  margin-left: 4px;
+  display: inline-block;
+  transition: transform 0.2s;
+}
+.preset-dropdown.open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+.preset-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 140px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: none;
+}
+.preset-dropdown-item {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.2s;
+  border-radius: 0;
+}
+.preset-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+[data-theme="light"] .preset-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.preset-dropdown-item.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--good);
+}
 .chart-box {
   position: relative;
   height: 260px;
@@ -677,13 +816,16 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   display: block;
   touch-action: none;
 }
-.chart-note {
-  margin-top: 8px;
+.tip-section {
+  margin: 16px 0;
+  padding: 0;
+}
+.tip-content {
+  text-align: center;
   color: var(--muted);
   font-size: 12px;
-  text-align: center;
 }
-.chart-note small {
+.tip-content small {
   opacity: 0.8;
 }
 .desktop-only {
