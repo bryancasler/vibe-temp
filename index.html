@@ -120,15 +120,21 @@
       <section class="cards">
         <article class="card card--combined" id="sunCard">
           <div class="card-temps">
-            <div class="card-temp-wrapper">
+            <div class="card-temp-wrapper" id="sunTempWrapper">
               <div class="card-temp-label">Sun</div>
               <div class="card-temp card-temp-sun" id="sun">
                 <span class="skeleton-text">—</span>
               </div>
             </div>
-            <div class="card-temp-wrapper">
+            <div class="card-temp-wrapper" id="shadeTempWrapper">
               <div class="card-temp-label">Shade</div>
               <div class="card-temp card-temp-shade" id="shade">
+                <span class="skeleton-text">—</span>
+              </div>
+            </div>
+            <div class="card-temp-wrapper" id="combinedTempWrapper" style="display: none;">
+              <div class="card-temp-label">Sun and Shade</div>
+              <div class="card-temp card-temp-combined" id="combinedTemp">
                 <span class="skeleton-text">—</span>
               </div>
             </div>

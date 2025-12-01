@@ -218,6 +218,10 @@
       reflectCustom: $("#reflectCustom"),
       shade: $("#shade"),
       sun: $("#sun"),
+      sunTempWrapper: $("#sunTempWrapper"),
+      shadeTempWrapper: $("#shadeTempWrapper"),
+      combinedTemp: $("#combinedTemp"),
+      combinedTempWrapper: $("#combinedTempWrapper"),
       shadeLabel: $("#shadeLabel"),
       sunLabel: $("#sunLabel"),
       combinedLabel: $("#combinedLabel"),
@@ -1569,10 +1573,61 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const shadeDisplay = toUserTemp(shadeF);
       const sunDisplay = toUserTemp(sunF);
 
-      els.shade &&
-        (els.shade.innerHTML = `${shadeDisplay.toFixed(1)}${unitSuffix()}`);
-      els.sun &&
-        (els.sun.innerHTML = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
+      // Check if temps are within 2.5°C during daytime
+      const isDay = isDaylightNow();
+      const shadeC = fToC(shadeF);
+      const sunC = fToC(sunF);
+      const tempDiffC = Math.abs(sunC - shadeC);
+      const showCombined = isDay && tempDiffC <= 2.5;
+
+      const cardTemps = els.sunTempWrapper?.parentElement;
+
+      if (showCombined) {
+        // Show combined view
+        const avgTemp = (shadeF + sunF) / 2;
+        const avgDisplay = toUserTemp(avgTemp);
+        if (els.combinedTemp) {
+          els.combinedTemp.innerHTML = `~${avgDisplay.toFixed(1)}${unitSuffix()}`;
+        }
+        if (els.combinedTempWrapper) {
+          els.combinedTempWrapper.style.display = "flex";
+        }
+        if (els.sunTempWrapper) {
+          els.sunTempWrapper.style.display = "none";
+        }
+        if (els.shadeTempWrapper) {
+          els.shadeTempWrapper.style.display = "none";
+        }
+        if (cardTemps) {
+          cardTemps.classList.add("sun-hidden");
+        }
+      } else {
+        // Show separate views
+        els.shade &&
+          (els.shade.innerHTML = `${shadeDisplay.toFixed(1)}${unitSuffix()}`);
+        els.sun &&
+          (els.sun.innerHTML = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
+
+        if (els.combinedTempWrapper) {
+          els.combinedTempWrapper.style.display = "none";
+        }
+        if (els.shadeTempWrapper) {
+          els.shadeTempWrapper.style.display = "flex";
+        }
+
+        // Hide sun vibe temperature when sun is not up
+        if (els.sunTempWrapper) {
+          els.sunTempWrapper.style.display = isDay ? "flex" : "none";
+          // Update card layout class
+          if (cardTemps) {
+            if (isDay) {
+              cardTemps.classList.remove("sun-hidden");
+            } else {
+              cardTemps.classList.add("sun-hidden");
+            }
+          }
+        }
+      }
 
       if (els.combinedLabel) {
         els.combinedLabel.innerHTML = combinedVibeDescriptor(
@@ -3981,10 +4036,60 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const shadeDisp = toUserTemp(shadeVals[i]);
       const sunDisp = toUserTemp(sunVals[i]);
 
-      els.shade &&
-        (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
-      els.sun &&
-        (els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`);
+      // Check if temps are within 2.5°C during daytime
+      const shadeC = fToC(shadeVals[i]);
+      const sunC = fToC(sunVals[i]);
+      const tempDiffC = Math.abs(sunC - shadeC);
+      const showCombined = isDay && tempDiffC <= 2.5;
+
+      const cardTemps = els.sunTempWrapper?.parentElement;
+
+      if (showCombined) {
+        // Show combined view
+        const avgTemp = (shadeVals[i] + sunVals[i]) / 2;
+        const avgDisplay = toUserTemp(avgTemp);
+        if (els.combinedTemp) {
+          els.combinedTemp.innerHTML = `~${avgDisplay.toFixed(1)}${unitSuffix()}`;
+        }
+        if (els.combinedTempWrapper) {
+          els.combinedTempWrapper.style.display = "flex";
+        }
+        if (els.sunTempWrapper) {
+          els.sunTempWrapper.style.display = "none";
+        }
+        if (els.shadeTempWrapper) {
+          els.shadeTempWrapper.style.display = "none";
+        }
+        if (cardTemps) {
+          cardTemps.classList.add("sun-hidden");
+        }
+      } else {
+        // Show separate views
+        els.shade &&
+          (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
+        els.sun &&
+          (els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`);
+
+        if (els.combinedTempWrapper) {
+          els.combinedTempWrapper.style.display = "none";
+        }
+        if (els.shadeTempWrapper) {
+          els.shadeTempWrapper.style.display = "flex";
+        }
+
+        // Hide sun vibe temperature when sun is not up
+        if (els.sunTempWrapper) {
+          els.sunTempWrapper.style.display = isDay ? "flex" : "none";
+          // Update card layout class
+          if (cardTemps) {
+            if (isDay) {
+              cardTemps.classList.remove("sun-hidden");
+            } else {
+              cardTemps.classList.add("sun-hidden");
+            }
+          }
+        }
+      }
 
       const simSolar = solarByHour[i];
       if (els.combinedLabel) {

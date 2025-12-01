@@ -220,6 +220,10 @@ body {
   gap: 16px;
   margin: 4px 0;
 }
+.card-temps:has(#sunTempWrapper[style*="display: none"]),
+.card-temps.sun-hidden {
+  grid-template-columns: 1fr;
+}
 .card-temp-wrapper {
   display: flex;
   flex-direction: column;
@@ -237,6 +241,12 @@ body {
 }
 .card-temp-shade {
   color: var(--accent);
+}
+.card-temp-combined {
+  color: var(--sun);
+}
+.card-temp-combined {
+  color: var(--sun);
 }
 .card-desc {
   display: block;
