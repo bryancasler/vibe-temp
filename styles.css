@@ -1228,6 +1228,13 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
 }
 
 /* Advanced */
+.advanced-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin: 10px 0 16px;
+  overflow: hidden;
+}
 .advanced {
   background: var(--card);
   border: 1px solid var(--border);
@@ -1240,16 +1247,25 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   align-items: center;
   gap: 8px;
   justify-content: flex-start;
-  padding: 12px;
+  padding: 14px 16px;
   border: 0;
   background: transparent;
   color: var(--text);
-  border-bottom: 1px solid var(--border);
   cursor: pointer;
   text-align: left;
+  font-size: 16px;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+.adv-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+[data-theme="light"] .adv-toggle:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
 .adv-label {
   font-weight: 600;
+  flex: 1;
 }
 .adv-caret {
   width: 0;
@@ -1259,13 +1275,15 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   border-top: 8px solid var(--muted);
   transition: transform 0.18s ease;
   transform-origin: 50% 45%;
-  margin-left: 6px; /* caret sits right after text */
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .adv-toggle[aria-expanded="true"] .adv-caret {
   transform: rotate(180deg);
 }
 .adv-panel {
-  padding: 12px;
+  padding: 24px;
+  border-top: 1px solid var(--border);
 }
 .adv-grid {
   display: grid;

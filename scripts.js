@@ -238,47 +238,60 @@
       sunCard: $("#sunCard"),
     };
 
-    // Advanced Configuration Modal
-    const advConfigBtn = $("#advConfigBtn");
-    const advConfigModal = $("#advConfigModal");
-    const advConfigClose = $("#advConfigClose");
+    // Advanced Configuration Toggle
+    const advConfigToggle = $("#advConfigToggle");
+    const advPanel = $("#advPanel");
+    const ADV_CONFIG_STORAGE_KEY = "vibeTemp_advConfigExpanded";
 
-    function openAdvConfig() {
-      if (advConfigModal) {
-        advConfigModal.style.display = "flex";
-        updateAdvStats(); // Update stats when modal opens
-        // Focus first input for accessibility
-        const firstInput = advConfigModal.querySelector("input, select");
-        if (firstInput) firstInput.focus();
+    function toggleAdvConfig() {
+      if (!advPanel || !advConfigToggle) return;
+      
+      const isExpanded = advConfigToggle.getAttribute("aria-expanded") === "true";
+      const newState = !isExpanded;
+      
+      // Update UI
+      advConfigToggle.setAttribute("aria-expanded", newState.toString());
+      advPanel.style.display = newState ? "block" : "none";
+      
+      // Save state to localStorage
+      try {
+        localStorage.setItem(ADV_CONFIG_STORAGE_KEY, newState.toString());
+      } catch (e) {
+        console.warn("Failed to save advanced config state:", e);
+      }
+      
+      // Update stats when opened
+      if (newState) {
+        updateAdvStats();
       }
     }
 
-    function closeAdvConfig() {
-      if (advConfigModal) {
-        advConfigModal.style.display = "none";
+    // Load saved state on page load
+    function loadAdvConfigState() {
+      if (!advPanel || !advConfigToggle) return;
+      
+      try {
+        const savedState = localStorage.getItem(ADV_CONFIG_STORAGE_KEY);
+        if (savedState !== null) {
+          const isExpanded = savedState === "true";
+          advConfigToggle.setAttribute("aria-expanded", isExpanded.toString());
+          advPanel.style.display = isExpanded ? "block" : "none";
+          
+          if (isExpanded) {
+            updateAdvStats();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load advanced config state:", e);
       }
     }
 
-    if (advConfigBtn) {
-      advConfigBtn.addEventListener("click", openAdvConfig);
+    if (advConfigToggle) {
+      advConfigToggle.addEventListener("click", toggleAdvConfig);
     }
-    if (advConfigClose) {
-      advConfigClose.addEventListener("click", closeAdvConfig);
-    }
-    if (advConfigModal) {
-      // Close on overlay click
-      advConfigModal.addEventListener("click", (e) => {
-        if (e.target === advConfigModal) {
-          closeAdvConfig();
-        }
-      });
-      // Close on ESC key
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && advConfigModal.style.display !== "none") {
-          closeAdvConfig();
-        }
-      });
-    }
+    
+    // Load state on page load
+    loadAdvConfigState();
 
     // Units & ZIP
     const unitEls = { F: $("#unitF"), C: $("#unitC") };
