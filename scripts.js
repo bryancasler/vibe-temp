@@ -2229,6 +2229,57 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       );
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
+      
+      // Find ideal "Touch Grass" time per day (65-75°F / 18-24°C during daytime)
+      function findTouchGrassTimes(labels, sunVals, isDayByHour) {
+        const idealMinF = 65;
+        const idealMaxF = 75;
+        const idealMinC = 18;
+        const idealMaxC = 24;
+        
+        // Convert ideal range based on current unit
+        const idealMin = unit === "F" ? idealMinF : idealMinC;
+        const idealMax = unit === "F" ? idealMaxF : idealMaxC;
+        
+        const touchGrassTimes = [];
+        const timesByDay = new Map(); // Map of day key -> best time for that day
+        
+        for (let i = 0; i < labels.length; i++) {
+          // Only consider daytime hours
+          if (!isDayByHour[i]) continue;
+          
+          const sunTemp = sunVals[i];
+          const time = new Date(labels[i]);
+          
+          // Check if temperature is in ideal range
+          if (sunTemp >= idealMin && sunTemp <= idealMax) {
+            // Create day key (YYYY-MM-DD)
+            const dayKey = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
+            
+            // Score: prefer temperatures closer to the middle of the range
+            const midPoint = (idealMin + idealMax) / 2;
+            const distanceFromMid = Math.abs(sunTemp - midPoint);
+            const score = 100 - (distanceFromMid * 10); // Higher score = better
+            
+            // Prefer times between 10am and 4pm (better for outdoor activities)
+            const hour = time.getHours();
+            const hourBonus = (hour >= 10 && hour <= 16) ? 20 : 0;
+            const finalScore = score + hourBonus;
+            
+            const candidate = { time, index: i, temp: sunTemp, score: finalScore };
+            
+            // Keep the best time for each day
+            if (!timesByDay.has(dayKey) || candidate.score > timesByDay.get(dayKey).score) {
+              timesByDay.set(dayKey, candidate);
+            }
+          }
+        }
+        
+        // Convert map to array
+        return Array.from(timesByDay.values());
+      }
+      
+      const touchGrassTimes = findTouchGrassTimes(labels, sunVals, isDayByHour);
 
       // Optimize: If chart exists and structure hasn't changed, just update data
       if (vibeChart && vibeChart.data.labels.length === displayLabels.length) {
@@ -2241,6 +2292,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         vibeChart._nowIdx = nowIdx;
         vibeChart._isDayByHour = isDayByHour;
         vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
+        vibeChart._touchGrassTimes = touchGrassTimes; // Store Touch Grass times for plugin
         // Update y-axis range
         vibeChart.options.scales.y.suggestedMin =
           Math.min(...shadeVals, ...sunVals) - 3;
@@ -2630,7 +2682,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       };
 
       // Custom timeline labels plugin - two-line format (times on top, days below)
-      // Hover indicator plugin - red dot at bottom of chart
+      // Hover indicator plugin - red dot at bottom of chart with vertical line
       const hoverIndicatorPlugin = {
         id: "hoverIndicator",
         afterDraw(chart) {
@@ -2643,12 +2695,22 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           // Ensure x is within chart area
           if (x < chartArea.left || x > chartArea.right) return;
           
-          // Draw red dot at bottom of chart
           ctx.save();
+          
+          // Draw thin vertical red line from bottom to top of chart area
+          ctx.strokeStyle = "#ef4444"; // red-500
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.stroke();
+          
+          // Draw red dot at bottom of chart
           ctx.fillStyle = "#ef4444"; // red-500
           ctx.beginPath();
           ctx.arc(x, chartArea.bottom, 4, 0, Math.PI * 2);
           ctx.fill();
+          
           ctx.restore();
         },
       };
@@ -2935,6 +2997,50 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             ctx.fillText(m.emoji, x, ySun - 8);
           });
 
+          ctx.restore();
+        },
+      };
+
+      // Touch Grass marker plugin - shows ideal temperature time per day
+      const touchGrassPlugin = {
+        id: "touchGrass",
+        afterDatasetsDraw(chart) {
+          const touchGrassTimes = chart._touchGrassTimes || [];
+          if (touchGrassTimes.length === 0) return;
+          
+          const { ctx, scales, chartArea } = chart;
+          const sunDsIndex = chart.data.datasets.findIndex(
+            (d) => d.label === "Sun Vibe"
+          );
+          if (sunDsIndex === -1) return;
+          const sunData = chart.data.datasets[sunDsIndex].data;
+          
+          // Store positions for hover detection
+          const positions = [];
+          
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+          
+          touchGrassTimes.forEach((tgTime) => {
+            // Get x position for the time
+            const x = scales.x.getPixelForValue(tgTime.index);
+            
+            // Only draw if within chart area
+            if (x < chartArea.left || x > chartArea.right) return;
+            
+            // Get y position on sun vibe line
+            const ySun = scales.y.getPixelForValue(sunData[tgTime.index]);
+            
+            // Store position for hover detection
+            positions.push({ x, y: ySun, time: tgTime.time, temp: tgTime.temp, index: tgTime.index });
+            
+            // Draw leaf icon
+            ctx.fillText("🍃", x, ySun - 8);
+          });
+          
+          chart._touchGrassPositions = positions;
           ctx.restore();
         },
       };
@@ -3715,11 +3821,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   return;
                 }
                 
-                // Check if hovering near a sun marker
+                // Check if hovering near a sun marker or Touch Grass marker
                 const chart = context.chart;
                 if (!chart) return;
                 
                 const markerPositions = chart._sunMarkerPositions || [];
+                const touchGrassPos = chart._touchGrassPosition;
                 
                 try {
                   const canvasPosition = Chart.helpers.getRelativePosition(
@@ -3728,6 +3835,26 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   );
                   const chartArea = chart.chartArea;
 
+                  // Check if hovering near Touch Grass marker
+                  if (touchGrassPos) {
+                    const dx = canvasPosition.x - touchGrassPos.x;
+                    const dy = canvasPosition.y - touchGrassPos.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 20) {
+                      const timeStr = fmtHM(touchGrassPos.time);
+                      const tempStr = `${touchGrassPos.temp.toFixed(1)}${unitSuffix()}`;
+                      const tooltip = chart.tooltip;
+                      tooltip.setContent({
+                        title: "🍃 Touch Grass",
+                        body: [{ lines: [`${timeStr} - ${tempStr}`] }],
+                      });
+                      tooltip.opacity = 1;
+                      tooltip.update(true);
+                      chart.draw();
+                      return;
+                    }
+                  }
 
                   if (!markerPositions.length) {
                     return;
@@ -3847,8 +3974,17 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       const rawLabels = chart._rawLabels || [];
                       const hoveredTime = i < rawLabels.length ? new Date(rawLabels[i]) : new Date();
                       
+                      // Check if this is a Touch Grass time
+                      const touchGrassPositions = chart._touchGrassPositions || [];
+                      const isTouchGrassTime = touchGrassPositions.some(pos => pos.index === i);
+                      
                       if (typeof shadeF === "number" && typeof sunF === "number") {
                         desc = combinedVibeDescriptor(shadeF, sunF, solar, isDay, hoveredTime) || "";
+                        
+                        // Add Touch Grass indicator if this is the Touch Grass time
+                        if (isTouchGrassTime) {
+                          desc = `🍃 Touch Grass - ${desc}`;
+                        }
                       }
                     }
                   } catch {}
@@ -3867,6 +4003,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           selectionHighlightPlugin,
           currentLine,
           sunMarkerPlugin,
+          touchGrassPlugin,
           windChillPlugin,
           precipitationIconsPlugin,
           timelineLabelsPlugin,
@@ -3880,6 +4017,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       vibeChart._nowIdx = nowIdx;
       vibeChart._isDayByHour = isDayByHour;
       vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
+      vibeChart._touchGrassTimes = touchGrassTimes; // Store Touch Grass times for plugin
 
       // Hide skeleton immediately after chart is created
       hideChartLoading();
@@ -3928,10 +4066,47 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         }
       });
 
-      function updateFromClientX(clientX) {
+      function updateFromClientX(clientX, clientY) {
         if (!vibeChart || !timelineState) return;
         const rect = els.chartCanvas.getBoundingClientRect();
         const x = clientX - rect.left;
+        const y = (clientY !== undefined) ? clientY - rect.top : 0;
+        
+        // Check if hovering near Touch Grass markers
+        const touchGrassPositions = vibeChart._touchGrassPositions || [];
+        for (const touchGrassPos of touchGrassPositions) {
+          const dx = x - touchGrassPos.x;
+          const dy = y - touchGrassPos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < 20) {
+            // Show Touch Grass info in temp section
+            const timeStr = fmtHM(touchGrassPos.time);
+            const tempStr = `${touchGrassPos.temp.toFixed(1)}${unitSuffix()}`;
+            
+            if (els.combinedLabel) {
+              els.combinedLabel.innerHTML = `🍃 Touch Grass - ${timeStr} - ${tempStr}`;
+            }
+            if (els.combinedTemp) {
+              els.combinedTemp.innerHTML = tempStr;
+            }
+            if (els.combinedTempWrapper) {
+              els.combinedTempWrapper.style.display = "flex";
+            }
+            if (els.sunTempWrapper) {
+              els.sunTempWrapper.style.display = "none";
+            }
+            if (els.shadeTempWrapper) {
+              els.shadeTempWrapper.style.display = "none";
+            }
+            const cardTemps = els.sunTempWrapper?.parentElement;
+            if (cardTemps) {
+              cardTemps.classList.add("sun-hidden");
+            }
+            return;
+          }
+        }
+        
         const idxFloat = vibeChart.scales.x.getValueForPixel(x);
         const idx = Math.round(idxFloat);
         if (
@@ -3967,7 +4142,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           try {
             els.chartCanvas.setPointerCapture(e.pointerId);
           } catch {}
-          updateFromClientX(e.clientX);
+          updateFromClientX(e.clientX, e.clientY);
         }
       });
 
@@ -3994,7 +4169,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
         } else {
           const isMouse = e.pointerType === "mouse";
-          if (isMouse || isPointerDown) updateFromClientX(e.clientX);
+          if (isMouse || isPointerDown) updateFromClientX(e.clientX, e.clientY);
         }
       });
 
