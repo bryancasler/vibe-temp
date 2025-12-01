@@ -1252,6 +1252,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
     const cToF = (c) => (c * 9) / 5 + 32;
     const toUserTemp = (f) => (unit === "F" ? f : fToC(f));
     const unitSuffix = () => (unit === "F" ? "\u00B0F" : "\u00B0C"); // Use Unicode for degree symbol
+    const formatTemp = (temp) => {
+      const displayTemp = toUserTemp(temp);
+      if (unit === "F") {
+        return Math.round(displayTemp).toString();
+      }
+      return displayTemp.toFixed(1);
+    };
 
     function fmtHM(d) {
       return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -1618,9 +1625,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       if (showCombined) {
         // Show combined view
         const avgTemp = (shadeF + sunF) / 2;
-        const avgDisplay = toUserTemp(avgTemp);
         if (els.combinedTemp) {
-          els.combinedTemp.innerHTML = `${avgDisplay.toFixed(1)}${unitSuffix()}`;
+          els.combinedTemp.innerHTML = `${formatTemp(avgTemp)}${unitSuffix()}`;
         }
         if (els.combinedTempWrapper) {
           els.combinedTempWrapper.style.display = "flex";
@@ -1637,9 +1643,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       } else {
         // Show separate views
         els.shade &&
-          (els.shade.innerHTML = `${shadeDisplay.toFixed(1)}${unitSuffix()}`);
+          (els.shade.innerHTML = `${formatTemp(shadeF)}${unitSuffix()}`);
         els.sun &&
-          (els.sun.innerHTML = `${sunDisplay.toFixed(1)}${unitSuffix()}`);
+          (els.sun.innerHTML = `${formatTemp(sunF)}${unitSuffix()}`);
 
         if (els.combinedTempWrapper) {
           els.combinedTempWrapper.style.display = "none";
@@ -1906,15 +1912,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const s = startIdx === -1 ? 0 : startIdx;
       const e = endIdx === -1 ? times.length : endIdx;
 
-      const labels = [],
-        shadeVals = [],
-        sunVals = [],
-        solarByHour = [],
-        isDayByHour = [],
-        windByHour = [],
-        humidityByHour = [],
-        precipitationByHour = [],
-        weathercodeByHour = [];
+      // First, build hourly data
+      const hourlyLabels = [],
+        hourlyShadeVals = [],
+        hourlySunVals = [],
+        hourlySolarByHour = [],
+        hourlyIsDayByHour = [],
+        hourlyWindByHour = [],
+        hourlyHumidityByHour = [],
+        hourlyPrecipitationByHour = [],
+        hourlyWeathercodeByHour = [];
 
       for (let i = s; i < e; i++) {
         const T = hourly.temperature_2m[i];
@@ -1936,16 +1943,96 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         });
         const sun = sunVibeOf(shade, solar, reflectivity());
 
-        labels.push(times[i]);
-        shadeVals.push(parseFloat(shade.toFixed(1))); // °F
-        sunVals.push(parseFloat(sun.toFixed(1))); // °F
-        solarByHour.push(solar);
-        isDayByHour.push(isDay ? 1 : 0);
-        windByHour.push(Wind ?? 0);
-        humidityByHour.push(RH ?? 0);
-        precipitationByHour.push(precip);
-        weathercodeByHour.push(wmo);
+        hourlyLabels.push(times[i]);
+        hourlyShadeVals.push(shade); // Keep as float for interpolation
+        hourlySunVals.push(sun); // Keep as float for interpolation
+        hourlySolarByHour.push(solar);
+        hourlyIsDayByHour.push(isDay ? 1 : 0);
+        hourlyWindByHour.push(Wind ?? 0);
+        hourlyHumidityByHour.push(RH ?? 0);
+        hourlyPrecipitationByHour.push(precip);
+        hourlyWeathercodeByHour.push(wmo);
       }
+
+      // Now interpolate to 15-minute increments
+      const labels = [],
+        shadeVals = [],
+        sunVals = [],
+        solarByHour = [],
+        isDayByHour = [],
+        windByHour = [],
+        humidityByHour = [],
+        precipitationByHour = [],
+        weathercodeByHour = [];
+
+      // Ensure we have hourly data before interpolating
+      if (hourlyLabels.length === 0) {
+        // Fallback: return hourly data if interpolation would fail
+        return {
+          labels: hourlyLabels,
+          shadeVals: hourlyShadeVals.map(v => parseFloat(v.toFixed(1))),
+          sunVals: hourlySunVals.map(v => parseFloat(v.toFixed(1))),
+          solarByHour: hourlySolarByHour,
+          isDayByHour: hourlyIsDayByHour,
+          windByHour: hourlyWindByHour,
+          humidityByHour: hourlyHumidityByHour,
+          precipitationByHour: hourlyPrecipitationByHour,
+          weathercodeByHour: hourlyWeathercodeByHour,
+          now,
+          hourlyLabels,
+        };
+      }
+
+      for (let i = 0; i < hourlyLabels.length; i++) {
+        const currentTime = new Date(hourlyLabels[i]);
+        const isLastHour = i === hourlyLabels.length - 1;
+        
+        // Add 4 points per hour (0, 15, 30, 45 minutes)
+        for (let minuteOffset = 0; minuteOffset < 60; minuteOffset += 15) {
+          const interpolatedTime = new Date(currentTime);
+          interpolatedTime.setMinutes(minuteOffset, 0, 0);
+          
+          // Only add if within the time range (use <= for end to include the last point)
+          if (interpolatedTime >= start && interpolatedTime <= end) {
+            labels.push(new Date(interpolatedTime));
+            
+            if (minuteOffset === 0) {
+              // Use exact hourly value
+              shadeVals.push(parseFloat(hourlyShadeVals[i].toFixed(1)));
+              sunVals.push(parseFloat(hourlySunVals[i].toFixed(1)));
+              solarByHour.push(hourlySolarByHour[i]);
+              isDayByHour.push(hourlyIsDayByHour[i]);
+              windByHour.push(hourlyWindByHour[i]);
+              humidityByHour.push(hourlyHumidityByHour[i]);
+              precipitationByHour.push(hourlyPrecipitationByHour[i]);
+              weathercodeByHour.push(hourlyWeathercodeByHour[i]);
+            } else if (!isLastHour && i + 1 < hourlyShadeVals.length) {
+              // Interpolate between current and next hour
+              const fraction = minuteOffset / 60;
+              shadeVals.push(parseFloat((hourlyShadeVals[i] + (hourlyShadeVals[i + 1] - hourlyShadeVals[i]) * fraction).toFixed(1)));
+              sunVals.push(parseFloat((hourlySunVals[i] + (hourlySunVals[i + 1] - hourlySunVals[i]) * fraction).toFixed(1)));
+              solarByHour.push(hourlySolarByHour[i] + (hourlySolarByHour[i + 1] - hourlySolarByHour[i]) * fraction);
+              // For boolean-like values, use the current hour's value
+              isDayByHour.push(hourlyIsDayByHour[i]);
+              windByHour.push(hourlyWindByHour[i] + (hourlyWindByHour[i + 1] - hourlyWindByHour[i]) * fraction);
+              humidityByHour.push(hourlyHumidityByHour[i] + (hourlyHumidityByHour[i + 1] - hourlyHumidityByHour[i]) * fraction);
+              precipitationByHour.push(hourlyPrecipitationByHour[i] + (hourlyPrecipitationByHour[i + 1] - hourlyPrecipitationByHour[i]) * fraction);
+              weathercodeByHour.push(hourlyWeathercodeByHour[i]);
+            } else {
+              // Last hour, use current values
+              shadeVals.push(parseFloat(hourlyShadeVals[i].toFixed(1)));
+              sunVals.push(parseFloat(hourlySunVals[i].toFixed(1)));
+              solarByHour.push(hourlySolarByHour[i]);
+              isDayByHour.push(hourlyIsDayByHour[i]);
+              windByHour.push(hourlyWindByHour[i]);
+              humidityByHour.push(hourlyHumidityByHour[i]);
+              precipitationByHour.push(hourlyPrecipitationByHour[i]);
+              weathercodeByHour.push(hourlyWeathercodeByHour[i]);
+            }
+          }
+        }
+      }
+
       return {
         labels,
         shadeVals,
@@ -1957,6 +2044,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         precipitationByHour,
         weathercodeByHour,
         now,
+        hourlyLabels, // Keep original hourly labels for bottom axis
       };
     }
     function hourKey(d) {
@@ -2721,9 +2809,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const { ctx, scales, chartArea } = chart;
           const xScale = scales.x;
 
-          // Get the default tick positions
-          const ticks = xScale.ticks;
-          if (!ticks || ticks.length === 0) return;
+          // Use hourly labels for display (stored on timelineState)
+          const hourlyLabels = window.timelineState?.hourlyLabels || chart._rawLabels || [];
+          const fullLabels = chart._rawLabels || [];
+          if (hourlyLabels.length === 0 || fullLabels.length === 0) return;
 
           ctx.save();
           ctx.textAlign = "center";
@@ -2741,108 +2830,82 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const maxTextWidth = Math.max(timeMetrics.width, dayMetrics.width);
           const minSpacing = maxTextWidth * 1.5; // 1.5x text width for comfortable spacing
 
-          // Filter ticks to prevent overlap
+          // Filter ticks to prevent overlap - only show hourly ticks
           const visibleTicks = [];
           let lastX = -Infinity;
 
-          ticks.forEach((tick) => {
-            const tickValue = tick.value;
-            if (
-              typeof tickValue !== "number" ||
-              tickValue < 0 ||
-              tickValue >= labels.length
-            )
-              return;
-
-            const date = new Date(labels[tickValue]);
-            const x = xScale.getPixelForValue(tickValue);
-
-            // Only consider ticks within chart area
+          // Find hourly positions in the full labels array
+          hourlyLabels.forEach((hourlyLabel) => {
+            const hourlyTime = new Date(hourlyLabel);
+            // Find the index in full labels array that matches this hour
+            const idx = fullLabels.findIndex((label) => {
+              const labelTime = new Date(label);
+              return labelTime.getTime() === hourlyTime.getTime();
+            });
+            
+            if (idx === -1) return;
+            
+            const x = xScale.getPixelForValue(idx);
             if (x < chartArea.left || x > chartArea.right) return;
-
-            // Check if this tick is far enough from the last one
+            
             if (x - lastX >= minSpacing || visibleTicks.length === 0) {
-              visibleTicks.push({ tick, x, date });
+              visibleTicks.push({ x, date: hourlyTime });
               lastX = x;
-            } else {
-              // If too close, prefer keeping the first and last ticks
-              const isFirst = visibleTicks.length === 0;
-              const isLast = tick === ticks[ticks.length - 1];
-              if (isFirst || isLast) {
-                // For first/last, replace the previous if this one is more important
-                if (visibleTicks.length > 0 && !isFirst) {
-                  visibleTicks.pop();
+            }
+          });
+
+          // Always include first and last hourly ticks if they exist
+          if (hourlyLabels.length > 0) {
+            const firstHourlyTime = new Date(hourlyLabels[0]);
+            const lastHourlyTime = new Date(hourlyLabels[hourlyLabels.length - 1]);
+            const firstIdx = fullLabels.findIndex((label) => {
+              const labelTime = new Date(label);
+              return labelTime.getTime() === firstHourlyTime.getTime();
+            });
+            const lastIdx = fullLabels.findIndex((label) => {
+              const labelTime = new Date(label);
+              return labelTime.getTime() === lastHourlyTime.getTime();
+            });
+
+            if (firstIdx !== -1) {
+              const firstX = xScale.getPixelForValue(firstIdx);
+              if (firstX >= chartArea.left && firstX <= chartArea.right) {
+                const firstTimeStr = formatTime(firstHourlyTime);
+                const firstDayStr = formatDay(firstHourlyTime);
+                if (firstTimeStr) {
+                  ctx.fillText(firstTimeStr, firstX, chartArea.bottom + 4);
                 }
-                visibleTicks.push({ tick, x, date });
-                lastX = x;
+                if (firstDayStr) {
+                  ctx.fillText(firstDayStr, firstX, chartArea.bottom + 18);
+                }
               }
             }
-          });
 
-          // Always include first and last ticks if they exist
-          const firstTick = ticks[0];
-          const lastTick = ticks[ticks.length - 1];
-          const firstTickValue = firstTick?.value;
-          const lastTickValue = lastTick?.value;
-
-          if (
-            typeof firstTickValue === "number" &&
-            firstTickValue >= 0 &&
-            firstTickValue < labels.length
-          ) {
-            const firstX = xScale.getPixelForValue(firstTickValue);
-            if (firstX >= chartArea.left && firstX <= chartArea.right) {
-              const firstDate = new Date(labels[firstTickValue]);
-              if (!visibleTicks.find((t) => t.tick === firstTick)) {
-                visibleTicks.unshift({
-                  tick: firstTick,
-                  x: firstX,
-                  date: firstDate,
-                });
+            if (lastIdx !== -1) {
+              const lastX = xScale.getPixelForValue(lastIdx);
+              if (lastX >= chartArea.left && lastX <= chartArea.right) {
+                const lastTimeStr = formatTime(lastHourlyTime);
+                const lastDayStr = formatDay(lastHourlyTime);
+                if (lastTimeStr) {
+                  ctx.fillText(lastTimeStr, lastX, chartArea.bottom + 4);
+                }
+                if (lastDayStr) {
+                  ctx.fillText(lastDayStr, lastX, chartArea.bottom + 18);
+                }
               }
             }
           }
 
-          if (
-            typeof lastTickValue === "number" &&
-            lastTickValue >= 0 &&
-            lastTickValue < labels.length
-          ) {
-            const lastX = xScale.getPixelForValue(lastTickValue);
-            if (lastX >= chartArea.left && lastX <= chartArea.right) {
-              const lastDate = new Date(labels[lastTickValue]);
-              if (!visibleTicks.find((t) => t.tick === lastTick)) {
-                visibleTicks.push({ tick: lastTick, x: lastX, date: lastDate });
-              }
-            }
-          }
-
-          // Sort by x position and remove duplicates
-          visibleTicks.sort((a, b) => a.x - b.x);
-          const finalTicks = [];
-          lastX = -Infinity;
-          visibleTicks.forEach((item) => {
-            if (item.x - lastX >= minSpacing || finalTicks.length === 0) {
-              finalTicks.push(item);
-              lastX = item.x;
-            }
-          });
-
-          // Draw the filtered ticks
-          finalTicks.forEach((item) => {
-            const x = item.x;
-            const date = item.date;
-
-            // Draw time on top line
+          // Draw the visible ticks
+          visibleTicks.forEach(({ x, date }) => {
             const timeStr = formatTime(date);
-            if (timeStr) {
-              const timeY = chartArea.bottom + 8;
-              ctx.fillText(timeStr, x, timeY);
+            const dayStr = formatDay(date);
 
-              // Draw day on bottom line, centered under the time
-              const dayStr = formatDay(date);
-              const dayY = chartArea.bottom + 24;
-              ctx.fillText(dayStr, x, dayY);
+            if (timeStr) {
+              ctx.fillText(timeStr, x, chartArea.bottom + 4);
+            }
+            if (dayStr) {
+              ctx.fillText(dayStr, x, chartArea.bottom + 18);
             }
           });
 
@@ -3843,7 +3906,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     
                     if (distance < 20) {
                       const timeStr = fmtHM(touchGrassPos.time);
-                      const tempStr = `${touchGrassPos.temp.toFixed(1)}${unitSuffix()}`;
+                      const tempStr = `${formatTemp(touchGrassPos.temp)}${unitSuffix()}`;
                       const tooltip = chart.tooltip;
                       tooltip.setContent({
                         title: "🍃 Touch Grass",
@@ -4082,7 +4145,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           if (distance < 20) {
             // Show Touch Grass info in temp section
             const timeStr = fmtHM(touchGrassPos.time);
-            const tempStr = `${touchGrassPos.temp.toFixed(1)}${unitSuffix()}`;
+            const tempStr = `${formatTemp(touchGrassPos.temp)}${unitSuffix()}`;
             
             if (els.combinedLabel) {
               els.combinedLabel.innerHTML = `🍃 Touch Grass - ${timeStr} - ${tempStr}`;
@@ -4317,9 +4380,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       if (showCombined) {
         // Show combined view
         const avgTemp = (shadeVals[i] + sunVals[i]) / 2;
-        const avgDisplay = toUserTemp(avgTemp);
         if (els.combinedTemp) {
-          els.combinedTemp.innerHTML = `${avgDisplay.toFixed(1)}${unitSuffix()}`;
+          els.combinedTemp.innerHTML = `${formatTemp(avgTemp)}${unitSuffix()}`;
         }
         if (els.combinedTempWrapper) {
           els.combinedTempWrapper.style.display = "flex";
@@ -4336,9 +4398,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       } else {
         // Show separate views
         els.shade &&
-          (els.shade.innerHTML = `${shadeDisp.toFixed(1)}${unitSuffix()}`);
+          (els.shade.innerHTML = `${formatTemp(shadeVals[i])}${unitSuffix()}`);
         els.sun &&
-          (els.sun.innerHTML = `${sunDisp.toFixed(1)}${unitSuffix()}`);
+          (els.sun.innerHTML = `${formatTemp(sunVals[i])}${unitSuffix()}`);
 
         if (els.combinedTempWrapper) {
           els.combinedTempWrapper.style.display = "none";
@@ -4488,9 +4550,21 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           }
           // Only show loading if chart doesn't exist yet
           if (!vibeChart) showChartLoading();
-          const ds = buildTimelineDataset(hourlyMaybe);
+          let ds;
+          try {
+            ds = buildTimelineDataset(hourlyMaybe);
+            if (!ds || !ds.labels || ds.labels.length === 0) {
+              throw new Error("Empty dataset from buildTimelineDataset");
+            }
+          } catch (e) {
+            console.error("Error building timeline dataset:", e);
+            // Fallback: try to continue with hourly data only
+            throw new Error("Failed to process weather data. Please try again.");
+          }
           timelineState = ds;
           window.timelineState = timelineState; // expose for tooltip descriptors
+          // Store hourly labels separately for axis display
+          window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
           await renderChart(
             ds.labels,
             ds.shadeVals,
@@ -4575,9 +4649,21 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
         // Only show loading if chart doesn't exist yet
         if (!vibeChart) showChartLoading();
-        const ds = buildTimelineDataset(hourly);
+        let ds;
+        try {
+          ds = buildTimelineDataset(hourly);
+          if (!ds || !ds.labels || ds.labels.length === 0) {
+            throw new Error("Empty dataset from buildTimelineDataset");
+          }
+        } catch (e) {
+          console.error("Error building timeline dataset:", e);
+          // Fallback: try to continue with hourly data only
+          throw new Error("Failed to process weather data. Please try again.");
+        }
         timelineState = ds;
         window.timelineState = timelineState; // expose for tooltip descriptors
+        // Store hourly labels separately for axis display
+        window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
         await renderChart(
           ds.labels,
           ds.shadeVals,
@@ -5047,7 +5133,14 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       humidityByHour: filteredIndices.map(
                         (i) => ds.humidityByHour?.[i] ?? 0
                       ),
+                      precipitationByHour: filteredIndices.map(
+                        (i) => ds.precipitationByHour?.[i] ?? 0
+                      ),
+                      weathercodeByHour: filteredIndices.map(
+                        (i) => ds.weathercodeByHour?.[i] ?? 0
+                      ),
                       now: ds.now,
+                      hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
                     };
                   }
                 }
@@ -5055,6 +5148,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
               timelineState = ds;
               window.timelineState = timelineState;
+              // Store hourly labels separately for axis display
+              window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
               await renderChart(
                 ds.labels,
                 ds.shadeVals,
@@ -5232,19 +5327,29 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     isDayByHour: filteredIndices.map(
                       (i) => ds.isDayByHour[i]
                     ),
-                    windByHour: filteredIndices.map(
-                      (i) => ds.windByHour?.[i] ?? 0
-                    ),
-                    humidityByHour: filteredIndices.map(
-                      (i) => ds.humidityByHour?.[i] ?? 0
-                    ),
-                    now: ds.now,
-                  };
+                    hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
+                      windByHour: filteredIndices.map(
+                        (i) => ds.windByHour?.[i] ?? 0
+                      ),
+                      humidityByHour: filteredIndices.map(
+                        (i) => ds.humidityByHour?.[i] ?? 0
+                      ),
+                      precipitationByHour: filteredIndices.map(
+                        (i) => ds.precipitationByHour?.[i] ?? 0
+                      ),
+                      weathercodeByHour: filteredIndices.map(
+                        (i) => ds.weathercodeByHour?.[i] ?? 0
+                      ),
+                      now: ds.now,
+                      hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
+                    };
                 }
               }
 
               timelineState = ds;
               window.timelineState = timelineState;
+              // Store hourly labels separately for axis display
+              window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
               await renderChart(
                 ds.labels,
                 ds.shadeVals,
