@@ -116,35 +116,6 @@
         </div>
       </div>
 
-      <!-- Combined temperature card -->
-      <section class="cards">
-        <article class="card card--combined" id="sunCard">
-          <div class="card-temps">
-            <div class="card-temp-wrapper" id="sunTempWrapper">
-              <div class="card-temp-label">Sun</div>
-              <div class="card-temp card-temp-sun" id="sun">
-                <span class="skeleton-text">—</span>
-              </div>
-            </div>
-            <div class="card-temp-wrapper" id="shadeTempWrapper">
-              <div class="card-temp-label">Shade</div>
-              <div class="card-temp card-temp-shade" id="shade">
-                <span class="skeleton-text">—</span>
-              </div>
-            </div>
-            <div class="card-temp-wrapper" id="combinedTempWrapper" style="display: none;">
-              <div class="card-temp-label">Sun and Shade</div>
-              <div class="card-temp card-temp-combined" id="combinedTemp">
-                <span class="skeleton-text">—</span>
-              </div>
-            </div>
-          </div>
-          <div class="card-desc" id="combinedLabel">
-            <span class="skeleton-text">Loading…</span>
-          </div>
-        </article>
-      </section>
-
       <!-- Weather Summary -->
       <section
         id="weatherSummary"
@@ -182,27 +153,6 @@
 
       <!-- Chart -->
       <section class="chart-wrap">
-        <div class="chart-head">
-          <div class="chart-title">24-Hour Forecast</div>
-          <div class="chart-head-right">
-            <div class="chart-status" id="chartStatus"></div>
-          </div>
-        </div>
-        <div class="chart-box" id="chartBox">
-          <div id="chartSkeleton" class="chart-skeleton">
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-          </div>
-          <canvas id="vibeChart" style="display: none"></canvas>
-        </div>
-        <div class="chart-note">
-          <small
-            >💡 Tip:
-            <span class="desktop-only">Hold Shift (or Ctrl/Cmd) and </span>drag
-            on the graph to select a time range and share it</small
-          >
-        </div>
         <div class="time-presets">
           <button
             id="presetDefault"
@@ -245,6 +195,51 @@
             Week
           </button>
         </div>
+        <div class="chart-status" id="chartStatus"></div>
+        <div class="chart-box" id="chartBox">
+          <div id="chartSkeleton" class="chart-skeleton">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+          <canvas id="vibeChart" style="display: none"></canvas>
+        </div>
+        <div class="chart-note">
+          <small
+            >💡 Tip:
+            <span class="desktop-only">Hold Shift (or Ctrl/Cmd) and </span>drag
+            on the graph to select a time range and share it</small
+          >
+        </div>
+      </section>
+
+      <!-- Combined temperature card -->
+      <section class="cards">
+        <article class="card card--combined" id="sunCard">
+          <div class="card-temps">
+            <div class="card-temp-wrapper" id="sunTempWrapper">
+              <div class="card-temp-label">Sun</div>
+              <div class="card-temp card-temp-sun" id="sun">
+                <span class="skeleton-text">—</span>
+              </div>
+            </div>
+            <div class="card-temp-wrapper" id="shadeTempWrapper">
+              <div class="card-temp-label">Shade</div>
+              <div class="card-temp card-temp-shade" id="shade">
+                <span class="skeleton-text">—</span>
+              </div>
+            </div>
+            <div class="card-temp-wrapper" id="combinedTempWrapper" style="display: none;">
+              <div class="card-temp-label">Sun and Shade</div>
+              <div class="card-temp card-temp-combined" id="combinedTemp">
+                <span class="skeleton-text">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-desc" id="combinedLabel">
+            <span class="skeleton-text">Loading…</span>
+          </div>
+        </article>
       </section>
 
       <!-- Advanced Configuration Section -->
