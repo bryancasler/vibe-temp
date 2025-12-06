@@ -2807,9 +2807,20 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           if (!nightShadingEnabled) return;
 
           const { ctx, chartArea, scales } = chart;
-          if (!sunTimes.sunrises || sunTimes.sunrises.length === 0) {
+
+          // Get labels and sunTimes from chart instance (supports chart updates)
+          const rawLabels = chart._rawLabels || [];
+          const chartSunTimes = chart._sunTimes || sunTimes;
+
+          if (!chartSunTimes.sunrises || chartSunTimes.sunrises.length === 0) {
             // Fallback to legacy properties
-            if (!sunTimes.sunriseToday || !sunTimes.sunsetToday) return;
+            if (!chartSunTimes.sunriseToday || !chartSunTimes.sunsetToday)
+              return;
+          }
+
+          if (rawLabels.length === 0) {
+            ctx.restore();
+            return;
           }
 
           ctx.save();
@@ -2823,8 +2834,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             let beforeTime = null;
             let afterTime = null;
 
-            for (let i = 0; i < labels.length; i++) {
-              const labelTime = new Date(labels[i]);
+            for (let i = 0; i < rawLabels.length; i++) {
+              const labelTime = new Date(rawLabels[i]);
               if (labelTime <= target) {
                 beforeIdx = i;
                 beforeTime = labelTime;
@@ -2850,7 +2861,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
 
             // If after last label
             if (afterIdx === -1) {
-              return scales.x.getPixelForValue(labels.length - 1);
+              return scales.x.getPixelForValue(rawLabels.length - 1);
             }
 
             // Interpolate between the two hour positions
@@ -2868,16 +2879,26 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
 
           // Use arrays if available, otherwise fall back to legacy properties
           const sunrises =
-            sunTimes.sunrises && sunTimes.sunrises.length > 0
-              ? sunTimes.sunrises
-              : (sunTimes.sunriseToday ? [sunTimes.sunriseToday] : []).concat(
-                  sunTimes.sunriseTomorrow ? [sunTimes.sunriseTomorrow] : []
+            chartSunTimes.sunrises && chartSunTimes.sunrises.length > 0
+              ? chartSunTimes.sunrises
+              : (chartSunTimes.sunriseToday
+                  ? [chartSunTimes.sunriseToday]
+                  : []
+                ).concat(
+                  chartSunTimes.sunriseTomorrow
+                    ? [chartSunTimes.sunriseTomorrow]
+                    : []
                 );
           const sunsets =
-            sunTimes.sunsets && sunTimes.sunsets.length > 0
-              ? sunTimes.sunsets
-              : (sunTimes.sunsetToday ? [sunTimes.sunsetToday] : []).concat(
-                  sunTimes.sunsetTomorrow ? [sunTimes.sunsetTomorrow] : []
+            chartSunTimes.sunsets && chartSunTimes.sunsets.length > 0
+              ? chartSunTimes.sunsets
+              : (chartSunTimes.sunsetToday
+                  ? [chartSunTimes.sunsetToday]
+                  : []
+                ).concat(
+                  chartSunTimes.sunsetTomorrow
+                    ? [chartSunTimes.sunsetTomorrow]
+                    : []
                 );
 
           // Add all sunrise/sunset events with their actual times
@@ -2885,8 +2906,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             if (time) {
               const timeDate = new Date(time);
               // Only include if within the visible range
-              const firstLabel = new Date(labels[0]);
-              const lastLabel = new Date(labels[labels.length - 1]);
+              const firstLabel = new Date(rawLabels[0]);
+              const lastLabel = new Date(rawLabels[rawLabels.length - 1]);
               if (timeDate >= firstLabel && timeDate <= lastLabel) {
                 events.push({ time: timeDate, type: "sunrise" });
               }
@@ -2896,8 +2917,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             if (time) {
               const timeDate = new Date(time);
               // Only include if within the visible range
-              const firstLabel = new Date(labels[0]);
-              const lastLabel = new Date(labels[labels.length - 1]);
+              const firstLabel = new Date(rawLabels[0]);
+              const lastLabel = new Date(rawLabels[rawLabels.length - 1]);
               if (timeDate >= firstLabel && timeDate <= lastLabel) {
                 events.push({ time: timeDate, type: "sunset" });
               }
@@ -2924,8 +2945,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             : "rgba(255, 255, 255, 0.08)"; // Lighter for day in dark mode
 
           // Get the start and end times of the visible range
-          const chartStartTime = new Date(labels[0]);
-          const chartEndTime = new Date(labels[labels.length - 1]);
+          const chartStartTime = new Date(rawLabels[0]);
+          const chartEndTime = new Date(rawLabels[rawLabels.length - 1]);
 
           if (isLightMode) {
             // Light mode: shade nighttime (sunset to sunrise)
