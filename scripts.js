@@ -73,9 +73,6 @@
     const preset3DayBtn = $("#preset3Day");
     const preset5DayBtn = $("#preset5Day");
     const presetOneWeekBtn = $("#presetOneWeek");
-    const presetMoreBtn = $("#presetMoreBtn");
-    const presetDropdownMenu = $("#presetDropdownMenu");
-    const presetDropdown = $(".preset-dropdown");
     const chartNavPrevBtn = $("#chartNavPrev");
     const chartNavNextBtn = $("#chartNavNext");
     
@@ -4994,8 +4991,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             btn.classList.remove("loading");
           }
         });
-        // Also clear active from main buttons
-        if (presetMoreBtn) presetMoreBtn.classList.remove("active");
 
         // Show loading state on the clicked button
         let clickedBtn = null;
@@ -5181,84 +5176,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
 
       // Time preset buttons
-      presetTodayBtn &&
-        presetTodayBtn.addEventListener("click", () => {
-          setTimePreset("today");
-          closeDropdown();
-        });
-      presetTomorrowBtn &&
-        presetTomorrowBtn.addEventListener("click", () => {
-          setTimePreset("tomorrow");
-          closeDropdown();
-        });
       presetDefaultBtn &&
         presetDefaultBtn.addEventListener("click", () =>
           setTimePreset("default")
         );
       presetWeekBtn &&
         presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
-      preset3DayBtn &&
-        preset3DayBtn.addEventListener("click", () => {
-          setTimePreset("3day");
-          closeDropdown();
-        });
-      preset5DayBtn &&
-        preset5DayBtn.addEventListener("click", () => {
-          setTimePreset("5day");
-          closeDropdown();
-        });
-      presetOneWeekBtn &&
-        presetOneWeekBtn.addEventListener("click", () => {
-          setTimePreset("oneWeek");
-          closeDropdown();
-        });
-
-      // Dropdown toggle
-      function toggleDropdown() {
-        if (!presetDropdown || !presetDropdownMenu) return;
-        
-        const currentDisplay = presetDropdownMenu.style.display;
-        const isOpen = currentDisplay === "block";
-        
-        presetDropdownMenu.style.display = isOpen ? "none" : "block";
-        if (isOpen) {
-          presetDropdown.classList.remove("open");
-        } else {
-          presetDropdown.classList.add("open");
-        }
-      }
-
-      function closeDropdown() {
-        if (presetDropdown && presetDropdownMenu) {
-          presetDropdownMenu.style.display = "none";
-          if (presetDropdown) {
-            presetDropdown.classList.remove("open");
-          }
-        }
-      }
-
-      // Initialize dropdown as closed
-      if (presetDropdownMenu) {
-        presetDropdownMenu.style.display = "none";
-      }
-
-      presetMoreBtn &&
-        presetMoreBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          toggleDropdown();
-        });
-
-      // Close dropdown when clicking outside
-      document.addEventListener("click", (e) => {
-        if (
-          presetDropdown &&
-          !presetDropdown.contains(e.target) &&
-          presetDropdownMenu &&
-          presetDropdownMenu.style.display !== "none"
-        ) {
-          closeDropdown();
-        }
-      });
 
       // Day navigation function
       function shiftDateOffset(delta) {
@@ -5278,7 +5201,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             btn.classList.remove("loading");
           }
         });
-        if (presetMoreBtn) presetMoreBtn.classList.remove("active");
 
         // Update date offset
         dateOffset += delta;
@@ -6234,12 +6156,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         closeShortcutsBtn.addEventListener("click", hideShortcutsModal);
 
       // Time presets
-      presetTodayBtn &&
-        presetTodayBtn.addEventListener("click", () => setTimePreset("today"));
-      presetTomorrowBtn &&
-        presetTomorrowBtn.addEventListener("click", () =>
-          setTimePreset("tomorrow")
-        );
       presetDefaultBtn &&
         presetDefaultBtn.addEventListener("click", () =>
           setTimePreset("default")
