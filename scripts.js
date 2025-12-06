@@ -49,6 +49,9 @@
     const summaryTextEl = $("#summaryText");
     const summaryTimeRangeEl = $("#summaryTimeRange");
     const summaryTitleEl = $("#weatherSummary .summary-title");
+    const remainderOfDaySummaryEl = $("#remainderOfDaySummary");
+    const remainderTextEl = $("#remainderText");
+    const remainderTimeRangeEl = $("#remainderTimeRange");
     const expiredModalEl = $("#expiredModal");
     const keepCustomBtn = $("#keepCustomBtn");
     const useDefaultsBtn = $("#useDefaultsBtn");
@@ -65,6 +68,8 @@
     const copySummaryBtn = $("#copySummaryBtn");
     const shortcutsModalEl = $("#shortcutsModal");
     const closeShortcutsBtn = $("#closeShortcutsBtn");
+    const gpsLocationBtn = $("#gpsLocationBtn");
+    const headlineDateEl = $("#headlineDate");
     const presetTodayBtn = $("#presetToday");
     const cardsContainer = $(".cards");
     const presetTomorrowBtn = $("#presetTomorrow");
@@ -73,22 +78,59 @@
     const preset3DayBtn = $("#preset3Day");
     const preset5DayBtn = $("#preset5Day");
     const presetOneWeekBtn = $("#presetOneWeek");
-    const chartNavPrevBtn = $("#chartNavPrev");
-    const chartNavNextBtn = $("#chartNavNext");
-    
     // Track date offset for day navigation (0 = today, 1 = tomorrow, -1 = yesterday, etc.)
     let dateOffset = 0;
 
-    // Function to update navigation arrows visibility based on data availability
-    function updateNavArrowsVisibility() {
-      const hasData = lastCoords !== null && timelineState !== null;
-      if (chartNavPrevBtn) {
-        chartNavPrevBtn.style.display = hasData ? "flex" : "none";
-      }
-      if (chartNavNextBtn) {
-        chartNavNextBtn.style.display = hasData ? "flex" : "none";
+    // Helper function to get ordinal suffix (st, nd, rd, th)
+    function getOrdinalSuffix(day) {
+      const j = day % 10;
+      const k = day % 100;
+      if (j === 1 && k !== 11) return "st";
+      if (j === 2 && k !== 12) return "nd";
+      if (j === 3 && k !== 13) return "rd";
+      return "th";
+    }
+
+    // Function to update headline date display
+    function updateHeadlineDate() {
+      if (headlineDateEl) {
+        const today = new Date();
+        today.setDate(today.getDate() + dateOffset);
+
+        // If week is selected (daysAhead === 7), show date range
+        if (daysAhead === 7) {
+          const startDate = new Date(today);
+          startDate.setHours(0, 0, 0, 0);
+          const endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 6); // 7 days total (0-6 = 7 days)
+
+          // Format with full month names and ordinals: "January 5th - 11th" or "January 5th - February 3rd"
+          const startMonth = startDate.toLocaleDateString("en-US", {
+            month: "long",
+          });
+          const startDay = startDate.getDate();
+          const startOrdinal = getOrdinalSuffix(startDay);
+          const endMonth = endDate.toLocaleDateString("en-US", {
+            month: "long",
+          });
+          const endDay = endDate.getDate();
+          const endOrdinal = getOrdinalSuffix(endDay);
+
+          if (startMonth === endMonth) {
+            headlineDateEl.textContent = `${startMonth}, ${startDay}${startOrdinal} - ${endDay}${endOrdinal}`;
+          } else {
+            headlineDateEl.textContent = `${startMonth}, ${startDay}${startOrdinal} - ${endMonth}, ${endDay}${endOrdinal}`;
+          }
+        } else {
+          // Single date format with full month name and ordinal, no year
+          const month = today.toLocaleDateString("en-US", { month: "long" });
+          const day = today.getDate();
+          const ordinal = getOrdinalSuffix(day);
+          headlineDateEl.textContent = `${month}, ${day}${ordinal}`;
+        }
       }
     }
+
     const favoritesDropdown = $("#favoritesDropdown");
     const favoritesToggle = $("#favoritesToggle");
     const favoritesList = $("#favoritesList");
@@ -269,21 +311,22 @@
 
     function toggleAdvConfig() {
       if (!advPanel || !advConfigToggle) return;
-      
-      const isExpanded = advConfigToggle.getAttribute("aria-expanded") === "true";
+
+      const isExpanded =
+        advConfigToggle.getAttribute("aria-expanded") === "true";
       const newState = !isExpanded;
-      
+
       // Update UI
       advConfigToggle.setAttribute("aria-expanded", newState.toString());
       advPanel.style.display = newState ? "block" : "none";
-      
+
       // Save state to localStorage
       try {
         localStorage.setItem(ADV_CONFIG_STORAGE_KEY, newState.toString());
       } catch (e) {
         console.warn("Failed to save advanced config state:", e);
       }
-      
+
       // Update stats when opened
       if (newState) {
         updateAdvStats();
@@ -293,14 +336,14 @@
     // Load saved state on page load
     function loadAdvConfigState() {
       if (!advPanel || !advConfigToggle) return;
-      
+
       try {
         const savedState = localStorage.getItem(ADV_CONFIG_STORAGE_KEY);
         if (savedState !== null) {
           const isExpanded = savedState === "true";
           advConfigToggle.setAttribute("aria-expanded", isExpanded.toString());
           advPanel.style.display = isExpanded ? "block" : "none";
-          
+
           if (isExpanded) {
             updateAdvStats();
           }
@@ -313,7 +356,7 @@
     if (advConfigToggle) {
       advConfigToggle.addEventListener("click", toggleAdvConfig);
     }
-    
+
     // Load state on page load
     loadAdvConfigState();
 
@@ -375,8 +418,10 @@
     let unit = storageCacheGet(UNIT_KEY, "F") === "C" ? "C" : "F";
     let daysAhead = parseInt(storageCacheGet(DAYS_AHEAD_KEY, "2"), 10);
     let nightShadingEnabled = storageCacheGet(NIGHT_SHADING_KEY) === "true";
-    let nightLineDarkeningEnabled = storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
-    let lineSmoothing = parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1")) || 1;
+    let nightLineDarkeningEnabled =
+      storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
+    let lineSmoothing =
+      parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1")) || 1;
     let temperatureZonesEnabled = storageCacheGet(TEMP_ZONES_KEY) === "true";
     let humidityVisualizationEnabled =
       storageCacheGet(HUMIDITY_VIS_KEY) === "true";
@@ -510,6 +555,10 @@
       if (weatherSummaryEl) weatherSummaryEl.style.display = "none";
       if (copySummaryBtn) copySummaryBtn.style.display = "none";
       updateCardVisibility();
+      // Show remainder of day section again when selection is cleared
+      if (remainderOfDaySummaryEl && timelineState) {
+        updateRemainderOfDaySummary();
+      }
       if (vibeChart) vibeChart.update("none");
 
       // Remove start, end, lat, lon, and zip from URL but keep other params
@@ -691,7 +740,7 @@
     }
 
     // Generate AI summary using free public API
-    async function generateWeatherSummary(weatherData) {
+    async function generateWeatherSummary(weatherData, touchGrassTime = null) {
       if (
         !weatherData ||
         !weatherData.dataPoints ||
@@ -750,14 +799,40 @@ ${
   vibeDescriptions.length > 0
     ? `- Sample descriptions: ${vibeDescriptions.slice(0, 3).join(", ")}`
     : ""
-}
+}${
+        touchGrassTime
+          ? `\n- TOUCH GRASS TIME: The ideal "Touch Grass" time (perfect temperature for outdoor activities) is at ${fmtHM(
+              new Date(touchGrassTime.time)
+            )} when it will feel like ${formatTemp(
+              touchGrassTime.temp
+            )}${unitSuffix()}. This is the best time to be outside during this period.`
+          : ""
+      }
 
 Provide a brief, conversational summary (3-4 sentences) describing:
-1. How it will FEEL during this time period based on the vibe temperatures
+1. How it will FEEL during this time period based on the vibe temperatures${
+        touchGrassTime
+          ? `. Include the Touch Grass time information from the data above.`
+          : ""
+      }
 2. Clothing recommendations (what to wear for comfort)
-3. Activity suggestions (what activities are suitable - e.g., hiking, staying indoors, outdoor sports)
+3. Activity suggestions (what activities are suitable - e.g., hiking, staying indoors, outdoor sports)${
+        touchGrassTime
+          ? `. Include the Touch Grass time information from the data above.`
+          : ""
+      }
 
-Use the representative vibe as the primary temperature reference. Focus on comfort, what to wear, and suitable activities. Ignore actual air temperature - only use the vibe temperatures which represent how it actually feels.`;
+Use the representative vibe as the primary temperature reference. Focus on comfort, what to wear, and suitable activities. Ignore actual air temperature - only use the vibe temperatures which represent how it actually feels.${
+        touchGrassTime
+          ? ` 
+
+CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information. You must mention: "The ideal Touch Grass time is at ${fmtHM(
+              new Date(touchGrassTime.time)
+            )} when it will feel like ${formatTemp(
+              touchGrassTime.temp
+            )}${unitSuffix()}" or similar wording. This is a required element of the summary.`
+          : ""
+      }`;
 
       try {
         // Use Hugging Face Inference API with a free model
@@ -807,7 +882,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           summary = result[0].summary_text.trim();
         } else {
           // Fallback: generate a simple summary
-          return generateFallbackSummary(weatherData);
+          return generateFallbackSummary(weatherData, touchGrassTime);
         }
 
         // Clean up the summary (remove prompt if included)
@@ -815,19 +890,39 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         // Remove any leading/trailing quotes or formatting
         summary = summary.replace(/^["']|["']$/g, "").trim();
         if (summary.length === 0 || summary.length < 20) {
-          return generateFallbackSummary(weatherData);
+          return generateFallbackSummary(weatherData, touchGrassTime);
+        }
+
+        // If touch grass time exists, ensure it's mentioned in the summary
+        if (touchGrassTime) {
+          const touchGrassTimeStr = fmtHM(new Date(touchGrassTime.time));
+          const touchGrassTempStr = `${formatTemp(
+            touchGrassTime.temp
+          )}${unitSuffix()}`;
+          // Check if the summary mentions the touch grass time (check for time or temperature)
+          const mentionsTime =
+            summary.toLowerCase().includes(touchGrassTimeStr.toLowerCase()) ||
+            summary.includes(touchGrassTimeStr.replace(/:/g, "")) ||
+            summary.toLowerCase().includes("touch grass");
+          const mentionsTemp = summary.includes(touchGrassTempStr);
+
+          // If not mentioned, append it to the summary
+          if (!mentionsTime || !mentionsTemp) {
+            const touchGrassInfo = ` The ideal "Touch Grass" time (perfect temperature for outdoor activities) is at ${touchGrassTimeStr} when it will feel like ${touchGrassTempStr}.`;
+            summary = summary + touchGrassInfo;
+          }
         }
 
         return summary;
       } catch (error) {
         console.warn("AI summary generation failed:", error);
         // Fallback to a simple generated summary
-        return generateFallbackSummary(weatherData);
+        return generateFallbackSummary(weatherData, touchGrassTime);
       }
     }
 
     // Generate fallback summary without AI (based on vibe temps)
-    function generateFallbackSummary(weatherData) {
+    function generateFallbackSummary(weatherData, touchGrassTime = null) {
       const { stats, duration, startTime, endTime, dataPoints } = weatherData;
       const start = new Date(startTime);
       const end = new Date(endTime);
@@ -967,6 +1062,17 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         return "\u{1F525}"; // 🔥
       };
 
+      // Add touch grass time if it exists
+      if (touchGrassTime) {
+        const touchGrassTimeStr = fmtHM(new Date(touchGrassTime.time));
+        const touchGrassTempStr = `${formatTemp(
+          touchGrassTime.temp
+        )}${unitSuffix()}`;
+        sentences.push(
+          `The ideal "Touch Grass" time (perfect temperature for outdoor activities) is at ${touchGrassTimeStr} when it will feel like ${touchGrassTempStr}`
+        );
+      }
+
       const icon = getWeatherIcon();
       return `${icon} ${sentences.join(". ")}.`;
     }
@@ -1042,6 +1148,144 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
     }
 
+    // Update remainder of day summary
+    async function updateRemainderOfDaySummary() {
+      if (!timelineState || !remainderOfDaySummaryEl) return;
+
+      // Hide remainder of day section if a selection is active
+      if (selectionRange) {
+        if (remainderOfDaySummaryEl)
+          remainderOfDaySummaryEl.style.display = "none";
+        return;
+      }
+
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Find the latest time in timelineState that's still today
+      const { labels } = timelineState;
+      let endTime = null;
+      for (const label of labels) {
+        const labelDate = new Date(label);
+        if (labelDate > now && labelDate <= endOfDay) {
+          if (!endTime || labelDate > endTime) {
+            endTime = labelDate;
+          }
+        }
+      }
+
+      // If no endTime found, use the last label that's still today or endOfDay
+      if (!endTime) {
+        // Check if there's any data for today at all
+        const lastLabel = labels[labels.length - 1];
+        if (lastLabel) {
+          const lastLabelDate = new Date(lastLabel);
+          if (
+            lastLabelDate.getDate() === now.getDate() &&
+            lastLabelDate.getMonth() === now.getMonth() &&
+            lastLabelDate.getFullYear() === now.getFullYear()
+          ) {
+            endTime = lastLabelDate;
+          } else {
+            endTime = endOfDay;
+          }
+        } else {
+          endTime = endOfDay;
+        }
+      }
+
+      // If no future data for today, don't show the section
+      if (endTime <= now) {
+        if (remainderOfDaySummaryEl)
+          remainderOfDaySummaryEl.style.display = "none";
+        return;
+      }
+
+      // Show the section
+      if (remainderOfDaySummaryEl)
+        remainderOfDaySummaryEl.style.display = "block";
+
+      // Update time range display
+      if (remainderTimeRangeEl) {
+        const startStr = now.toLocaleString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        const endStr = endTime.toLocaleString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        remainderTimeRangeEl.textContent = `${startStr} → ${endStr}`;
+      }
+
+      // Show loading state
+      if (remainderTextEl) {
+        remainderTextEl.textContent = "Generating summary...";
+        remainderTextEl.className = "summary-text loading";
+      }
+
+      try {
+        const weatherData = extractWeatherDataForRange(now, endTime);
+        if (!weatherData) {
+          if (remainderTextEl) {
+            remainderTextEl.textContent =
+              "No weather data available for the remainder of the day.";
+            remainderTextEl.className = "summary-text";
+          }
+          return;
+        }
+
+        // Find Touch Grass time for today if it exists
+        let touchGrassTime = null;
+        if (vibeChart && vibeChart._touchGrassTimes) {
+          const todayKey = `${now.getFullYear()}-${String(
+            now.getMonth() + 1
+          ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+          const touchGrassTimes = vibeChart._touchGrassTimes || [];
+          for (const tgTime of touchGrassTimes) {
+            const tgDate =
+              tgTime.time instanceof Date ? tgTime.time : new Date(tgTime.time);
+            const tgDayKey = `${tgDate.getFullYear()}-${String(
+              tgDate.getMonth() + 1
+            ).padStart(2, "0")}-${String(tgDate.getDate()).padStart(2, "0")}`;
+            const tgTimeMs = tgDate.getTime();
+            if (
+              tgDayKey === todayKey &&
+              tgTimeMs >= now.getTime() &&
+              tgTimeMs <= endTime.getTime()
+            ) {
+              touchGrassTime = tgTime;
+              break;
+            }
+          }
+        }
+
+        const summary = await generateWeatherSummary(
+          weatherData,
+          touchGrassTime
+        );
+
+        if (remainderTextEl) {
+          remainderTextEl.textContent = summary;
+          remainderTextEl.className = "summary-text";
+        }
+      } catch (error) {
+        console.warn("Failed to generate remainder of day summary:", error);
+        if (remainderTextEl) {
+          remainderTextEl.textContent =
+            "Unable to generate summary at this time.";
+          remainderTextEl.className = "summary-text";
+        }
+      }
+    }
+
     // Helper to create a hash of timelineState for the selected range
     // Optimized: Uses binary search for sorted arrays and samples data to reduce computation
     function getTimelineHashForRange(startTime, endTime) {
@@ -1102,6 +1346,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
     async function updateWeatherSummary() {
       if (!selectionRange || !timelineState || summaryGenerationInProgress)
         return;
+
+      // Hide remainder of day section when a selection is active
+      if (remainderOfDaySummaryEl) {
+        remainderOfDaySummaryEl.style.display = "none";
+      }
 
       // Check if we've already generated a summary for this exact selectionRange and data
       const currentHash = getTimelineHashForRange(
@@ -1179,7 +1428,27 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           return;
         }
 
-        const summary = await generateWeatherSummary(weatherData);
+        // Find Touch Grass time within the selected range if it exists
+        let touchGrassTime = null;
+        if (vibeChart && vibeChart._touchGrassTimes) {
+          const touchGrassTimes = vibeChart._touchGrassTimes || [];
+          const rangeStart = selectionRange.startTime.getTime();
+          const rangeEnd = selectionRange.endTime.getTime();
+          for (const tgTime of touchGrassTimes) {
+            const tgDate =
+              tgTime.time instanceof Date ? tgTime.time : new Date(tgTime.time);
+            const tgTimeMs = tgDate.getTime();
+            if (tgTimeMs >= rangeStart && tgTimeMs <= rangeEnd) {
+              touchGrassTime = tgTime;
+              break;
+            }
+          }
+        }
+
+        const summary = await generateWeatherSummary(
+          weatherData,
+          touchGrassTime
+        );
 
         if (summaryTextEl) {
           summaryTextEl.textContent = summary;
@@ -1427,9 +1696,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ? "Great in the sun"
           : "Cool in shade, warm in sun";
       if (tempF < 65)
-        return context === "sun"
-          ? "Perfect in the sun"
-          : "Cool; find sun";
+        return context === "sun" ? "Perfect in the sun" : "Cool; find sun";
       if (tempF < 70) return "Balanced, light layers";
       if (tempF < 75) return "Mild and comfy";
       if (tempF < 80) return "Warm and glowy";
@@ -1610,59 +1877,32 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const shadeDisplay = toUserTemp(shadeF);
       const sunDisplay = toUserTemp(sunF);
 
-      // Check if temps are within 2.5°C during daytime
+      // Always show both sun and shade temps together
       const isDay = isDaylightNow();
-      const shadeC = fToC(shadeF);
-      const sunC = fToC(sunF);
-      const tempDiffC = Math.abs(sunC - shadeC);
-      const showCombined = isDay && tempDiffC <= 2.5;
 
+      els.shade &&
+        (els.shade.innerHTML = `${formatTemp(shadeF)}${unitSuffix()}`);
+      els.sun && (els.sun.innerHTML = `${formatTemp(sunF)}${unitSuffix()}`);
+
+      // Always hide combined view
+      if (els.combinedTempWrapper) {
+        els.combinedTempWrapper.style.display = "none";
+      }
+
+      // Always show both sun and shade wrappers
+      if (els.shadeTempWrapper) {
+        els.shadeTempWrapper.style.display = "flex";
+      }
+      if (els.sunTempWrapper) {
+        els.sunTempWrapper.style.display = "flex";
+      }
+
+      // Update card layout - always show both (ensure no classes that would hide one)
       const cardTemps = els.sunTempWrapper?.parentElement;
-
-      if (showCombined) {
-        // Show combined view
-        const avgTemp = (shadeF + sunF) / 2;
-        if (els.combinedTemp) {
-          els.combinedTemp.innerHTML = `${formatTemp(avgTemp)}${unitSuffix()}`;
-        }
-        if (els.combinedTempWrapper) {
-          els.combinedTempWrapper.style.display = "flex";
-        }
-        if (els.sunTempWrapper) {
-          els.sunTempWrapper.style.display = "none";
-        }
-        if (els.shadeTempWrapper) {
-          els.shadeTempWrapper.style.display = "none";
-        }
-        if (cardTemps) {
-          cardTemps.classList.add("sun-hidden");
-        }
-      } else {
-        // Show separate views
-        els.shade &&
-          (els.shade.innerHTML = `${formatTemp(shadeF)}${unitSuffix()}`);
-        els.sun &&
-          (els.sun.innerHTML = `${formatTemp(sunF)}${unitSuffix()}`);
-
-        if (els.combinedTempWrapper) {
-          els.combinedTempWrapper.style.display = "none";
-        }
-        if (els.shadeTempWrapper) {
-          els.shadeTempWrapper.style.display = "flex";
-        }
-
-        // Hide sun vibe temperature when sun is not up
-        if (els.sunTempWrapper) {
-          els.sunTempWrapper.style.display = isDay ? "flex" : "none";
-          // Update card layout class
-          if (cardTemps) {
-            if (isDay) {
-              cardTemps.classList.remove("sun-hidden");
-            } else {
-              cardTemps.classList.add("sun-hidden");
-            }
-          }
-        }
+      if (cardTemps) {
+        cardTemps.classList.remove("sun-hidden");
+        // Ensure grid always shows 2 columns
+        cardTemps.style.gridTemplateColumns = "1fr 1fr";
       }
 
       if (els.combinedLabel) {
@@ -1967,8 +2207,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         // Fallback: return hourly data if interpolation would fail
         return {
           labels: hourlyLabels,
-          shadeVals: hourlyShadeVals.map(v => parseFloat(v.toFixed(1))),
-          sunVals: hourlySunVals.map(v => parseFloat(v.toFixed(1))),
+          shadeVals: hourlyShadeVals.map((v) => parseFloat(v.toFixed(1))),
+          sunVals: hourlySunVals.map((v) => parseFloat(v.toFixed(1))),
           solarByHour: hourlySolarByHour,
           isDayByHour: hourlyIsDayByHour,
           windByHour: hourlyWindByHour,
@@ -1983,16 +2223,16 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       for (let i = 0; i < hourlyLabels.length; i++) {
         const currentTime = new Date(hourlyLabels[i]);
         const isLastHour = i === hourlyLabels.length - 1;
-        
+
         // Add 4 points per hour (0, 15, 30, 45 minutes)
         for (let minuteOffset = 0; minuteOffset < 60; minuteOffset += 15) {
           const interpolatedTime = new Date(currentTime);
           interpolatedTime.setMinutes(minuteOffset, 0, 0);
-          
+
           // Only add if within the time range (use <= for end to include the last point)
           if (interpolatedTime >= start && interpolatedTime <= end) {
             labels.push(new Date(interpolatedTime));
-            
+
             if (minuteOffset === 0) {
               // Use exact hourly value
               shadeVals.push(parseFloat(hourlyShadeVals[i].toFixed(1)));
@@ -2006,14 +2246,43 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             } else if (!isLastHour && i + 1 < hourlyShadeVals.length) {
               // Interpolate between current and next hour
               const fraction = minuteOffset / 60;
-              shadeVals.push(parseFloat((hourlyShadeVals[i] + (hourlyShadeVals[i + 1] - hourlyShadeVals[i]) * fraction).toFixed(1)));
-              sunVals.push(parseFloat((hourlySunVals[i] + (hourlySunVals[i + 1] - hourlySunVals[i]) * fraction).toFixed(1)));
-              solarByHour.push(hourlySolarByHour[i] + (hourlySolarByHour[i + 1] - hourlySolarByHour[i]) * fraction);
+              shadeVals.push(
+                parseFloat(
+                  (
+                    hourlyShadeVals[i] +
+                    (hourlyShadeVals[i + 1] - hourlyShadeVals[i]) * fraction
+                  ).toFixed(1)
+                )
+              );
+              sunVals.push(
+                parseFloat(
+                  (
+                    hourlySunVals[i] +
+                    (hourlySunVals[i + 1] - hourlySunVals[i]) * fraction
+                  ).toFixed(1)
+                )
+              );
+              solarByHour.push(
+                hourlySolarByHour[i] +
+                  (hourlySolarByHour[i + 1] - hourlySolarByHour[i]) * fraction
+              );
               // For boolean-like values, use the current hour's value
               isDayByHour.push(hourlyIsDayByHour[i]);
-              windByHour.push(hourlyWindByHour[i] + (hourlyWindByHour[i + 1] - hourlyWindByHour[i]) * fraction);
-              humidityByHour.push(hourlyHumidityByHour[i] + (hourlyHumidityByHour[i + 1] - hourlyHumidityByHour[i]) * fraction);
-              precipitationByHour.push(hourlyPrecipitationByHour[i] + (hourlyPrecipitationByHour[i + 1] - hourlyPrecipitationByHour[i]) * fraction);
+              windByHour.push(
+                hourlyWindByHour[i] +
+                  (hourlyWindByHour[i + 1] - hourlyWindByHour[i]) * fraction
+              );
+              humidityByHour.push(
+                hourlyHumidityByHour[i] +
+                  (hourlyHumidityByHour[i + 1] - hourlyHumidityByHour[i]) *
+                    fraction
+              );
+              precipitationByHour.push(
+                hourlyPrecipitationByHour[i] +
+                  (hourlyPrecipitationByHour[i + 1] -
+                    hourlyPrecipitationByHour[i]) *
+                    fraction
+              );
               weathercodeByHour.push(hourlyWeathercodeByHour[i]);
             } else {
               // Last hour, use current values
@@ -2282,6 +2551,138 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       }
     }
 
+    // Update chart data directly without recreating the chart
+    function updateChartData(
+      labels,
+      shadeValsF,
+      sunValsFF,
+      now,
+      isDayByHour = []
+    ) {
+      if (!vibeChart || !els.chartCanvas) return;
+
+      // Preserve hover state before update
+      const savedHoverX = vibeChart._hoverX;
+      const savedHoverIndex = vibeChart._hoverIndex;
+
+      const shadeVals = shadeValsF.map((v) => toUserTemp(v));
+      const sunValsRaw = sunValsFF.map((v) => toUserTemp(v));
+
+      // If Sun Vibe is less than 5% different from Shade Vibe, treat it as the same (only on graph)
+      const sunVals = sunValsRaw.map((sunVal, i) => {
+        const shadeVal = shadeVals[i];
+        if (shadeVal === 0) return sunVal; // Avoid division by zero
+        const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
+        return percentDiff < 0.05 ? shadeVal : sunVal;
+      });
+
+      const displayLabels = labels.map((d) =>
+        d.toLocaleString([], { weekday: "short", hour: "numeric" })
+      );
+      const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
+      const markers = buildSunMarkers(labels);
+      const touchGrassTimes = findTouchGrassTimes(labels, sunVals, isDayByHour);
+
+      // Update chart data directly
+      vibeChart.data.labels = displayLabels;
+      vibeChart.data.datasets[0].data = sunVals;
+      vibeChart.data.datasets[1].data = shadeVals;
+      vibeChart._rawLabels = labels;
+      vibeChart._markers = markers;
+      vibeChart._nowIdx = nowIdx;
+      vibeChart._isDayByHour = isDayByHour;
+      vibeChart._sunTimes = sunTimes;
+      vibeChart._touchGrassTimes = touchGrassTimes;
+
+      // Update y-axis range
+      vibeChart.options.scales.y.suggestedMin =
+        Math.min(...shadeVals, ...sunVals) - 3;
+      vibeChart.options.scales.y.suggestedMax =
+        Math.max(...shadeVals, ...sunVals) + 3;
+
+      // Update chart (this will trigger plugins)
+      vibeChart.update("none");
+
+      // Restore hover state after update (scales are now ready)
+      if (
+        savedHoverIndex !== null &&
+        savedHoverIndex !== undefined &&
+        savedHoverIndex >= 0 &&
+        savedHoverIndex < labels.length
+      ) {
+        const xScale = vibeChart.scales.x;
+        vibeChart._hoverX = xScale.getPixelForValue(savedHoverIndex);
+        vibeChart._hoverIndex = savedHoverIndex;
+        // Redraw to show hover indicator
+        vibeChart.draw();
+      } else if (savedHoverX !== null && savedHoverX !== undefined) {
+        vibeChart._hoverX = savedHoverX;
+        // Redraw to show hover indicator
+        vibeChart.draw();
+      }
+
+      updateCardVisibility();
+    }
+
+    // Find ideal "Touch Grass" time per day (65-75°F / 18-24°C during daytime)
+    function findTouchGrassTimes(labels, sunVals, isDayByHour) {
+      const idealMinF = 65;
+      const idealMaxF = 75;
+      const idealMinC = 18;
+      const idealMaxC = 24;
+
+      // Convert ideal range based on current unit
+      const idealMin = unit === "F" ? idealMinF : idealMinC;
+      const idealMax = unit === "F" ? idealMaxF : idealMaxC;
+
+      const touchGrassTimes = [];
+      const timesByDay = new Map(); // Map of day key -> best time for that day
+
+      for (let i = 0; i < labels.length; i++) {
+        // Only consider daytime hours
+        if (!isDayByHour[i]) continue;
+
+        const sunTemp = sunVals[i];
+        const time = new Date(labels[i]);
+
+        // Check if temperature is in ideal range
+        if (sunTemp >= idealMin && sunTemp <= idealMax) {
+          // Create day key (YYYY-MM-DD)
+          const dayKey = `${time.getFullYear()}-${String(
+            time.getMonth() + 1
+          ).padStart(2, "0")}-${String(time.getDate()).padStart(2, "0")}`;
+
+          // Score: prefer temperatures closer to the middle of the range
+          const midPoint = (idealMin + idealMax) / 2;
+          const distanceFromMid = Math.abs(sunTemp - midPoint);
+          const score = 100 - distanceFromMid * 10; // Higher score = better
+
+          // Prefer times between 10am and 4pm (better for outdoor activities)
+          const hour = time.getHours();
+          const hourBonus = hour >= 10 && hour <= 16 ? 20 : 0;
+          const finalScore = score + hourBonus;
+
+          const candidate = {
+            time,
+            index: i,
+            temp: sunTemp,
+            score: finalScore,
+          };
+
+          // Keep the best time for each day
+          if (
+            !timesByDay.has(dayKey) ||
+            candidate.score > timesByDay.get(dayKey).score
+          ) {
+            timesByDay.set(dayKey, candidate);
+          }
+        }
+      }
+
+      // Convert map to array
+      return Array.from(timesByDay.values());
+    }
+
     async function renderChart(
       labels,
       shadeValsF,
@@ -2300,7 +2701,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
       const sunValsRaw = sunValsFF.map((v) => toUserTemp(v));
-      
+
       // If Sun Vibe is less than 5% different from Shade Vibe, treat it as the same (only on graph)
       const sunVals = sunValsRaw.map((sunVal, i) => {
         const shadeVal = shadeVals[i];
@@ -2308,62 +2709,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
         return percentDiff < 0.05 ? shadeVal : sunVal;
       });
-      
+
       const displayLabels = labels.map((d) =>
         d.toLocaleString([], { weekday: "short", hour: "numeric" })
       );
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
-      
-      // Find ideal "Touch Grass" time per day (65-75°F / 18-24°C during daytime)
-      function findTouchGrassTimes(labels, sunVals, isDayByHour) {
-        const idealMinF = 65;
-        const idealMaxF = 75;
-        const idealMinC = 18;
-        const idealMaxC = 24;
-        
-        // Convert ideal range based on current unit
-        const idealMin = unit === "F" ? idealMinF : idealMinC;
-        const idealMax = unit === "F" ? idealMaxF : idealMaxC;
-        
-        const touchGrassTimes = [];
-        const timesByDay = new Map(); // Map of day key -> best time for that day
-        
-        for (let i = 0; i < labels.length; i++) {
-          // Only consider daytime hours
-          if (!isDayByHour[i]) continue;
-          
-          const sunTemp = sunVals[i];
-          const time = new Date(labels[i]);
-          
-          // Check if temperature is in ideal range
-          if (sunTemp >= idealMin && sunTemp <= idealMax) {
-            // Create day key (YYYY-MM-DD)
-            const dayKey = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
-            
-            // Score: prefer temperatures closer to the middle of the range
-            const midPoint = (idealMin + idealMax) / 2;
-            const distanceFromMid = Math.abs(sunTemp - midPoint);
-            const score = 100 - (distanceFromMid * 10); // Higher score = better
-            
-            // Prefer times between 10am and 4pm (better for outdoor activities)
-            const hour = time.getHours();
-            const hourBonus = (hour >= 10 && hour <= 16) ? 20 : 0;
-            const finalScore = score + hourBonus;
-            
-            const candidate = { time, index: i, temp: sunTemp, score: finalScore };
-            
-            // Keep the best time for each day
-            if (!timesByDay.has(dayKey) || candidate.score > timesByDay.get(dayKey).score) {
-              timesByDay.set(dayKey, candidate);
-            }
-          }
-        }
-        
-        // Convert map to array
-        return Array.from(timesByDay.values());
-      }
-      
+
       const touchGrassTimes = findTouchGrassTimes(labels, sunVals, isDayByHour);
 
       // Optimize: If chart exists and structure hasn't changed, just update data
@@ -2772,16 +3124,33 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         id: "hoverIndicator",
         afterDraw(chart) {
           if (chart._hoverX === null || chart._hoverX === undefined) return;
-          
+
           const ctx = chart.ctx;
           const chartArea = chart.chartArea;
           const x = chart._hoverX;
-          
+
           // Ensure x is within chart area
           if (x < chartArea.left || x > chartArea.right) return;
-          
+
           ctx.save();
-          
+
+          // Get the time for this hover position
+          // Use stored hover index if available, otherwise calculate from pixel position
+          let hoverTime = null;
+          const rawLabels = chart._rawLabels || [];
+          const hoverIndex =
+            chart._hoverIndex !== undefined && chart._hoverIndex !== null
+              ? chart._hoverIndex
+              : Math.round(chart.scales.x.getValueForPixel(x));
+
+          if (
+            Number.isFinite(hoverIndex) &&
+            hoverIndex >= 0 &&
+            hoverIndex < rawLabels.length
+          ) {
+            hoverTime = new Date(rawLabels[hoverIndex]);
+          }
+
           // Draw thin vertical red line from bottom to top of chart area
           ctx.strokeStyle = "#ef4444"; // red-500
           ctx.lineWidth = 1;
@@ -2789,13 +3158,25 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ctx.moveTo(x, chartArea.top);
           ctx.lineTo(x, chartArea.bottom);
           ctx.stroke();
-          
+
           // Draw red dot at bottom of chart
           ctx.fillStyle = "#ef4444"; // red-500
           ctx.beginPath();
           ctx.arc(x, chartArea.bottom, 4, 0, Math.PI * 2);
           ctx.fill();
-          
+
+          // Draw time label above the line in red
+          if (hoverTime) {
+            ctx.fillStyle = "#ef4444"; // red-500
+            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            const timeStr = fmtHM(hoverTime);
+            // Position label above chart area with some margin
+            const labelY = chartArea.top - 8;
+            ctx.fillText(timeStr, x, labelY);
+          }
+
           ctx.restore();
         },
       };
@@ -2807,7 +3188,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           const xScale = scales.x;
 
           // Use hourly labels for display (stored on timelineState)
-          const hourlyLabels = window.timelineState?.hourlyLabels || chart._rawLabels || [];
+          const hourlyLabels =
+            window.timelineState?.hourlyLabels || chart._rawLabels || [];
           const fullLabels = chart._rawLabels || [];
           if (hourlyLabels.length === 0 || fullLabels.length === 0) return;
 
@@ -2839,12 +3221,12 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               const labelTime = new Date(label);
               return labelTime.getTime() === hourlyTime.getTime();
             });
-            
+
             if (idx === -1) return;
-            
+
             const x = xScale.getPixelForValue(idx);
             if (x < chartArea.left || x > chartArea.right) return;
-            
+
             if (x - lastX >= minSpacing || visibleTicks.length === 0) {
               visibleTicks.push({ x, date: hourlyTime });
               lastX = x;
@@ -2854,7 +3236,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           // Always include first and last hourly ticks if they exist
           if (hourlyLabels.length > 0) {
             const firstHourlyTime = new Date(hourlyLabels[0]);
-            const lastHourlyTime = new Date(hourlyLabels[hourlyLabels.length - 1]);
+            const lastHourlyTime = new Date(
+              hourlyLabels[hourlyLabels.length - 1]
+            );
             const firstIdx = fullLabels.findIndex((label) => {
               const labelTime = new Date(label);
               return labelTime.getTime() === firstHourlyTime.getTime();
@@ -2914,7 +3298,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       const currentLine = {
         id: "currentLine",
         afterDatasetsDraw(chart) {
-          if (nowIdx === -1) return;
+          const nowIdx = chart._nowIdx;
+          if (nowIdx === -1 || nowIdx === undefined) return;
           const { ctx, chartArea, scales } = chart;
           const x = scales.x.getPixelForValue(nowIdx);
           const timeColor =
@@ -2927,6 +3312,25 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ctx.strokeStyle = timeColor;
           ctx.setLineDash([5, 5]);
           ctx.stroke();
+
+          // Draw green dot at bottom of chart
+          ctx.fillStyle = timeColor;
+          ctx.beginPath();
+          ctx.arc(x, chartArea.bottom, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Draw current time label above the line in green
+          // Use actual current time, not the data point time
+          const actualCurrentTime = new Date();
+          ctx.fillStyle = timeColor;
+          ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          const timeStr = fmtHM(actualCurrentTime);
+          // Position label above chart area with some margin
+          const labelY = chartArea.top - 8;
+          ctx.fillText(timeStr, x, labelY);
+
           ctx.restore();
         },
       };
@@ -3067,39 +3471,45 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         afterDatasetsDraw(chart) {
           const touchGrassTimes = chart._touchGrassTimes || [];
           if (touchGrassTimes.length === 0) return;
-          
+
           const { ctx, scales, chartArea } = chart;
           const sunDsIndex = chart.data.datasets.findIndex(
             (d) => d.label === "Sun Vibe"
           );
           if (sunDsIndex === -1) return;
           const sunData = chart.data.datasets[sunDsIndex].data;
-          
+
           // Store positions for hover detection
           const positions = [];
-          
+
           ctx.save();
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-          
+
           touchGrassTimes.forEach((tgTime) => {
             // Get x position for the time
             const x = scales.x.getPixelForValue(tgTime.index);
-            
+
             // Only draw if within chart area
             if (x < chartArea.left || x > chartArea.right) return;
-            
+
             // Get y position on sun vibe line
             const ySun = scales.y.getPixelForValue(sunData[tgTime.index]);
-            
+
             // Store position for hover detection
-            positions.push({ x, y: ySun, time: tgTime.time, temp: tgTime.temp, index: tgTime.index });
-            
+            positions.push({
+              x,
+              y: ySun,
+              time: tgTime.time,
+              temp: tgTime.temp,
+              index: tgTime.index,
+            });
+
             // Draw leaf icon
             ctx.fillText("🍃", x, ySun - 8);
           });
-          
+
           chart._touchGrassPositions = positions;
           ctx.restore();
         },
@@ -3536,7 +3946,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             // De Casteljau's algorithm for cubic bezier subdivision
             // For a cubic bezier: P(t) = (1-t)^3*P0 + 3*(1-t)^2*t*P1 + 3*(1-t)*t^2*P2 + t^3*P3
             // Where P0=p1, P1=cp1, P2=cp2, P3=p2
-            
+
             // Intermediate points for subdivision
             const q0x = p1.x;
             const q0y = p1.y;
@@ -3546,23 +3956,23 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             const q2y = (1 - t) * cp1y + t * cp2y;
             const q3x = (1 - t) * cp2x + t * p2.x;
             const q3y = (1 - t) * cp2y + t * p2.y;
-            
+
             const r0x = (1 - t) * q0x + t * q1x;
             const r0y = (1 - t) * q0y + t * q1y;
             const r1x = (1 - t) * q1x + t * q2x;
             const r1y = (1 - t) * q1y + t * q2y;
             const r2x = (1 - t) * q2x + t * q3x;
             const r2y = (1 - t) * q2y + t * q3y;
-            
+
             const s0x = (1 - t) * r0x + t * r1x;
             const s0y = (1 - t) * r0y + t * r1y;
             const s1x = (1 - t) * r1x + t * r2x;
             const s1y = (1 - t) * r1y + t * r2y;
-            
+
             // The point at t
             const endX = (1 - t) * s0x + t * s1x;
             const endY = (1 - t) * s0y + t * s1y;
-            
+
             // Control points for the first portion: p1 (q0), r0, s0, end point
             return {
               cp1x: r0x,
@@ -3570,7 +3980,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               cp2x: s0x,
               cp2y: s0y,
               endX: endX,
-              endY: endY
+              endY: endY,
             };
           }
 
@@ -3759,7 +4169,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   if (lineSmoothing > 0 && uniqueDrawPoints.length > 2) {
                     // Calculate control points for bezier curve
                     const p0 = i > 0 ? uniqueDrawPoints[i - 1] : p1;
-                    const p3 = i < uniqueDrawPoints.length - 2 ? uniqueDrawPoints[i + 2] : p2;
+                    const p3 =
+                      i < uniqueDrawPoints.length - 2
+                        ? uniqueDrawPoints[i + 2]
+                        : p2;
 
                     // Calculate direction vectors
                     const dx1 = p2.x - p0.x;
@@ -3802,7 +4215,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
+          interaction: { mode: "x", intersect: false },
           animation: false,
           animations: {
             x: false,
@@ -3812,6 +4225,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           },
           layout: {
             padding: {
+              top: 20, // Extra space for time labels above lines
               bottom: 40, // Extra space for two-line labels
             },
           },
@@ -3861,33 +4275,47 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               borderWidth: 1,
               padding: 12,
               displayColors: false,
-              itemSort: (a, b) => {
-                const order = ["Sun Vibe", "Shade Vibe", "Highlighted Vibes"];
-                return (
-                  order.indexOf(a.dataset.label) -
-                  order.indexOf(b.dataset.label)
-                );
-              },
               filter: (item) => {
                 // Hide highlight from tooltip
-                if (item.dataset.label === "Highlighted Vibes") return false;
+                if (item.dataset.label === "Highlighted Vibes") {
+                  console.log(
+                    "[Tooltip Debug] filter: Filtering out Highlighted Vibes"
+                  );
+                  return false;
+                }
                 // Only show Shade Vibe in tooltip (we'll show combined description there)
-                if (item.dataset.label === "Sun Vibe") return false;
+                if (item.dataset.label === "Sun Vibe") {
+                  console.log("[Tooltip Debug] filter: Filtering out Sun Vibe");
+                  return false;
+                }
+                console.log(
+                  `[Tooltip Debug] filter: Allowing ${item.dataset.label}`
+                );
                 return true;
+              },
+              // Deduplicate tooltip items to prevent showing identical lines
+              itemSort: (a, b) => {
+                const order = ["Sun Vibe", "Shade Vibe", "Highlighted Vibes"];
+                const orderDiff =
+                  order.indexOf(a.dataset.label) -
+                  order.indexOf(b.dataset.label);
+                if (orderDiff !== 0) return orderDiff;
+                // If same dataset, sort by dataIndex to ensure consistent ordering
+                return a.dataIndex - b.dataIndex;
               },
               external: (context) => {
                 // Guard: ensure we have a valid event
                 if (!context || !context.event) {
                   return;
                 }
-                
+
                 // Check if hovering near a sun marker or Touch Grass marker
                 const chart = context.chart;
                 if (!chart) return;
-                
+
                 const markerPositions = chart._sunMarkerPositions || [];
                 const touchGrassPos = chart._touchGrassPosition;
-                
+
                 try {
                   const canvasPosition = Chart.helpers.getRelativePosition(
                     context.event,
@@ -3900,11 +4328,22 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     const dx = canvasPosition.x - touchGrassPos.x;
                     const dy = canvasPosition.y - touchGrassPos.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    
+
                     if (distance < 20) {
                       const timeStr = fmtHM(touchGrassPos.time);
-                      const tempStr = `${formatTemp(touchGrassPos.temp)}${unitSuffix()}`;
+                      const tempStr = `${formatTemp(
+                        touchGrassPos.temp
+                      )}${unitSuffix()}`;
                       const tooltip = chart.tooltip;
+                      // Set flag to prevent default tooltip processing
+                      chart._customTooltipActive = true;
+                      console.log(
+                        "[Tooltip Debug] external: Showing Touch Grass tooltip, setting _customTooltipActive = true"
+                      );
+                      // Clear any default tooltip items to prevent duplicates
+                      tooltip.setItems([]);
+                      // Ensure tooltip is completely replaced, not added to
+                      tooltip.opacity = 0; // Hide first
                       tooltip.setContent({
                         title: "🍃 Touch Grass",
                         body: [{ lines: [`${timeStr} - ${tempStr}`] }],
@@ -3917,6 +4356,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                   }
 
                   if (!markerPositions.length) {
+                    // Not near any marker, clear custom tooltip flag
+                    chart._customTooltipActive = false;
                     return;
                   }
 
@@ -3930,6 +4371,15 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       // Show custom tooltip for sun marker
                       const timeStr = fmtHM(new Date(marker.time));
                       const tooltip = chart.tooltip;
+                      // Set flag to prevent default tooltip processing
+                      chart._customTooltipActive = true;
+                      console.log(
+                        `[Tooltip Debug] external: Showing ${marker.label} tooltip, setting _customTooltipActive = true`
+                      );
+                      // Clear any default tooltip items to prevent duplicates
+                      tooltip.setItems([]);
+                      // Ensure tooltip is completely replaced, not added to
+                      tooltip.opacity = 0; // Hide first
                       tooltip.setContent({
                         title: `${marker.label}`,
                         body: [{ lines: [timeStr] }],
@@ -3941,26 +4391,292 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                     }
                   }
 
-                  // Not near a marker, use default tooltip
-                  const tooltip = chart.tooltip;
-                  tooltip.opacity = 0;
+                  // Not near a marker, clear custom tooltip flag and use default tooltip
+                  chart._customTooltipActive = false;
+                  console.log(
+                    "[Tooltip Debug] external: Not near marker, cleared _customTooltipActive, using default tooltip"
+                  );
                 } catch (e) {
                   // Silently handle errors (e.g., when clicking outside chart)
                   if (chart) {
                     chart._hoverX = null;
+                    chart._customTooltipActive = false;
                   }
                 }
               },
               callbacks: {
+                // Deduplicate tooltip body items to prevent showing identical lines
+                beforeBody: (items) => {
+                  if (!items || !Array.isArray(items) || items.length === 0)
+                    return items;
+
+                  // Check if custom tooltip is active - if so, skip default processing
+                  const chart = items[0]?.chart;
+                  if (chart && chart._customTooltipActive) {
+                    console.log(
+                      "[Tooltip Debug] beforeBody: Custom tooltip active, returning empty array"
+                    );
+                    return [];
+                  }
+
+                  // Debug logging (temporary)
+                  console.log(
+                    "[Tooltip Debug] beforeBody: Processing",
+                    items.length,
+                    "items"
+                  );
+                  items.forEach((item, idx) => {
+                    console.log(`[Tooltip Debug] beforeBody item ${idx}:`, {
+                      datasetLabel: item.dataset?.label,
+                      label: item.label,
+                      labelType: typeof item.label,
+                      formattedValue: item.formattedValue,
+                      raw: item.raw,
+                    });
+                  });
+
+                  // Safe string conversion that never returns "[object Object]"
+                  // Uses a Set to track visited objects and prevent circular references
+                  const safeString = (value, visited = new WeakSet()) => {
+                    if (value === null || value === undefined) return "";
+                    if (typeof value === "string") return value;
+                    if (typeof value === "number" || typeof value === "boolean")
+                      return String(value);
+                    if (typeof value === "function") return "";
+                    // Handle Date objects
+                    if (value instanceof Date) {
+                      return isNaN(value.getTime()) ? "" : value.toISOString();
+                    }
+                    // Handle Error objects
+                    if (value instanceof Error) {
+                      return value.message || "";
+                    }
+                    if (Array.isArray(value)) {
+                      if (value.length === 0) return "";
+                      // Try to join array elements if they're strings/numbers
+                      const stringParts = value
+                        .slice(0, 10) // Limit to first 10 elements to avoid huge strings
+                        .map((item) => safeString(item, visited))
+                        .filter((str) => str.length > 0);
+                      return stringParts.length > 0
+                        ? stringParts.join(", ")
+                        : "";
+                    }
+                    if (typeof value === "object") {
+                      // Prevent circular references
+                      if (visited.has(value)) return "";
+                      visited.add(value);
+                      // Try to extract meaningful text from object
+                      if (value.text !== undefined) {
+                        const result = safeString(value.text, visited);
+                        if (result) return result;
+                      }
+                      if (value.label !== undefined) {
+                        const result = safeString(value.label, visited);
+                        if (result) return result;
+                      }
+                      if (value.message !== undefined) {
+                        const result = safeString(value.message, visited);
+                        if (result) return result;
+                      }
+                      if (value.value !== undefined) {
+                        const result = safeString(value.value, visited);
+                        if (result) return result;
+                      }
+                      // Try toString as last resort
+                      if (
+                        value.toString &&
+                        typeof value.toString === "function"
+                      ) {
+                        try {
+                          const str = value.toString();
+                          // If toString returns "[object Object]" or similar, skip it
+                          if (
+                            str === "[object Object]" ||
+                            str.startsWith("[object ")
+                          )
+                            return "";
+                          return str;
+                        } catch (e) {
+                          return "";
+                        }
+                      }
+                      // Skip objects we can't convert safely
+                      return "";
+                    }
+                    return "";
+                  };
+
+                  // Deduplicate: if multiple items have the same displayed text, only keep the first
+                  // We deduplicate based on the actual text content, not dataset labels
+                  const seen = new Set();
+                  return items.filter((item) => {
+                    if (!item) return false;
+
+                    // Extract the actual displayed text from Chart.js item structure
+                    // The label callback has already been called, so item.label contains the final text
+                    // Priority: label (from label callback) > formattedValue > parsed value
+                    let displayText = "";
+
+                    // First, check the label - this is the result from the label callback
+                    // which contains the description text we want to show
+                    // Handle case where item.label might be an object or array
+                    if (item.label !== undefined) {
+                      // Check if label is an object before processing
+                      if (
+                        typeof item.label === "object" &&
+                        item.label !== null
+                      ) {
+                        // Recursively extract text from object properties
+                        displayText = safeString(item.label);
+                      } else {
+                        displayText = safeString(item.label);
+                      }
+                    }
+
+                    // If no label, check formattedValue - this is what Chart.js displays by default
+                    if (!displayText && item.formattedValue !== undefined) {
+                      displayText = safeString(item.formattedValue);
+                    }
+
+                    // Fallback to parsed value if available
+                    if (
+                      !displayText &&
+                      item.parsed !== undefined &&
+                      item.parsed.y !== undefined
+                    ) {
+                      displayText = safeString(item.parsed.y);
+                    }
+
+                    // Last resort: raw value
+                    if (!displayText && item.raw !== undefined) {
+                      displayText = safeString(item.raw);
+                    }
+
+                    // Skip items that have no displayable text (empty or only whitespace)
+                    const normalizedText = displayText
+                      ? displayText.trim().toLowerCase()
+                      : "";
+                    if (!normalizedText) {
+                      return false;
+                    }
+
+                    // Deduplicate based on the normalized text content (case-insensitive)
+                    // If two items have the same text (even from different datasets), keep only the first
+                    if (seen.has(normalizedText)) {
+                      console.log(
+                        `[Tooltip Debug] beforeBody: Filtering duplicate text: "${normalizedText}"`
+                      );
+                      return false; // Duplicate text, filter it out
+                    }
+                    seen.add(normalizedText);
+                    console.log(
+                      `[Tooltip Debug] beforeBody: Keeping item with text: "${normalizedText}"`
+                    );
+                    return true;
+                  });
+                },
                 // Keep the time label as title, with sunrise/sunset info if near
                 title: (items) => {
-                  const defaultTitle = items?.[0]?.label ?? "";
-                  if (!items || items.length === 0) return defaultTitle;
+                  if (!items || items.length === 0) return "";
+
+                  // Check if custom tooltip is active - if so, skip default processing
+                  const firstItem = items[0];
+                  const chart = firstItem?.chart;
+                  if (chart && chart._customTooltipActive) {
+                    console.log(
+                      "[Tooltip Debug] title: Custom tooltip active, returning empty string"
+                    );
+                    return "";
+                  }
+
+                  // Safe string conversion helper (enhanced version)
+                  // Uses a Set to track visited objects and prevent circular references
+                  const safeString = (value, visited = new WeakSet()) => {
+                    if (value === null || value === undefined) return "";
+                    if (typeof value === "string") return value;
+                    if (typeof value === "number" || typeof value === "boolean")
+                      return String(value);
+                    if (typeof value === "function") return "";
+                    // Handle Date objects
+                    if (value instanceof Date) {
+                      return isNaN(value.getTime()) ? "" : value.toISOString();
+                    }
+                    // Handle Error objects
+                    if (value instanceof Error) {
+                      return value.message || "";
+                    }
+                    if (Array.isArray(value)) {
+                      if (value.length === 0) return "";
+                      // Try to join array elements if they're strings/numbers
+                      const stringParts = value
+                        .slice(0, 10) // Limit to first 10 elements to avoid huge strings
+                        .map((item) => safeString(item, visited))
+                        .filter((str) => str.length > 0);
+                      return stringParts.length > 0
+                        ? stringParts.join(", ")
+                        : "";
+                    }
+                    if (typeof value === "object") {
+                      // Prevent circular references
+                      if (visited.has(value)) return "";
+                      visited.add(value);
+                      // Try to extract meaningful text from object
+                      if (value.text !== undefined) {
+                        const result = safeString(value.text, visited);
+                        if (result) return result;
+                      }
+                      if (value.label !== undefined) {
+                        const result = safeString(value.label, visited);
+                        if (result) return result;
+                      }
+                      if (value.message !== undefined) {
+                        const result = safeString(value.message, visited);
+                        if (result) return result;
+                      }
+                      if (value.value !== undefined) {
+                        const result = safeString(value.value, visited);
+                        if (result) return result;
+                      }
+                      // Try toString as last resort
+                      if (
+                        value.toString &&
+                        typeof value.toString === "function"
+                      ) {
+                        try {
+                          const str = value.toString();
+                          // If toString returns "[object Object]" or similar, skip it
+                          if (
+                            str === "[object Object]" ||
+                            str.startsWith("[object ")
+                          )
+                            return "";
+                          return str;
+                        } catch (e) {
+                          return "";
+                        }
+                      }
+                      // Skip objects we can't convert safely
+                      return "";
+                    }
+                    return "";
+                  };
+
+                  // Extract default title safely, handling different item.label types
+                  let defaultTitle = "";
+                  if (firstItem) {
+                    defaultTitle = safeString(firstItem.label);
+                  }
 
                   // Get the hovered time from the first item
                   const item = items[0];
+                  if (!item || typeof item.dataIndex !== "number") {
+                    return defaultTitle || "";
+                  }
+
                   const dataIndex = item.dataIndex;
-                  const chart = item.chart;
+                  if (!chart) return defaultTitle || "";
+
                   const rawLabels = chart._rawLabels || [];
                   const sunTimes = chart._sunTimes || {
                     sunrises: [],
@@ -3969,6 +4685,10 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
                   if (dataIndex >= 0 && dataIndex < rawLabels.length) {
                     const hoveredTime = new Date(rawLabels[dataIndex]);
+                    if (isNaN(hoveredTime.getTime())) {
+                      return defaultTitle || "";
+                    }
+
                     const hoveredTimeMs = hoveredTime.getTime();
                     const twoHoursMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
@@ -3984,7 +4704,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                         type: "sunset",
                         label: "Sunset",
                       })),
-                    ];
+                    ].filter((e) => !isNaN(e.time)); // Filter out invalid dates
 
                     // Find events within 2 hours before or after
                     const nearbyEvents = allEvents.filter((e) => {
@@ -4007,18 +4727,117 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                         return `${event.label} ${exactTime}`;
                       });
 
-                      // Combine with default title
-                      return `${defaultTitle} - ${eventStrings.join(", ")}`;
+                      // Combine with default title - ensure both are strings
+                      const eventText = eventStrings.join(", ");
+                      const finalTitle = defaultTitle || "";
+                      return eventText
+                        ? `${finalTitle} - ${eventText}`
+                        : finalTitle;
                     }
                   }
 
-                  return defaultTitle;
+                  // Always return a string
+                  const finalTitle = defaultTitle || "";
+                  console.log(
+                    `[Tooltip Debug] title: Returning title:`,
+                    finalTitle
+                  );
+                  return finalTitle;
                 },
                 // Custom label showing combined description
                 label: (ctx) => {
-                  if (ctx.dataset.label === "Highlighted Vibes") return null; // Don't show in tooltip
-                  if (ctx.dataset.label === "Sun Vibe") return null; // Only show combined description via Shade Vibe
-                  
+                  // Check if custom tooltip is active - if so, skip default processing
+                  const chart = ctx.chart;
+                  if (chart && chart._customTooltipActive) {
+                    console.log(
+                      "[Tooltip Debug] label: Custom tooltip active, returning empty string"
+                    );
+                    return "";
+                  }
+
+                  if (ctx.dataset.label === "Highlighted Vibes") {
+                    console.log(
+                      "[Tooltip Debug] label: Filtering Highlighted Vibes"
+                    );
+                    return ""; // Don't show in tooltip
+                  }
+                  if (ctx.dataset.label === "Sun Vibe") {
+                    console.log("[Tooltip Debug] label: Filtering Sun Vibe");
+                    return ""; // Only show combined description via Shade Vibe
+                  }
+
+                  // Safe string conversion helper (enhanced version)
+                  // Uses a Set to track visited objects and prevent circular references
+                  const safeString = (value, visited = new WeakSet()) => {
+                    if (value === null || value === undefined) return "";
+                    if (typeof value === "string") return value;
+                    if (typeof value === "number" || typeof value === "boolean")
+                      return String(value);
+                    if (typeof value === "function") return "";
+                    // Handle Date objects
+                    if (value instanceof Date) {
+                      return isNaN(value.getTime()) ? "" : value.toISOString();
+                    }
+                    // Handle Error objects
+                    if (value instanceof Error) {
+                      return value.message || "";
+                    }
+                    if (Array.isArray(value)) {
+                      if (value.length === 0) return "";
+                      // Try to join array elements if they're strings/numbers
+                      const stringParts = value
+                        .slice(0, 10) // Limit to first 10 elements to avoid huge strings
+                        .map((item) => safeString(item, visited))
+                        .filter((str) => str.length > 0);
+                      return stringParts.length > 0
+                        ? stringParts.join(", ")
+                        : "";
+                    }
+                    if (typeof value === "object") {
+                      // Prevent circular references
+                      if (visited.has(value)) return "";
+                      visited.add(value);
+                      // Try to extract meaningful text from object
+                      if (value.text !== undefined) {
+                        const result = safeString(value.text, visited);
+                        if (result) return result;
+                      }
+                      if (value.label !== undefined) {
+                        const result = safeString(value.label, visited);
+                        if (result) return result;
+                      }
+                      if (value.message !== undefined) {
+                        const result = safeString(value.message, visited);
+                        if (result) return result;
+                      }
+                      if (value.value !== undefined) {
+                        const result = safeString(value.value, visited);
+                        if (result) return result;
+                      }
+                      // Try toString as last resort
+                      if (
+                        value.toString &&
+                        typeof value.toString === "function"
+                      ) {
+                        try {
+                          const str = value.toString();
+                          // If toString returns "[object Object]" or similar, skip it
+                          if (
+                            str === "[object Object]" ||
+                            str.startsWith("[object ")
+                          )
+                            return "";
+                          return str;
+                        } catch (e) {
+                          return "";
+                        }
+                      }
+                      // Skip objects we can't convert safely
+                      return "";
+                    }
+                    return "";
+                  };
+
                   let desc = "";
                   try {
                     const i = ctx.dataIndex;
@@ -4028,28 +4847,62 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       const solar = ts.solarByHour?.[i] ?? 0;
                       const shadeF = ts.shadeVals?.[i];
                       const sunF = ts.sunVals?.[i];
-                      
+
                       // Get the hovered time for sunset info
-                      const chart = ctx.chart;
                       const rawLabels = chart._rawLabels || [];
-                      const hoveredTime = i < rawLabels.length ? new Date(rawLabels[i]) : new Date();
-                      
+                      const hoveredTime =
+                        i < rawLabels.length
+                          ? new Date(rawLabels[i])
+                          : new Date();
+
                       // Check if this is a Touch Grass time
-                      const touchGrassPositions = chart._touchGrassPositions || [];
-                      const isTouchGrassTime = touchGrassPositions.some(pos => pos.index === i);
-                      
-                      if (typeof shadeF === "number" && typeof sunF === "number") {
-                        desc = combinedVibeDescriptor(shadeF, sunF, solar, isDay, hoveredTime) || "";
-                        
+                      const touchGrassPositions =
+                        chart._touchGrassPositions || [];
+                      const isTouchGrassTime = touchGrassPositions.some(
+                        (pos) => pos.index === i
+                      );
+
+                      if (
+                        typeof shadeF === "number" &&
+                        typeof sunF === "number"
+                      ) {
+                        const vibeDesc = combinedVibeDescriptor(
+                          shadeF,
+                          sunF,
+                          solar,
+                          isDay,
+                          hoveredTime
+                        );
+                        // Ensure vibeDesc is safely converted to string
+                        desc = safeString(vibeDesc);
+
                         // Add Touch Grass indicator if this is the Touch Grass time
-                        if (isTouchGrassTime) {
+                        if (isTouchGrassTime && desc) {
                           desc = `🍃 Touch Grass - ${desc}`;
                         }
                       }
                     }
-                  } catch {}
-                  // Return the combined description
-                  return desc;
+                  } catch (e) {
+                    // Ensure we always return a string even on error
+                    desc = "";
+                  }
+                  // Final safety check: ensure desc is always a string
+                  const finalDesc =
+                    typeof desc === "string" ? desc : safeString(desc) || "";
+
+                  // Debug logging (temporary)
+                  if (finalDesc) {
+                    console.log(
+                      `[Tooltip Debug] label: Returning description for ${ctx.dataset.label}:`,
+                      finalDesc.substring(0, 100)
+                    );
+                  } else {
+                    console.log(
+                      `[Tooltip Debug] label: Returning empty string for ${ctx.dataset.label}`
+                    );
+                  }
+
+                  return finalDesc;
                 },
               },
             },
@@ -4093,35 +4946,47 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       let selectionStartTime = null;
       let touchStartTime = null;
       let hasMoved = false;
-      
+      let clickStartX = null;
+      let clickStartTime = null;
+
       // Track mouse position for red dot indicator
       els.chartCanvas.addEventListener("mousemove", (e) => {
         if (!vibeChart || !timelineState) return;
         const rect = els.chartCanvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        
+        const y = e.clientY - rect.top;
+
         // Get the data index from the x position
         const xScale = vibeChart.scales.x;
-        if (xScale) {
-          const dataIndex = xScale.getValueForPixel(x);
-          // Round to nearest integer for category scale
-          const roundedIndex = Math.round(dataIndex);
-          if (Number.isFinite(roundedIndex) && roundedIndex >= 0 && roundedIndex < timelineState.labels.length) {
-            // Get the pixel position of this data point
-            const pixelX = xScale.getPixelForValue(roundedIndex);
-            vibeChart._hoverX = pixelX;
-            vibeChart.draw();
-          } else {
-            vibeChart._hoverX = null;
-            vibeChart.draw();
-          }
+        if (!xScale) return;
+
+        const dataIndex = xScale.getValueForPixel(x);
+        const roundedIndex = Math.round(dataIndex);
+
+        if (
+          Number.isFinite(roundedIndex) &&
+          roundedIndex >= 0 &&
+          roundedIndex < timelineState.labels.length
+        ) {
+          // Get the pixel position of this data point (snap to nearest point)
+          const pixelX = xScale.getPixelForValue(roundedIndex);
+          vibeChart._hoverX = pixelX;
+          vibeChart._hoverIndex = roundedIndex;
+          // Update temperature cards to show the hovered time's data
+          paintSimulatedIndex(roundedIndex);
+          vibeChart.draw();
+        } else {
+          vibeChart._hoverX = null;
+          vibeChart._hoverIndex = null;
+          vibeChart.draw();
         }
       });
-      
+
       // Clear hover indicator when mouse leaves chart
       els.chartCanvas.addEventListener("mouseleave", () => {
         if (vibeChart) {
           vibeChart._hoverX = null;
+          vibeChart._hoverIndex = null;
           vibeChart.draw();
         }
       });
@@ -4130,20 +4995,20 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (!vibeChart || !timelineState) return;
         const rect = els.chartCanvas.getBoundingClientRect();
         const x = clientX - rect.left;
-        const y = (clientY !== undefined) ? clientY - rect.top : 0;
-        
+        const y = clientY !== undefined ? clientY - rect.top : 0;
+
         // Check if hovering near Touch Grass markers
         const touchGrassPositions = vibeChart._touchGrassPositions || [];
         for (const touchGrassPos of touchGrassPositions) {
           const dx = x - touchGrassPos.x;
           const dy = y - touchGrassPos.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
-          
+
           if (distance < 20) {
             // Show Touch Grass info in temp section
             const timeStr = fmtHM(touchGrassPos.time);
             const tempStr = `${formatTemp(touchGrassPos.temp)}${unitSuffix()}`;
-            
+
             if (els.combinedLabel) {
               els.combinedLabel.innerHTML = `🍃 Touch Grass - ${timeStr} - ${tempStr}`;
             }
@@ -4166,9 +5031,25 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             return;
           }
         }
-        
-        const idxFloat = vibeChart.scales.x.getValueForPixel(x);
-        const idx = Math.round(idxFloat);
+
+        // Always use the x position to determine index, not which line is closer
+        // This ensures consistent behavior regardless of which line is hovered
+        // Use the stored hover index if available (from mousemove), otherwise calculate from x position
+        let idx = null;
+        if (
+          vibeChart._hoverIndex !== null &&
+          vibeChart._hoverIndex !== undefined
+        ) {
+          // Use the index already calculated by mousemove handler
+          idx = vibeChart._hoverIndex;
+        } else {
+          // Fallback: calculate from x position
+          const xScale = vibeChart.scales.x;
+          if (!xScale) return;
+          const idxFloat = xScale.getValueForPixel(x);
+          idx = Math.round(idxFloat);
+        }
+
         if (
           Number.isFinite(idx) &&
           idx >= 0 &&
@@ -4198,7 +5079,11 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           } catch {}
           e.preventDefault();
         } else {
+          // Track click position for potential 3-hour selection
+          clickStartX = e.clientX;
+          clickStartTime = Date.now();
           isPointerDown = true;
+          hasMoved = false;
           try {
             els.chartCanvas.setPointerCapture(e.pointerId);
           } catch {}
@@ -4228,6 +5113,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             vibeChart.update("none");
           }
         } else {
+          // Track if pointer moved (to distinguish click from drag)
+          if (isPointerDown && clickStartX !== null) {
+            const moveDistance = Math.abs(e.clientX - clickStartX);
+            if (moveDistance > 5) {
+              hasMoved = true;
+            }
+          }
           const isMouse = e.pointerType === "mouse";
           if (isMouse || isPointerDown) updateFromClientX(e.clientX, e.clientY);
         }
@@ -4304,8 +5196,60 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           try {
             els.chartCanvas.releasePointerCapture(e.pointerId);
           } catch {}
+        } else if (isPointerDown && !hasMoved && clickStartX !== null) {
+          // This was a click (not a drag) - create 3-hour selection
+          const clickedTime = getTimeFromClientX(e.clientX);
+          if (clickedTime) {
+            // Round to nearest hour
+            const clickedHour = new Date(clickedTime);
+            clickedHour.setMinutes(0, 0, 0);
+
+            // Create selection: clicked hour - 1 hour, clicked hour, clicked hour + 1 hour
+            const startTime = new Date(clickedHour);
+            startTime.setHours(startTime.getHours() - 1);
+
+            const endTime = new Date(clickedHour);
+            endTime.setHours(endTime.getHours() + 1);
+
+            selectionRange = { startTime, endTime };
+            isSelectingActive = false;
+            updateCardVisibility();
+            vibeChart.update("none");
+
+            // Copy URL to clipboard and update browser URL
+            const url = generateShareURL(startTime, endTime);
+            const urlObj = new URL(url);
+            history.pushState({}, "", urlObj.pathname + urlObj.search);
+
+            (async () => {
+              const success = await copyToClipboard(url);
+              if (success) {
+                showNotification(
+                  "Link copied to clipboard! Share this URL to show this time range.",
+                  "success"
+                );
+              } else {
+                showNotification(
+                  "Failed to copy to clipboard. URL: " + url,
+                  "error",
+                  5000
+                );
+              }
+            })();
+
+            // Generate weather summary
+            updateWeatherSummary();
+          }
+          isPointerDown = false;
+          clickStartX = null;
+          clickStartTime = null;
+          try {
+            els.chartCanvas.releasePointerCapture(e.pointerId);
+          } catch {}
         } else {
           isPointerDown = false;
+          clickStartX = null;
+          clickStartTime = null;
           try {
             els.chartCanvas.releasePointerCapture(e.pointerId);
           } catch {}
@@ -4556,7 +5500,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           } catch (e) {
             console.error("Error building timeline dataset:", e);
             // Fallback: try to continue with hourly data only
-            throw new Error("Failed to process weather data. Please try again.");
+            throw new Error(
+              "Failed to process weather data. Please try again."
+            );
           }
           timelineState = ds;
           window.timelineState = timelineState; // expose for tooltip descriptors
@@ -4569,17 +5515,17 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
             ds.now,
             ds.isDayByHour
           );
+          // Update remainder of day summary after chart renders
+          await updateRemainderOfDaySummary();
           // Update summary if selection exists (weather data may have changed)
           if (selectionRange) {
             updateWeatherSummary();
           }
-          updateNavArrowsVisibility();
         }
 
         const nowTime = new Date();
         els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
         updateAdvStats();
-        updateNavArrowsVisibility();
       } catch (e) {
         console.warn("Update cycle failed", e);
         // Don't show error for update cycle failures, just log them
@@ -4668,7 +5614,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           ds.now,
           ds.isDayByHour
         );
-        updateNavArrowsVisibility();
+        // Update remainder of day summary after chart renders
+        await updateRemainderOfDaySummary();
         updateAdvStats(); // Update stats after chart is rendered
         // Update summary if selection exists (weather data may have changed)
         if (selectionRange) {
@@ -4962,7 +5909,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                       ds.now,
                       ds.isDayByHour
                     );
-                    updateNavArrowsVisibility();
                   })
                   .catch(() => {});
               }
@@ -4974,7 +5920,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       function setTimePreset(preset) {
         // Reset date offset when preset is selected
         dateOffset = 0;
-        
+
         // Clear active state from all presets
         const allPresetBtns = [
           presetTodayBtn,
@@ -5045,6 +5991,9 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (els.daysAhead) els.daysAhead.value = daysAhead;
         storageCacheSet(DAYS_AHEAD_KEY, String(daysAhead));
 
+        // Update date display (needs to be after daysAhead is set)
+        updateHeadlineDate();
+
         // Update chart title
         if (preset === "tomorrow") {
           if (chartTitleEl) chartTitleEl.textContent = "Tomorrow";
@@ -5058,18 +6007,26 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         if (lastCoords) {
           getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
             .then(async (hourly) => {
-              try {
-                // For "tomorrow" preset, we need at least 2 days of data to show all of tomorrow
-                const sunDaysAhead = preset === "tomorrow" ? 2 : daysAhead;
-                const dailySun = await getDailySun(
-                  lastCoords.latitude,
-                  lastCoords.longitude,
-                  sunDaysAhead
-                );
-                sunTimes = dailySun;
-              } catch (e) {
-                console.warn("Failed to fetch sun times:", e);
+              // Skip getDailySun if we already have enough sun data
+              const sunDaysAhead = preset === "tomorrow" ? 2 : daysAhead;
+              const needsSunData =
+                !sunTimes ||
+                !sunTimes.sunrises ||
+                sunTimes.sunrises.length < sunDaysAhead + 1;
+
+              if (needsSunData) {
+                try {
+                  const dailySun = await getDailySun(
+                    lastCoords.latitude,
+                    lastCoords.longitude,
+                    sunDaysAhead
+                  );
+                  sunTimes = dailySun;
+                } catch (e) {
+                  console.warn("Failed to fetch sun times:", e);
+                }
               }
+
               // For "tomorrow" preset, build dataset with 2 days to ensure we have all of tomorrow's data
               const datasetDaysAhead = preset === "tomorrow" ? 2 : daysAhead;
               let ds = buildTimelineDataset(hourly, datasetDaysAhead);
@@ -5103,37 +6060,60 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
                 }
 
                 if (filterStart && filterEnd) {
+                  // Optimize: Use timestamp comparisons and pre-allocate arrays
+                  const filterStartTime = filterStart.getTime();
+                  const filterEndTime = filterEnd.getTime();
                   const filteredIndices = [];
+
+                  // First pass: collect indices
                   for (let i = 0; i < ds.labels.length; i++) {
-                    const labelTime = new Date(ds.labels[i]);
-                    if (labelTime >= filterStart && labelTime < filterEnd) {
+                    const labelTime = new Date(ds.labels[i]).getTime();
+                    if (
+                      labelTime >= filterStartTime &&
+                      labelTime < filterEndTime
+                    ) {
                       filteredIndices.push(i);
                     }
                   }
 
                   if (filteredIndices.length > 0) {
+                    // Pre-allocate arrays with known length
+                    const len = filteredIndices.length;
+                    const newLabels = new Array(len);
+                    const newShadeVals = new Array(len);
+                    const newSunVals = new Array(len);
+                    const newSolarByHour = new Array(len);
+                    const newIsDayByHour = new Array(len);
+                    const newWindByHour = new Array(len);
+                    const newHumidityByHour = new Array(len);
+                    const newPrecipitationByHour = new Array(len);
+                    const newWeathercodeByHour = new Array(len);
+
+                    // Single loop to populate all arrays
+                    for (let j = 0; j < len; j++) {
+                      const i = filteredIndices[j];
+                      newLabels[j] = ds.labels[i];
+                      newShadeVals[j] = ds.shadeVals[i];
+                      newSunVals[j] = ds.sunVals[i];
+                      newSolarByHour[j] = ds.solarByHour[i];
+                      newIsDayByHour[j] = ds.isDayByHour[i];
+                      newWindByHour[j] = ds.windByHour?.[i] ?? 0;
+                      newHumidityByHour[j] = ds.humidityByHour?.[i] ?? 0;
+                      newPrecipitationByHour[j] =
+                        ds.precipitationByHour?.[i] ?? 0;
+                      newWeathercodeByHour[j] = ds.weathercodeByHour?.[i] ?? 0;
+                    }
+
                     ds = {
-                      labels: filteredIndices.map((i) => ds.labels[i]),
-                      shadeVals: filteredIndices.map((i) => ds.shadeVals[i]),
-                      sunVals: filteredIndices.map((i) => ds.sunVals[i]),
-                      solarByHour: filteredIndices.map(
-                        (i) => ds.solarByHour[i]
-                      ),
-                      isDayByHour: filteredIndices.map(
-                        (i) => ds.isDayByHour[i]
-                      ),
-                      windByHour: filteredIndices.map(
-                        (i) => ds.windByHour?.[i] ?? 0
-                      ),
-                      humidityByHour: filteredIndices.map(
-                        (i) => ds.humidityByHour?.[i] ?? 0
-                      ),
-                      precipitationByHour: filteredIndices.map(
-                        (i) => ds.precipitationByHour?.[i] ?? 0
-                      ),
-                      weathercodeByHour: filteredIndices.map(
-                        (i) => ds.weathercodeByHour?.[i] ?? 0
-                      ),
+                      labels: newLabels,
+                      shadeVals: newShadeVals,
+                      sunVals: newSunVals,
+                      solarByHour: newSolarByHour,
+                      isDayByHour: newIsDayByHour,
+                      windByHour: newWindByHour,
+                      humidityByHour: newHumidityByHour,
+                      precipitationByHour: newPrecipitationByHour,
+                      weathercodeByHour: newWeathercodeByHour,
                       now: ds.now,
                       hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
                     };
@@ -5145,13 +6125,31 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
               window.timelineState = timelineState;
               // Store hourly labels separately for axis display
               window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
-              await renderChart(
-                ds.labels,
-                ds.shadeVals,
-                ds.sunVals,
-                ds.now,
-                ds.isDayByHour
-              );
+
+              // Use updateChartData for faster updates instead of full renderChart
+              if (vibeChart) {
+                updateChartData(
+                  ds.labels,
+                  ds.shadeVals,
+                  ds.sunVals,
+                  ds.now,
+                  ds.isDayByHour
+                );
+                // Update remainder of day summary after chart data updates
+                await updateRemainderOfDaySummary();
+              } else {
+                // Chart doesn't exist yet, use renderChart
+                await renderChart(
+                  ds.labels,
+                  ds.shadeVals,
+                  ds.sunVals,
+                  ds.now,
+                  ds.isDayByHour
+                );
+                // Update remainder of day summary after chart renders
+                await updateRemainderOfDaySummary();
+              }
+
               if (selectionRange) {
                 updateWeatherSummary();
               }
@@ -5184,124 +6182,6 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
 
       // Day navigation function
-      function shiftDateOffset(delta) {
-        // Deselect all preset buttons
-        const allPresetBtns = [
-          presetTodayBtn,
-          presetTomorrowBtn,
-          presetDefaultBtn,
-          presetWeekBtn,
-          preset3DayBtn,
-          preset5DayBtn,
-          presetOneWeekBtn,
-        ];
-        allPresetBtns.forEach((btn) => {
-          if (btn) {
-            btn.classList.remove("active");
-            btn.classList.remove("loading");
-          }
-        });
-
-        // Update date offset
-        dateOffset += delta;
-
-        // Re-render chart with new offset if we have data
-        if (lastCoords) {
-          getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
-            .then(async (hourly) => {
-              try {
-                const dailySun = await getDailySun(
-                  lastCoords.latitude,
-                  lastCoords.longitude,
-                  daysAhead
-                );
-                sunTimes = dailySun;
-              } catch (e) {
-                console.warn("Failed to fetch sun times:", e);
-              }
-              let ds = buildTimelineDataset(hourly, daysAhead);
-
-              // Apply date offset filtering
-              if (ds.labels.length > 0) {
-                const now = new Date();
-                const filterStart = new Date(now);
-                filterStart.setHours(0, 0, 0, 0);
-                filterStart.setDate(filterStart.getDate() + dateOffset);
-                const filterEnd = new Date(filterStart);
-                filterEnd.setDate(filterEnd.getDate() + daysAhead);
-
-                const filteredIndices = [];
-                for (let i = 0; i < ds.labels.length; i++) {
-                  const labelTime = new Date(ds.labels[i]);
-                  if (labelTime >= filterStart && labelTime < filterEnd) {
-                    filteredIndices.push(i);
-                  }
-                }
-
-                if (filteredIndices.length > 0) {
-                  ds = {
-                    labels: filteredIndices.map((i) => ds.labels[i]),
-                    shadeVals: filteredIndices.map((i) => ds.shadeVals[i]),
-                    sunVals: filteredIndices.map((i) => ds.sunVals[i]),
-                    solarByHour: filteredIndices.map(
-                      (i) => ds.solarByHour[i]
-                    ),
-                    isDayByHour: filteredIndices.map(
-                      (i) => ds.isDayByHour[i]
-                    ),
-                    hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
-                      windByHour: filteredIndices.map(
-                        (i) => ds.windByHour?.[i] ?? 0
-                      ),
-                      humidityByHour: filteredIndices.map(
-                        (i) => ds.humidityByHour?.[i] ?? 0
-                      ),
-                      precipitationByHour: filteredIndices.map(
-                        (i) => ds.precipitationByHour?.[i] ?? 0
-                      ),
-                      weathercodeByHour: filteredIndices.map(
-                        (i) => ds.weathercodeByHour?.[i] ?? 0
-                      ),
-                      now: ds.now,
-                      hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
-                    };
-                }
-              }
-
-              timelineState = ds;
-              window.timelineState = timelineState;
-              // Store hourly labels separately for axis display
-              window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
-              await renderChart(
-                ds.labels,
-                ds.shadeVals,
-                ds.sunVals,
-                ds.now,
-                ds.isDayByHour
-              );
-              if (selectionRange) {
-                updateWeatherSummary();
-              }
-              updateNavArrowsVisibility();
-            })
-            .catch((e) => {
-              console.warn("Failed to update chart:", e);
-              updateNavArrowsVisibility();
-            });
-        } else {
-          // No data available, hide arrows
-          updateNavArrowsVisibility();
-        }
-      }
-
-      // Navigation button event listeners
-      chartNavPrevBtn &&
-        chartNavPrevBtn.addEventListener("click", () => shiftDateOffset(-1));
-      chartNavNextBtn &&
-        chartNavNextBtn.addEventListener("click", () => shiftDateOffset(1));
-
-      // Initialize navigation arrows visibility
-      updateNavArrowsVisibility();
 
       els.solar &&
         els.solar.addEventListener("input", () => {
@@ -5442,11 +6322,13 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
 
       // Line smoothing setting
       els.lineSmoothing && (els.lineSmoothing.value = lineSmoothing);
-      els.lineSmoothingVal && (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
+      els.lineSmoothingVal &&
+        (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
       els.lineSmoothing &&
         els.lineSmoothing.addEventListener("input", () => {
           lineSmoothing = parseFloat(els.lineSmoothing.value) || 0;
-          els.lineSmoothingVal && (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
+          els.lineSmoothingVal &&
+            (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
           storageCacheSet(LINE_SMOOTHING_KEY, String(lineSmoothing));
           // Update chart if it exists (debounced)
           debouncedChartUpdate("none");
@@ -5818,7 +6700,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
         }
 
         // Show loading state
-        if (zipEls.loadingSpinner) zipEls.loadingSpinner.style.display = "block";
+        if (zipEls.loadingSpinner)
+          zipEls.loadingSpinner.style.display = "block";
         if (zipEls.input) {
           zipEls.input.disabled = true;
         }
@@ -5865,7 +6748,8 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           });
         } finally {
           // Always clear loading state
-          if (zipEls.loadingSpinner) zipEls.loadingSpinner.style.display = "none";
+          if (zipEls.loadingSpinner)
+            zipEls.loadingSpinner.style.display = "none";
           if (zipEls.input) {
             zipEls.input.disabled = false;
           }
@@ -6001,6 +6885,15 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
           useLocation();
           // Stats will be updated when location is set via primeWeatherForCoords
         });
+
+      // GPS location button in headline
+      gpsLocationBtn &&
+        gpsLocationBtn.addEventListener("click", () => {
+          useLocation();
+        });
+
+      // Initialize headline date
+      updateHeadlineDate();
 
       // Favorites toggle
       favoritesToggle &&
@@ -6177,7 +7070,7 @@ Use the representative vibe as the primary temperature reference. Focus on comfo
       allPresetBtns.forEach((btn) => {
         if (btn) btn.classList.remove("active");
       });
-      
+
       // Then set the appropriate button as active
       if (daysAhead === 1) {
         if (presetTodayBtn) presetTodayBtn.classList.add("active");

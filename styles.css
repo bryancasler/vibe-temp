@@ -50,48 +50,56 @@ body {
 .headline {
   margin: 0;
   font-size: 28px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.headline .headline-main {
+  font-size: 28px;
+  font-weight: 500;
 }
 .headline .zip-inline-wrapper {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-left: 10px;
   font-weight: 500;
-  font-size: 20px;
+  font-size: 28px;
+}
+.headline .gps-icon-btn {
+  background: none;
+  border: none;
   cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-radius: 4px;
-}
-.headline .zip-inline-wrapper:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-[data-theme="light"] .headline .zip-inline-wrapper:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-.headline .zip-icon {
-  font-size: 18px;
-  line-height: 1;
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: currentColor;
 }
-.headline .zip-label-text {
-  color: var(--muted);
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-underline-offset: 3px;
-  transition: all 0.2s ease;
-}
-.headline .zip-inline-wrapper:hover .zip-label-text {
-  color: var(--accent);
-  text-decoration-style: solid;
-}
-.headline .sub {
+.headline .gps-icon-btn .gps-icon {
+  width: 20px;
+  height: 20px;
   display: block;
-  font-weight: 500;
+}
+.headline .gps-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="light"] .headline .gps-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.headline .gps-icon-btn:active {
+  transform: scale(0.95);
+}
+.preset-date {
+  font-size: 12px;
   color: var(--muted);
-  font-size: 14px;
-  margin-top: 4px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  font-weight: 400;
+  text-align: center;
 }
 
 .header-controls {
@@ -220,10 +228,6 @@ body {
   gap: 16px;
   margin: 4px 0;
 }
-.card-temps:has(#sunTempWrapper[style*="display: none"]),
-.card-temps.sun-hidden {
-  grid-template-columns: 1fr;
-}
 .card-temp-wrapper {
   display: flex;
   flex-direction: column;
@@ -267,6 +271,15 @@ body {
   margin: 10px 0 16px;
   padding: 16px;
 }
+
+/* Remainder of Day Summary */
+.remainder-summary {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin: 10px 0 16px;
+  padding: 16px;
+}
 .summary-header {
   display: flex;
   align-items: center;
@@ -280,6 +293,9 @@ body {
   font-weight: 600;
   color: var(--good);
   flex: 1;
+}
+.remainder-summary .summary-title {
+  color: var(--text);
 }
 .summary-actions {
   display: flex;
@@ -1626,11 +1642,14 @@ select {
   .adv-grid {
     grid-template-columns: 1fr;
   }
+  .headline .headline-main {
+    font-size: 24px;
+  }
   .headline .zip-inline-wrapper {
     display: block;
     margin-left: 0;
     margin-top: 4px;
-    font-size: 16px;
+    font-size: 24px;
   }
   .headline {
     font-size: 24px;

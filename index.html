@@ -14,10 +14,8 @@
       <header class="header">
         <div class="headline-wrap">
           <h1 class="headline">
-            Vibe Temp
+            <span class="headline-main">Vibe Temp at</span>
             <span class="zip-inline-wrapper">
-              <span class="zip-icon">📍</span>
-              <span class="zip-label-text">at ZIP</span>
               <div style="position: relative; display: inline-block;">
                 <input
                   type="text"
@@ -28,6 +26,11 @@
                   inputmode="numeric"
                   pattern="[0-9]*"
                   title="Enter 5-digit ZIP code"
+                  autocomplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-dashlane-ignore="true"
                 />
                 <div class="zip-loading-spinner" id="zipLoadingSpinner" style="display: none;"></div>
                 <button
@@ -40,6 +43,16 @@
                   ✕
                 </button>
               </div>
+              <button
+                id="gpsLocationBtn"
+                class="gps-icon-btn"
+                type="button"
+                title="Use current location"
+              >
+                <svg class="gps-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/>
+                </svg>
+              </button>
             </span>
           </h1>
         </div>
@@ -96,6 +109,11 @@
               type="text"
               placeholder="Enter ZIP code (e.g., 20001)"
               maxlength="10"
+              autocomplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-dashlane-ignore="true"
             />
             <button
               id="errorZipSubmitBtn"
@@ -124,7 +142,56 @@
         </div>
       </div>
 
-      <!-- Weather Summary -->
+      <!-- Chart -->
+      <section class="chart-wrap">
+        <div class="time-presets">
+          <div class="preset-buttons-group">
+            <button
+              id="presetDefault"
+              class="preset-btn active"
+              type="button"
+              title="Show 24-hour forecast"
+            >
+              24-Hour Forecast
+            </button>
+            <button
+              id="presetWeek"
+              class="preset-btn"
+              type="button"
+              title="Show next week"
+            >
+              Week
+            </button>
+          </div>
+        </div>
+        <div class="preset-date" id="headlineDate"></div>
+        <div class="chart-status" id="chartStatus"></div>
+        <div class="chart-box" id="chartBox">
+          <div id="chartSkeleton" class="chart-skeleton">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+          <canvas id="vibeChart" style="display: none"></canvas>
+        </div>
+      </section>
+
+      <!-- Remainder of Day Summary -->
+      <section
+        id="remainderOfDaySummary"
+        class="remainder-summary"
+        style="display: none"
+      >
+        <div class="summary-content">
+          <div class="summary-header">
+            <h3 class="summary-title">Remainder of Day</h3>
+          </div>
+          <div id="remainderTimeRange" class="summary-time-range"></div>
+          <div id="remainderText" class="summary-text">Generating summary...</div>
+        </div>
+      </section>
+
+      <!-- Weather Summary (Highlighted Vibes) -->
       <section
         id="weatherSummary"
         class="weather-summary"
@@ -156,55 +223,6 @@
           </div>
           <div id="summaryTimeRange" class="summary-time-range"></div>
           <div id="summaryText" class="summary-text">Generating summary...</div>
-        </div>
-      </section>
-
-      <!-- Chart -->
-      <section class="chart-wrap">
-        <div class="time-presets">
-          <button
-            id="chartNavPrev"
-            class="chart-nav-btn"
-            type="button"
-            title="Previous day"
-          >
-            ←
-          </button>
-          <div class="preset-buttons-group">
-            <button
-              id="presetDefault"
-              class="preset-btn active"
-              type="button"
-              title="Show 24-hour forecast"
-            >
-              24-Hour Forecast
-            </button>
-            <button
-              id="presetWeek"
-              class="preset-btn"
-              type="button"
-              title="Show next week"
-            >
-              Week
-            </button>
-          </div>
-          <button
-            id="chartNavNext"
-            class="chart-nav-btn"
-            type="button"
-            title="Next day"
-          >
-            →
-          </button>
-        </div>
-        <div class="chart-status" id="chartStatus"></div>
-        <div class="chart-box" id="chartBox">
-          <div id="chartSkeleton" class="chart-skeleton">
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-          </div>
-          <canvas id="vibeChart" style="display: none"></canvas>
         </div>
       </section>
 
