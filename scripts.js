@@ -506,7 +506,7 @@
     let currentPlaceName = "";
 
     let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, now } all in °F
-    window.timelineState = null; // expose for tooltip use
+    window.timelineState = null; // Expose timeline state for tooltip data access
     let simActive = false;
     let selectionRange = null; // { startTime: Date, endTime: Date } for URL sharing
     let isSelectingActive = false; // Flag to track if user is actively selecting (dragging)
@@ -2394,7 +2394,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         })
         .filter((e) => e !== null);
     }
-
     // Loading state helpers
     function showCardLoading() {
       // Cards start with skeleton class, will be removed when data loads
@@ -3138,69 +3137,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           ctx.restore();
         },
       };
-
       // Custom timeline labels plugin - two-line format (times on top, days below)
-      // Hover indicator plugin - red dot at bottom of chart with vertical line
-      const hoverIndicatorPlugin = {
-        id: "hoverIndicator",
-        afterDraw(chart) {
-          if (chart._hoverX === null || chart._hoverX === undefined) return;
-
-          const ctx = chart.ctx;
-          const chartArea = chart.chartArea;
-          const x = chart._hoverX;
-
-          // Ensure x is within chart area
-          if (x < chartArea.left || x > chartArea.right) return;
-
-          ctx.save();
-
-          // Get the time for this hover position
-          // Use stored hover index if available, otherwise calculate from pixel position
-          let hoverTime = null;
-          const rawLabels = chart._rawLabels || [];
-          const hoverIndex =
-            chart._hoverIndex !== undefined && chart._hoverIndex !== null
-              ? chart._hoverIndex
-              : Math.round(chart.scales.x.getValueForPixel(x));
-
-          if (
-            Number.isFinite(hoverIndex) &&
-            hoverIndex >= 0 &&
-            hoverIndex < rawLabels.length
-          ) {
-            hoverTime = new Date(rawLabels[hoverIndex]);
-          }
-
-          // Draw thin vertical red line from bottom to top of chart area
-          ctx.strokeStyle = "#ef4444"; // red-500
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(x, chartArea.top);
-          ctx.lineTo(x, chartArea.bottom);
-          ctx.stroke();
-
-          // Draw red dot at bottom of chart
-          ctx.fillStyle = "#ef4444"; // red-500
-          ctx.beginPath();
-          ctx.arc(x, chartArea.bottom, 4, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Draw time label above the line in red
-          if (hoverTime) {
-            ctx.fillStyle = "#ef4444"; // red-500
-            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "bottom";
-            const timeStr = fmtHM(hoverTime);
-            // Position label above chart area with some margin
-            const labelY = chartArea.top - 8;
-            ctx.fillText(timeStr, x, labelY);
-          }
-
-          ctx.restore();
-        },
-      };
 
       const timelineLabelsPlugin = {
         id: "timelineLabels",
@@ -3310,6 +3247,68 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
               ctx.fillText(dayStr, x, chartArea.bottom + 18);
             }
           });
+
+          ctx.restore();
+        },
+      };
+
+      // Hover indicator plugin - red dot at bottom of chart with vertical line
+      const hoverIndicatorPlugin = {
+        id: "hoverIndicator",
+        afterDraw(chart) {
+          if (chart._hoverX === null || chart._hoverX === undefined) return;
+
+          const ctx = chart.ctx;
+          const chartArea = chart.chartArea;
+          const x = chart._hoverX;
+
+          // Ensure x is within chart area
+          if (x < chartArea.left || x > chartArea.right) return;
+
+          ctx.save();
+
+          // Get the time for this hover position
+          // Use stored hover index if available, otherwise calculate from pixel position
+          let hoverTime = null;
+          const rawLabels = chart._rawLabels || [];
+          const hoverIndex =
+            chart._hoverIndex !== undefined && chart._hoverIndex !== null
+              ? chart._hoverIndex
+              : Math.round(chart.scales.x.getValueForPixel(x));
+
+          if (
+            Number.isFinite(hoverIndex) &&
+            hoverIndex >= 0 &&
+            hoverIndex < rawLabels.length
+          ) {
+            hoverTime = new Date(rawLabels[hoverIndex]);
+          }
+
+          // Draw thin vertical red line from bottom to top of chart area
+          ctx.strokeStyle = "#ef4444"; // red-500
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.stroke();
+
+          // Draw red dot at bottom of chart
+          ctx.fillStyle = "#ef4444"; // red-500
+          ctx.beginPath();
+          ctx.arc(x, chartArea.bottom, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Draw time label above the line in red
+          if (hoverTime) {
+            ctx.fillStyle = "#ef4444"; // red-500
+            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            const timeStr = fmtHM(hoverTime);
+            // Position label above chart area with some margin
+            const labelY = chartArea.top - 8;
+            ctx.fillText(timeStr, x, labelY);
+          }
 
           ctx.restore();
         },
@@ -3869,7 +3868,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           fill: false, // Disable default fill
         },
       ];
-
       // Gradient plugin for smooth gradient fills
       const gradientFillPlugin = {
         id: "gradientFill",
@@ -4223,7 +4221,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           });
         },
       };
-
       // Show canvas so Chart.js can render, but keep skeleton visible until animation completes
       if (els.chartCanvas) els.chartCanvas.style.display = "block";
 
@@ -4289,641 +4286,87 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
               },
             },
             tooltip: {
-              backgroundColor: "rgba(0, 0, 0, 0.85)",
-              titleColor: "#ffffff",
-              bodyColor: "#ffffff",
-              borderColor: "rgba(255, 255, 255, 0.2)",
-              borderWidth: 1,
-              padding: 12,
-              displayColors: false,
-              filter: (item) => {
-                // Hide highlight from tooltip
-                if (item.dataset.label === "Highlighted Vibes") {
-                  console.log(
-                    "[Tooltip Debug] filter: Filtering out Highlighted Vibes"
-                  );
-                  return false;
-                }
-                // Only show Shade Vibe in tooltip (we'll show combined description there)
-                if (item.dataset.label === "Sun Vibe") {
-                  console.log("[Tooltip Debug] filter: Filtering out Sun Vibe");
-                  return false;
-                }
-                console.log(
-                  `[Tooltip Debug] filter: Allowing ${item.dataset.label}`
-                );
-                return true;
-              },
-              // Deduplicate tooltip items to prevent showing identical lines
-              itemSort: (a, b) => {
-                const order = ["Sun Vibe", "Shade Vibe", "Highlighted Vibes"];
-                const orderDiff =
-                  order.indexOf(a.dataset.label) -
-                  order.indexOf(b.dataset.label);
-                if (orderDiff !== 0) return orderDiff;
-                // If same dataset, sort by dataIndex to ensure consistent ordering
-                return a.dataIndex - b.dataIndex;
-              },
-              external: (context) => {
-                // Guard: ensure we have a valid event
-                if (!context || !context.event) {
-                  return;
-                }
-
-                // Check if hovering near a sun marker or Touch Grass marker
-                const chart = context.chart;
-                if (!chart) return;
-
-                const markerPositions = chart._sunMarkerPositions || [];
-                const touchGrassPos = chart._touchGrassPosition;
-
-                try {
-                  const canvasPosition = Chart.helpers.getRelativePosition(
-                    context.event,
-                    chart
-                  );
-                  const chartArea = chart.chartArea;
-
-                  // Check if hovering near Touch Grass marker
-                  if (touchGrassPos) {
-                    const dx = canvasPosition.x - touchGrassPos.x;
-                    const dy = canvasPosition.y - touchGrassPos.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < 20) {
-                      const timeStr = fmtHM(touchGrassPos.time);
-                      const tempStr = `${formatTemp(
-                        touchGrassPos.temp
-                      )}${unitSuffix()}`;
-                      const tooltip = chart.tooltip;
-                      // Set flag to prevent default tooltip processing
-                      chart._customTooltipActive = true;
-                      console.log(
-                        "[Tooltip Debug] external: Showing Touch Grass tooltip, setting _customTooltipActive = true"
-                      );
-                      // Clear any default tooltip items to prevent duplicates
-                      tooltip.setItems([]);
-                      // Ensure tooltip is completely replaced, not added to
-                      tooltip.opacity = 0; // Hide first
-                      tooltip.setContent({
-                        title: "🍃 Touch Grass",
-                        body: [{ lines: [`${timeStr} - ${tempStr}`] }],
-                      });
-                      tooltip.opacity = 1;
-                      tooltip.update(true);
-                      chart.draw();
-                      return;
-                    }
-                  }
-
-                  if (!markerPositions.length) {
-                    // Not near any marker, clear custom tooltip flag
-                    chart._customTooltipActive = false;
-                    return;
-                  }
-
-                  // Check if mouse is near any marker (within 20px)
-                  for (const marker of markerPositions) {
-                    const dx = canvasPosition.x - marker.x;
-                    const dy = canvasPosition.y - marker.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < 20) {
-                      // Show custom tooltip for sun marker
-                      const timeStr = fmtHM(new Date(marker.time));
-                      const tooltip = chart.tooltip;
-                      // Set flag to prevent default tooltip processing
-                      chart._customTooltipActive = true;
-                      console.log(
-                        `[Tooltip Debug] external: Showing ${marker.label} tooltip, setting _customTooltipActive = true`
-                      );
-                      // Clear any default tooltip items to prevent duplicates
-                      tooltip.setItems([]);
-                      // Ensure tooltip is completely replaced, not added to
-                      tooltip.opacity = 0; // Hide first
-                      tooltip.setContent({
-                        title: `${marker.label}`,
-                        body: [{ lines: [timeStr] }],
-                      });
-                      tooltip.opacity = 1;
-                      tooltip.update(true);
-                      chart.draw();
-                      return;
-                    }
-                  }
-
-                  // Not near a marker, clear custom tooltip flag and use default tooltip
-                  chart._customTooltipActive = false;
-                  console.log(
-                    "[Tooltip Debug] external: Not near marker, cleared _customTooltipActive, using default tooltip"
-                  );
-                } catch (e) {
-                  // Silently handle errors (e.g., when clicking outside chart)
-                  if (chart) {
-                    chart._hoverX = null;
-                    chart._customTooltipActive = false;
-                  }
-                }
-              },
+              enabled: true,
               callbacks: {
-                // Deduplicate tooltip body items to prevent showing identical lines
-                beforeBody: (items) => {
-                  if (!items || !Array.isArray(items) || items.length === 0)
-                    return items;
-
-                  // Check if custom tooltip is active - if so, skip default processing
-                  const chart = items[0]?.chart;
-                  if (chart && chart._customTooltipActive) {
-                    console.log(
-                      "[Tooltip Debug] beforeBody: Custom tooltip active, returning empty array"
-                    );
-                    return [];
-                  }
-
-                  // Debug logging (temporary)
-                  console.log(
-                    "[Tooltip Debug] beforeBody: Processing",
-                    items.length,
-                    "items"
-                  );
-                  items.forEach((item, idx) => {
-                    console.log(`[Tooltip Debug] beforeBody item ${idx}:`, {
-                      datasetLabel: item.dataset?.label,
-                      label: item.label,
-                      labelType: typeof item.label,
-                      formattedValue: item.formattedValue,
-                      raw: item.raw,
-                    });
-                  });
-
-                  // Safe string conversion that never returns "[object Object]"
-                  // Uses a Set to track visited objects and prevent circular references
-                  const safeString = (value, visited = new WeakSet()) => {
-                    if (value === null || value === undefined) return "";
-                    if (typeof value === "string") return value;
-                    if (typeof value === "number" || typeof value === "boolean")
-                      return String(value);
-                    if (typeof value === "function") return "";
-                    // Handle Date objects
-                    if (value instanceof Date) {
-                      return isNaN(value.getTime()) ? "" : value.toISOString();
-                    }
-                    // Handle Error objects
-                    if (value instanceof Error) {
-                      return value.message || "";
-                    }
-                    if (Array.isArray(value)) {
-                      if (value.length === 0) return "";
-                      // Try to join array elements if they're strings/numbers
-                      const stringParts = value
-                        .slice(0, 10) // Limit to first 10 elements to avoid huge strings
-                        .map((item) => safeString(item, visited))
-                        .filter((str) => str.length > 0);
-                      return stringParts.length > 0
-                        ? stringParts.join(", ")
-                        : "";
-                    }
-                    if (typeof value === "object") {
-                      // Prevent circular references
-                      if (visited.has(value)) return "";
-                      visited.add(value);
-                      // Try to extract meaningful text from object
-                      if (value.text !== undefined) {
-                        const result = safeString(value.text, visited);
-                        if (result) return result;
-                      }
-                      if (value.label !== undefined) {
-                        const result = safeString(value.label, visited);
-                        if (result) return result;
-                      }
-                      if (value.message !== undefined) {
-                        const result = safeString(value.message, visited);
-                        if (result) return result;
-                      }
-                      if (value.value !== undefined) {
-                        const result = safeString(value.value, visited);
-                        if (result) return result;
-                      }
-                      // Try toString as last resort
-                      if (
-                        value.toString &&
-                        typeof value.toString === "function"
-                      ) {
-                        try {
-                          const str = value.toString();
-                          // If toString returns "[object Object]" or similar, skip it
-                          if (
-                            str === "[object Object]" ||
-                            str.startsWith("[object ")
-                          )
-                            return "";
-                          return str;
-                        } catch (e) {
-                          return "";
-                        }
-                      }
-                      // Skip objects we can't convert safely
-                      return "";
-                    }
-                    return "";
-                  };
-
-                  // Deduplicate: if multiple items have the same displayed text, only keep the first
-                  // We deduplicate based on the actual text content, not dataset labels
-                  const seen = new Set();
-                  return items.filter((item) => {
-                    if (!item) return false;
-
-                    // Extract the actual displayed text from Chart.js item structure
-                    // The label callback has already been called, so item.label contains the final text
-                    // Priority: label (from label callback) > formattedValue > parsed value
-                    let displayText = "";
-
-                    // First, check the label - this is the result from the label callback
-                    // which contains the description text we want to show
-                    // Handle case where item.label might be an object or array
-                    if (item.label !== undefined) {
-                      // Check if label is an object before processing
-                      if (
-                        typeof item.label === "object" &&
-                        item.label !== null
-                      ) {
-                        // Recursively extract text from object properties
-                        displayText = safeString(item.label);
-                      } else {
-                        displayText = safeString(item.label);
-                      }
-                    }
-
-                    // If no label, check formattedValue - this is what Chart.js displays by default
-                    if (!displayText && item.formattedValue !== undefined) {
-                      displayText = safeString(item.formattedValue);
-                    }
-
-                    // Fallback to parsed value if available
-                    if (
-                      !displayText &&
-                      item.parsed !== undefined &&
-                      item.parsed.y !== undefined
-                    ) {
-                      displayText = safeString(item.parsed.y);
-                    }
-
-                    // Last resort: raw value
-                    if (!displayText && item.raw !== undefined) {
-                      displayText = safeString(item.raw);
-                    }
-
-                    // Skip items that have no displayable text (empty or only whitespace)
-                    const normalizedText = displayText
-                      ? displayText.trim().toLowerCase()
-                      : "";
-                    if (!normalizedText) {
-                      return false;
-                    }
-
-                    // Deduplicate based on the normalized text content (case-insensitive)
-                    // If two items have the same text (even from different datasets), keep only the first
-                    if (seen.has(normalizedText)) {
-                      console.log(
-                        `[Tooltip Debug] beforeBody: Filtering duplicate text: "${normalizedText}"`
+                // Title: Format as "Fri, 6pm" (weekday abbreviation, comma, lowercase time)
+                title: function (context) {
+                  if (context.length > 0) {
+                    const dataIndex = context[0].dataIndex;
+                    const rawTime = this.chart._rawLabels[dataIndex];
+                    if (rawTime) {
+                      const d = new Date(rawTime);
+                      // Format: "Fri, 6pm"
+                      return (
+                        d.toLocaleDateString("en-US", { weekday: "short" }) +
+                        ", " +
+                        d
+                          .toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            hour12: true,
+                          })
+                          .toLowerCase()
+                          .replace(" ", "")
                       );
-                      return false; // Duplicate text, filter it out
                     }
-                    seen.add(normalizedText);
-                    console.log(
-                      `[Tooltip Debug] beforeBody: Keeping item with text: "${normalizedText}"`
-                    );
-                    return true;
-                  });
+                  }
+                  return "";
                 },
-                // Keep the time label as title, with sunrise/sunset info if near
-                title: (items) => {
-                  if (!items || items.length === 0) return "";
-
-                  // Check if custom tooltip is active - if so, skip default processing
-                  const firstItem = items[0];
-                  const chart = firstItem?.chart;
-                  if (chart && chart._customTooltipActive) {
-                    console.log(
-                      "[Tooltip Debug] title: Custom tooltip active, returning empty string"
-                    );
-                    return "";
+                // Label: Show weather description for Shade Vibe dataset only
+                label: function (context) {
+                  // Only show tooltip for the "Shade Vibe" dataset
+                  if (context.dataset.label !== "Shade Vibe") {
+                    return null;
                   }
 
-                  // Safe string conversion helper (enhanced version)
-                  // Uses a Set to track visited objects and prevent circular references
-                  const safeString = (value, visited = new WeakSet()) => {
-                    if (value === null || value === undefined) return "";
-                    if (typeof value === "string") return value;
-                    if (typeof value === "number" || typeof value === "boolean")
-                      return String(value);
-                    if (typeof value === "function") return "";
-                    // Handle Date objects
-                    if (value instanceof Date) {
-                      return isNaN(value.getTime()) ? "" : value.toISOString();
-                    }
-                    // Handle Error objects
-                    if (value instanceof Error) {
-                      return value.message || "";
-                    }
-                    if (Array.isArray(value)) {
-                      if (value.length === 0) return "";
-                      // Try to join array elements if they're strings/numbers
-                      const stringParts = value
-                        .slice(0, 10) // Limit to first 10 elements to avoid huge strings
-                        .map((item) => safeString(item, visited))
-                        .filter((str) => str.length > 0);
-                      return stringParts.length > 0
-                        ? stringParts.join(", ")
-                        : "";
-                    }
-                    if (typeof value === "object") {
-                      // Prevent circular references
-                      if (visited.has(value)) return "";
-                      visited.add(value);
-                      // Try to extract meaningful text from object
-                      if (value.text !== undefined) {
-                        const result = safeString(value.text, visited);
-                        if (result) return result;
-                      }
-                      if (value.label !== undefined) {
-                        const result = safeString(value.label, visited);
-                        if (result) return result;
-                      }
-                      if (value.message !== undefined) {
-                        const result = safeString(value.message, visited);
-                        if (result) return result;
-                      }
-                      if (value.value !== undefined) {
-                        const result = safeString(value.value, visited);
-                        if (result) return result;
-                      }
-                      // Try toString as last resort
-                      if (
-                        value.toString &&
-                        typeof value.toString === "function"
-                      ) {
-                        try {
-                          const str = value.toString();
-                          // If toString returns "[object Object]" or similar, skip it
-                          if (
-                            str === "[object Object]" ||
-                            str.startsWith("[object ")
-                          )
-                            return "";
-                          return str;
-                        } catch (e) {
-                          return "";
-                        }
-                      }
-                      // Skip objects we can't convert safely
-                      return "";
-                    }
-                    return "";
-                  };
+                  const dataIndex = context.dataIndex;
+                  const chart = this.chart;
+                  const localTimelineState = window.timelineState;
 
-                  // Extract default title safely, handling different item.label types
-                  let defaultTitle = "";
-                  if (firstItem) {
-                    defaultTitle = safeString(firstItem.label);
+                  // Ensure all required data is available
+                  if (
+                    !chart._rawLabels ||
+                    !localTimelineState ||
+                    !localTimelineState.shadeVals ||
+                    !localTimelineState.sunVals ||
+                    !localTimelineState.solarByHour
+                  ) {
+                    return "Data not available.";
                   }
 
-                  // Get the hovered time from the first item
-                  const item = items[0];
-                  if (!item || typeof item.dataIndex !== "number") {
-                    return defaultTitle || "";
-                  }
+                  const shadeF = localTimelineState.shadeVals[dataIndex];
+                  const sunF = localTimelineState.sunVals[dataIndex];
+                  const solar = localTimelineState.solarByHour[dataIndex];
+                  const currentTime = new Date(chart._rawLabels[dataIndex]);
+                  const isDay =
+                    localTimelineState.isDayByHour &&
+                    localTimelineState.isDayByHour[dataIndex] === 1;
+                  const touchGrassTimes = chart._touchGrassTimes || [];
 
-                  const dataIndex = item.dataIndex;
-                  if (!chart) return defaultTitle || "";
-
-                  const rawLabels = chart._rawLabels || [];
-                  const sunTimes = chart._sunTimes || {
-                    sunrises: [],
-                    sunsets: [],
-                  };
-
-                  if (dataIndex >= 0 && dataIndex < rawLabels.length) {
-                    const hoveredTime = new Date(rawLabels[dataIndex]);
-                    if (isNaN(hoveredTime.getTime())) {
-                      return defaultTitle || "";
-                    }
-
-                    const hoveredTimeMs = hoveredTime.getTime();
-                    const twoHoursMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-
-                    // Check all sunrises and sunsets
-                    const allEvents = [
-                      ...sunTimes.sunrises.map((t) => ({
-                        time: new Date(t).getTime(),
-                        type: "sunrise",
-                        label: "Sunrise",
-                      })),
-                      ...sunTimes.sunsets.map((t) => ({
-                        time: new Date(t).getTime(),
-                        type: "sunset",
-                        label: "Sunset",
-                      })),
-                    ].filter((e) => !isNaN(e.time)); // Filter out invalid dates
-
-                    // Find events within 2 hours before or after
-                    const nearbyEvents = allEvents.filter((e) => {
-                      const timeDiff = Math.abs(e.time - hoveredTimeMs);
-                      return timeDiff <= twoHoursMs;
-                    });
-
-                    if (nearbyEvents.length > 0) {
-                      // Sort events by time difference
-                      const sortedEvents = nearbyEvents
-                        .map((e) => ({
-                          ...e,
-                          diff: Math.abs(e.time - hoveredTimeMs),
-                        }))
-                        .sort((a, b) => a.diff - b.diff);
-
-                      // Build inline tooltip: "Fri, 6pm - Sunset 6:35pm"
-                      const eventStrings = sortedEvents.map((event) => {
-                        const exactTime = fmtHM(new Date(event.time));
-                        return `${event.label} ${exactTime}`;
-                      });
-
-                      // Combine with default title - ensure both are strings
-                      const eventText = eventStrings.join(", ");
-                      const finalTitle = defaultTitle || "";
-                      return eventText
-                        ? `${finalTitle} - ${eventText}`
-                        : finalTitle;
-                    }
-                  }
-
-                  // Always return a string
-                  const finalTitle = defaultTitle || "";
-                  console.log(
-                    `[Tooltip Debug] title: Returning title:`,
-                    finalTitle
+                  // Generate description using combinedVibeDescriptor
+                  let description = combinedVibeDescriptor(
+                    shadeF,
+                    sunF,
+                    solar,
+                    isDay,
+                    currentTime
                   );
-                  return finalTitle;
-                },
-                // Custom label showing combined description
-                label: (ctx) => {
-                  // Check if custom tooltip is active - if so, skip default processing
-                  const chart = ctx.chart;
-                  if (chart && chart._customTooltipActive) {
-                    console.log(
-                      "[Tooltip Debug] label: Custom tooltip active, returning empty string"
-                    );
-                    return "";
+
+                  // Check if within 2 hours of a Touch Grass time
+                  const isTouchGrassTime = touchGrassTimes.some(
+                    (tg) =>
+                      Math.abs(
+                        new Date(tg.time).getTime() - currentTime.getTime()
+                      ) <=
+                      2 * 60 * 60 * 1000
+                  );
+
+                  // Prefix with Touch Grass indicator if applicable
+                  if (isTouchGrassTime) {
+                    description = `🍃 Touch Grass - ${description}`;
                   }
 
-                  if (ctx.dataset.label === "Highlighted Vibes") {
-                    console.log(
-                      "[Tooltip Debug] label: Filtering Highlighted Vibes"
-                    );
-                    return ""; // Don't show in tooltip
-                  }
-                  if (ctx.dataset.label === "Sun Vibe") {
-                    console.log("[Tooltip Debug] label: Filtering Sun Vibe");
-                    return ""; // Only show combined description via Shade Vibe
-                  }
-
-                  // Safe string conversion helper (enhanced version)
-                  // Uses a Set to track visited objects and prevent circular references
-                  const safeString = (value, visited = new WeakSet()) => {
-                    if (value === null || value === undefined) return "";
-                    if (typeof value === "string") return value;
-                    if (typeof value === "number" || typeof value === "boolean")
-                      return String(value);
-                    if (typeof value === "function") return "";
-                    // Handle Date objects
-                    if (value instanceof Date) {
-                      return isNaN(value.getTime()) ? "" : value.toISOString();
-                    }
-                    // Handle Error objects
-                    if (value instanceof Error) {
-                      return value.message || "";
-                    }
-                    if (Array.isArray(value)) {
-                      if (value.length === 0) return "";
-                      // Try to join array elements if they're strings/numbers
-                      const stringParts = value
-                        .slice(0, 10) // Limit to first 10 elements to avoid huge strings
-                        .map((item) => safeString(item, visited))
-                        .filter((str) => str.length > 0);
-                      return stringParts.length > 0
-                        ? stringParts.join(", ")
-                        : "";
-                    }
-                    if (typeof value === "object") {
-                      // Prevent circular references
-                      if (visited.has(value)) return "";
-                      visited.add(value);
-                      // Try to extract meaningful text from object
-                      if (value.text !== undefined) {
-                        const result = safeString(value.text, visited);
-                        if (result) return result;
-                      }
-                      if (value.label !== undefined) {
-                        const result = safeString(value.label, visited);
-                        if (result) return result;
-                      }
-                      if (value.message !== undefined) {
-                        const result = safeString(value.message, visited);
-                        if (result) return result;
-                      }
-                      if (value.value !== undefined) {
-                        const result = safeString(value.value, visited);
-                        if (result) return result;
-                      }
-                      // Try toString as last resort
-                      if (
-                        value.toString &&
-                        typeof value.toString === "function"
-                      ) {
-                        try {
-                          const str = value.toString();
-                          // If toString returns "[object Object]" or similar, skip it
-                          if (
-                            str === "[object Object]" ||
-                            str.startsWith("[object ")
-                          )
-                            return "";
-                          return str;
-                        } catch (e) {
-                          return "";
-                        }
-                      }
-                      // Skip objects we can't convert safely
-                      return "";
-                    }
-                    return "";
-                  };
-
-                  let desc = "";
-                  try {
-                    const i = ctx.dataIndex;
-                    const ts = window.timelineState;
-                    if (ts && Number.isFinite(i)) {
-                      const isDay = !!ts.isDayByHour?.[i];
-                      const solar = ts.solarByHour?.[i] ?? 0;
-                      const shadeF = ts.shadeVals?.[i];
-                      const sunF = ts.sunVals?.[i];
-
-                      // Get the hovered time for sunset info
-                      const rawLabels = chart._rawLabels || [];
-                      const hoveredTime =
-                        i < rawLabels.length
-                          ? new Date(rawLabels[i])
-                          : new Date();
-
-                      // Check if this is a Touch Grass time
-                      const touchGrassPositions =
-                        chart._touchGrassPositions || [];
-                      const isTouchGrassTime = touchGrassPositions.some(
-                        (pos) => pos.index === i
-                      );
-
-                      if (
-                        typeof shadeF === "number" &&
-                        typeof sunF === "number"
-                      ) {
-                        const vibeDesc = combinedVibeDescriptor(
-                          shadeF,
-                          sunF,
-                          solar,
-                          isDay,
-                          hoveredTime
-                        );
-                        // Ensure vibeDesc is safely converted to string
-                        desc = safeString(vibeDesc);
-
-                        // Add Touch Grass indicator if this is the Touch Grass time
-                        if (isTouchGrassTime && desc) {
-                          desc = `🍃 Touch Grass - ${desc}`;
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    // Ensure we always return a string even on error
-                    desc = "";
-                  }
-                  // Final safety check: ensure desc is always a string
-                  const finalDesc =
-                    typeof desc === "string" ? desc : safeString(desc) || "";
-
-                  // Debug logging (temporary)
-                  if (finalDesc) {
-                    console.log(
-                      `[Tooltip Debug] label: Returning description for ${ctx.dataset.label}:`,
-                      finalDesc.substring(0, 100)
-                    );
-                  } else {
-                    console.log(
-                      `[Tooltip Debug] label: Returning empty string for ${ctx.dataset.label}`
-                    );
-                  }
-
-                  return finalDesc;
+                  // Return a single line. Chart.js will handle the color swatch.
+                  return description;
                 },
               },
             },
@@ -4958,17 +4401,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
 
       // Update card visibility based on current time
       updateCardVisibility();
-
-      // Pointer interactions: hover + tap/drag simulation + drag selection
-      els.chartCanvas.style.touchAction = "none";
-      let isPointerDown = false;
-      let isSelecting = false;
-      let selectionStartX = null;
-      let selectionStartTime = null;
-      let touchStartTime = null;
-      let hasMoved = false;
-      let clickStartX = null;
-      let clickStartTime = null;
 
       // Track mouse position for red dot indicator
       els.chartCanvas.addEventListener("mousemove", (e) => {
@@ -5011,6 +4443,17 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           vibeChart.draw();
         }
       });
+
+      // Pointer interactions: hover + tap/drag simulation + drag selection
+      els.chartCanvas.style.touchAction = "none";
+      let isPointerDown = false;
+      let isSelecting = false;
+      let selectionStartX = null;
+      let selectionStartTime = null;
+      let touchStartTime = null;
+      let hasMoved = false;
+      let clickStartX = null;
+      let clickStartTime = null;
 
       function updateFromClientX(clientX, clientY) {
         if (!vibeChart || !timelineState) return;
@@ -5526,7 +4969,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             );
           }
           timelineState = ds;
-          window.timelineState = timelineState; // expose for tooltip descriptors
+          window.timelineState = timelineState; // Expose for tooltip data access
           // Store hourly labels separately for axis display
           window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
           await renderChart(
@@ -5625,7 +5068,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           throw new Error("Failed to process weather data. Please try again.");
         }
         timelineState = ds;
-        window.timelineState = timelineState; // expose for tooltip descriptors
+        window.timelineState = timelineState; // Expose for tooltip data access
         // Store hourly labels separately for axis display
         window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
         await renderChart(
@@ -5790,7 +5233,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         if (n.textContent.includes("Save")) n.remove();
       });
     };
-
     // Geolocation - precise location (requires permission)
     function useLocation() {
       statusEl && (statusEl.textContent = "Getting precise location…");
@@ -6555,7 +5997,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         if (calibCloudExpVal)
           calibCloudExpVal.textContent = calibration.cloudExp.toFixed(1);
       }
-
       // Debounce calibration updates
       let calibrationUpdateTimeout = null;
       function updateCalibration() {
@@ -7316,7 +6757,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           }
         }
       });
-
       // Parse URL parameters and apply settings
       function applyURLParameters() {
         const params = new URLSearchParams(location.search);

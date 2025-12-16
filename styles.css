@@ -357,23 +357,6 @@ body {
   -moz-user-select: none;
   -ms-user-select: none;
 }
-/* Chart.js tooltip max-width and styling */
-.chartjs-tooltip {
-  max-width: min(90vw, 200px) !important;
-}
-.chartjs-tooltip-body {
-  color: #ffffff !important;
-}
-.chartjs-tooltip-body-item {
-  color: #ffffff !important;
-}
-.chartjs-tooltip-title {
-  color: #ffffff !important;
-}
-/* Hide the color indicator square */
-.chartjs-tooltip-body-item span {
-  display: none !important;
-}
 .chart-head {
   display: flex;
   align-items: center;
@@ -411,7 +394,9 @@ body {
   border: 2px solid var(--border);
   border-radius: 8px;
   padding: 6px 12px 6px 28px; /* Left padding accounts for spinner space */
-  width: calc(5ch + 52px); /* 5 characters + left padding (28px) + right padding (12px) + extra space for letter-spacing */
+  width: calc(
+    5ch + 52px
+  ); /* 5 characters + left padding (28px) + right padding (12px) + extra space for letter-spacing */
   text-align: center;
   transition: all 0.2s ease;
   letter-spacing: 0.5px;
@@ -600,7 +585,10 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-[data-theme="light"] .shading-toggle-label input[type="checkbox"]:checked + .toggle-switch {
+[data-theme="light"]
+  .shading-toggle-label
+  input[type="checkbox"]:checked
+  + .toggle-switch {
   background: var(--good);
 }
 
@@ -653,17 +641,20 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   border-color: var(--border);
 }
 
-[data-theme="light"] input[type="checkbox"]:not(.shading-toggle-label input):hover {
+[data-theme="light"]
+  input[type="checkbox"]:not(.shading-toggle-label input):hover {
   background: rgba(59, 130, 246, 0.1);
   border-color: var(--accent);
 }
 
-[data-theme="light"] input[type="checkbox"]:not(.shading-toggle-label input):checked {
+[data-theme="light"]
+  input[type="checkbox"]:not(.shading-toggle-label input):checked {
   background: var(--good);
   border-color: var(--good);
 }
 
-[data-theme="light"] input[type="checkbox"]:not(.shading-toggle-label input):checked::after {
+[data-theme="light"]
+  input[type="checkbox"]:not(.shading-toggle-label input):checked::after {
   color: #ffffff;
 }
 .chart-title {
