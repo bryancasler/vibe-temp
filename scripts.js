@@ -1620,13 +1620,11 @@
 
       let description = "";
 
-      // Adjust wording based on temperature difference
+      // Adjust wording based on temperature difference. The gap tops out at
+      // 8 + 4 × reflectivity (9.2°F on concrete) at the default calibration.
       if (diff < 2) {
         // Very similar - use single description
         description = sunBase;
-      } else if (diff >= 15) {
-        // Large contrast - emphasize the difference
-        description = `${sunBase} in sun, but ${shadeBase} in shade`;
       } else if (diff >= 8) {
         // Moderate difference
         description = `${sunBase} in sun, ${shadeBase} in shade`;
