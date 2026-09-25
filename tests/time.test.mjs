@@ -42,3 +42,14 @@ test("zone names are checked", () => {
   assert.ok(!T.isValidZone(""));
   assert.ok(!T.isValidZone(undefined));
 });
+
+test("a day whose midnight does not exist starts when the clocks land", () => {
+  // Santiago moved from -04 to -03 at 00:00 on 2025-09-07: the day starts at 01:00.
+  const z = "America/Santiago";
+  const start = T.startOfDay(Date.parse("2025-09-07T15:00:00Z"), z);
+  assert.equal(T.dayKey(start, z), "2025-09-07");
+  assert.equal(iso(start), "2025-09-07T04:00:00.000Z");
+  assert.equal(T.parts(start, z).hour, 1);
+  assert.equal(iso(T.startOfDay(Date.parse("2025-09-06T15:00:00Z"), z, 1)), "2025-09-07T04:00:00.000Z");
+  assert.equal(iso(T.startOfDay(Date.parse("2025-09-06T15:00:00Z"), z)), "2025-09-06T04:00:00.000Z");
+});

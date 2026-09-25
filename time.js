@@ -60,11 +60,25 @@
     return guess;
   }
 
-  /** Local midnight of the day containing `time`, moved by addDays days. */
+  /**
+   * The first instant of the day containing `time`, moved by addDays days:
+   * local midnight, or where the clocks jump past midnight (daylight time
+   * starting at 00:00, as in Santiago), the moment they land.
+   */
   function startOfDay(time, zone, addDays = 0) {
     const p = parts(time, zone);
     const d = new Date(Date.UTC(p.year, p.month - 1, p.day + addDays));
-    return instantOf(zone, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    let t = instantOf(zone, y, m, day);
+    const want = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    // Midnight did not exist, so t fell on the day before: step to the
+    // first hour of the right day.
+    for (let i = 0; i < 4 && dayKey(t, zone) < want; i++) {
+      t = startOfHour(t, zone) + 3600000;
+    }
+    return t;
   }
 
   /** The start of the local clock hour containing `time`. */
