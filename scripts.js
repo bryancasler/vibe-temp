@@ -4668,7 +4668,8 @@
     }
 
     // ── Dogs mode ──
-    // Off by default and remembered per browser. On, it adds dcgoldens'
+    // On by default and remembered per browser (only an explicit "off" is
+    // saved as off). On, it adds dcgoldens'
     // Dog Weather (dogs.js): a walk rating for every hour (the strip under
     // the chart), the paw-to-grass time for goldens, the six dog cards and
     // best walk times, and names the touch-grass time for people beside it.
@@ -4678,7 +4679,7 @@
     const DOG_STRIP_SPACE = 16; // px under the plot for the walk strip
     const PAW_BROWN = "#3D2E1C";
     const LEAF_GREEN = "#3F7D3C";
-    let dogsOn = storeGet(DOGS_KEY) === "true";
+    let dogsOn = storeGet(DOGS_KEY) !== "false";
     let currentForecast = null; // the raw forecast behind the chart
     // Air and storms for the place on screen: { key, air: Map|null,
     // airFailed, storms: { status, byT } }

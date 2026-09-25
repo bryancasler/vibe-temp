@@ -73,18 +73,6 @@
         </div>
 
         <div class="header-controls">
-          <!-- Dogs mode (off by default, remembered per browser) -->
-          <button
-            id="dogsToggle"
-            class="theme-btn dogs-btn"
-            type="button"
-            aria-pressed="false"
-            aria-label="Dogs"
-            title="Dogs: walk times and dog cards"
-          >
-            <span aria-hidden="true">🐾</span
-            ><span class="dogs-label" aria-hidden="true"> Dogs</span>
-          </button>
           <!-- Theme toggle -->
           <div class="theme-toggle" aria-label="Theme">
             <button
@@ -115,6 +103,18 @@
               &#176;F
             </button>
           </div>
+          <!-- Dogs mode (on by default, remembered per browser) -->
+          <button
+            id="dogsToggle"
+            class="theme-btn dogs-btn"
+            type="button"
+            aria-pressed="true"
+            aria-label="Dogs"
+            title="Dogs: walk times and dog cards"
+          >
+            <span aria-hidden="true">🐾</span
+            ><span class="dogs-label" aria-hidden="true"> Dogs</span>
+          </button>
         </div>
       </header>
 
