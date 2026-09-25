@@ -1,10 +1,14 @@
 (() => {
-  // Load Chart.js dynamically
+  // Chart.js, pinned. chart.umd.js is the file as published to npm (already
+  // minified); jsDelivr's .min.js is generated on request and its own header
+  // says not to use SRI with it. The hash was checked against the npm tarball.
   const CHART_JS_URL =
-    "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js";
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.js";
+  const CHART_JS_INTEGRITY =
+    "sha384-tgbB5AKnszdcfwcZtTfuhR3Ko1XZdlDfsLtkxiiAZiVkkXCkFmp+FQFh+V/UTo54";
   let CHART_READY = null;
 
-  function loadScriptOnce(src) {
+  function loadScriptOnce(src, integrity) {
     return new Promise((resolve, reject) => {
       const existing = Array.from(document.scripts).find((s) => s.src === src);
       if (existing) {
@@ -15,17 +19,33 @@
       }
       const s = document.createElement("script");
       s.src = src;
+      if (integrity) {
+        s.integrity = integrity;
+        s.crossOrigin = "anonymous";
+      }
       s.async = true;
-      s.defer = true;
       s.onload = () => resolve();
-      s.onerror = (e) => reject(e);
+      s.onerror = (e) => {
+        s.remove();
+        reject(e);
+      };
       document.head.appendChild(s);
     });
   }
   function ensureChartJs() {
-    if (!CHART_READY) CHART_READY = loadScriptOnce(CHART_JS_URL);
+    if (!CHART_READY) {
+      CHART_READY = loadScriptOnce(CHART_JS_URL, CHART_JS_INTEGRITY).catch(
+        (e) => {
+          CHART_READY = null; // let the next render try again
+          throw e;
+        }
+      );
+    }
     return CHART_READY;
   }
+  // Start downloading Chart.js now, alongside the weather requests, rather
+  // than after all the data is in.
+  ensureChartJs().catch(() => {});
 
   // DOM ready helper (works if script loads after DOM or with defer)
   const onReady = (cb) => {
@@ -6509,7 +6529,7 @@
       }
 
       // Boot
-      setTimeout(() => {
+      (() => {
         statusEl &&
           (statusEl.textContent = "Trying to get your local weather…");
 
@@ -6557,7 +6577,7 @@
           // Update chart title to show location even if set from URL
           updateChartTitle();
         }
-      }, 300);
+      })();
 
     // Cleanup on page unload to prevent memory leaks
     window.addEventListener("beforeunload", () => {
