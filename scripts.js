@@ -1864,9 +1864,9 @@
         latitude: roundCoord(lat).toFixed(2),
         longitude: roundCoord(lon).toFixed(2),
         current:
-          "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+          "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day",
         hourly:
-          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day,precipitation,weathercode",
+          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,precipitation,weathercode",
         daily: "sunrise,sunset",
         temperature_unit: "fahrenheit",
         wind_speed_unit: "mph",
@@ -1995,6 +1995,8 @@
           uv_index: uv,
           uv_index_clear_sky: uvc,
           cloud_cover: CC,
+          shortwave_radiation: hourly.shortwave_radiation?.[i],
+          direct_radiation: hourly.direct_radiation?.[i],
           is_day: isDay ? 1 : 0,
         });
         const sun = sunVibeOf(shade, solar, reflectivity());
@@ -4763,6 +4765,8 @@
             uv_index: cur.uv_index,
             uv_index_clear_sky: cur.uv_index_clear_sky,
             cloud_cover: cur.cloud_cover ?? 0,
+            shortwave_radiation: cur.shortwave_radiation,
+            direct_radiation: cur.direct_radiation,
             is_day: cur.is_day,
           });
           els.solar.value = solar.toFixed(1);
@@ -4871,6 +4875,8 @@
           uv_index: cur.uv_index,
           uv_index_clear_sky: cur.uv_index_clear_sky,
           cloud_cover: cur.cloud_cover ?? 0,
+          shortwave_radiation: cur.shortwave_radiation,
+          direct_radiation: cur.direct_radiation,
           is_day: cur.is_day,
         });
         els.solar.value = solar.toFixed(1);

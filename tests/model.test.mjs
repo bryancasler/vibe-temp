@@ -58,3 +58,81 @@ test("sun equals shade at night", () => {
     }
   }
 });
+
+// Real DC hours from 2025 with the values of the direct-beam model Bryan
+// approved for dcgoldens on 2026-09-24 (dcgoldens scripts/weather-check.ts
+// BEAM_REFS), and vibe-temp's values before it (vt).
+const BEAM_REFS = [
+  { label: "2025-10-17 8am, clear first daylight hour", T: 41.4, RH: 68, W: 4.5, uv: 0.1, uvc: 0.1, cc: 0, isDay: true, sw: 32, dr: 17, shade: 40.1167, sun: 45.2903, vt: 49.3167 },
+  { label: "2025-04-20 12pm, thin high cloud with the sun out", T: 74, RH: 52, W: 10, uv: 5.8, uvc: 6.5, cc: 98, isDay: true, sw: 827, dr: 615, shade: 67.8, sun: 74.4723, vt: 69.1002 },
+  { label: "2025-04-13 10am, thin high cloud called 100%", T: 51.5, RH: 60, W: 11.9, uv: 3.15, uvc: 3.25, cc: 100, isDay: true, sw: 529, dr: 372, shade: 44.5033, sun: 51.1894, vt: 44.5033 },
+  { label: "2025-04-19 12pm, bright overcast", T: 73.1, RH: 61, W: 9.9, uv: 2.4, uvc: 6.5, cc: 100, isDay: true, sw: 582, dr: 6, shade: 67.57, sun: 68.7951, vt: 67.57 },
+  { label: "2025-12-28 12pm, grey overcast", T: 39.4, RH: 78, W: 6.5, uv: 1.1, uvc: 2.7, cc: 100, isDay: true, sw: 112, dr: 0, shade: 37.3833, sun: 37.3833, vt: 37.3833 },
+  { label: "2025-07-29 2pm, hot clear afternoon", T: 96.6, RH: 52, W: 0.5, uv: 7.7, uvc: 7.85, cc: 2, isDay: true, sw: 916, dr: 735, shade: 97.05, sun: 105.0538, vt: 105.5896 },
+  { label: "2025-07-29 11pm, night", T: 81.6, RH: 74, W: 1.1, uv: 0, uvc: 0, cc: 15, isDay: false, sw: 0, dr: 0, shade: 83.0967, sun: 83.0967, vt: 83.0967 },
+  { label: "2025-01-09 5pm, no sunlight in a daylight hour", T: 29.7, RH: 38, W: 9.9, uv: 0.25, uvc: 0.25, cc: 0, isDay: true, sw: 0, dr: 0, shade: 22.6367, sun: 22.6367, vt: 31.8367 },
+];
+const beam = (r, over = {}) => feels(r, { shortwave_radiation: r.sw, direct_radiation: r.dr, ...over });
+
+test("with sunlight readings it matches the direct-beam model on every reference hour", () => {
+  for (const r of BEAM_REFS) {
+    const f = beam(r);
+    assert.ok(Math.abs(f.shade - r.shade) < 0.05 && Math.abs(f.sun - r.sun) < 0.05, `${r.label}: ${f.shade} ${f.sun}`);
+  }
+});
+
+test("the sun-minus-shade gaps move as the handoff lists", () => {
+  const want = [
+    ["2025-10-17 8am", 9.2, 5.2],
+    ["2025-04-20 12pm", 1.3, 6.7],
+    ["2025-04-13 10am", 0, 6.7],
+    ["2025-04-19 12pm", 0, 1.2],
+    ["2025-12-28 12pm", 0, 0],
+    ["2025-07-29 2pm", 8.5, 8.0],
+  ];
+  for (const [prefix, before, after] of want) {
+    const r = BEAM_REFS.find((x) => x.label.startsWith(prefix));
+    const old = feels(r);
+    const now = beam(r);
+    assert.equal(Math.round((old.sun - old.shade) * 10) / 10, before, `${prefix} before`);
+    assert.equal(Math.round((now.sun - now.shade) * 10) / 10, after, `${prefix} after`);
+  }
+});
+
+test("a missing radiation reading falls back to cloud cover, exactly as before", () => {
+  const r = BEAM_REFS[1];
+  for (const over of [{ direct_radiation: null }, { shortwave_radiation: undefined }, { shortwave_radiation: NaN }]) {
+    assert.ok(Math.abs(beam(r, over).sun - r.vt) < 0.05);
+  }
+});
+
+test("effective cloud: 0 at a clear beam share, 100 with no beam or no sunlight", () => {
+  const e = M.effectiveCloudPct;
+  assert.equal(e({ cloud_cover: 90, shortwave_radiation: 800, direct_radiation: 700 }), 0);
+  assert.equal(e({ cloud_cover: 0, shortwave_radiation: 500, direct_radiation: 0 }), 100);
+  assert.equal(e({ cloud_cover: 40, shortwave_radiation: 0, direct_radiation: 0 }), 100);
+  assert.equal(e({ cloud_cover: 60, shortwave_radiation: null, direct_radiation: 300 }), 60);
+  assert.equal(M.BEAM_SHARE_CLEAR, 0.85);
+});
+
+test("every hour of 2025: never NaN, sun never below shade, gap 0 or 1.2 to 9.2, 0 at night", async () => {
+  const { readFileSync } = await import("node:fs");
+  const year = JSON.parse(readFileSync(new URL("./fixtures/dc-2025-hours.json", import.meta.url)));
+  let clearMiddays = 0;
+  let moved = 0;
+  for (const row of year.rows) {
+    const [T, RH, W, uv, uvc, cc, sw, dr, isDay] = row;
+    const h = { T, RH, W, uv, uvc, cc, isDay: isDay ? 1 : 0, sw, dr };
+    const f = beam(h);
+    const gap = f.sun - f.shade;
+    assert.ok(Number.isFinite(f.sun) && Number.isFinite(f.shade));
+    assert.ok(gap === 0 || (gap >= 1.2 - 1e-9 && gap <= 9.2 + 1e-9), `gap ${gap}`);
+    if (!isDay) assert.equal(gap, 0);
+    // Clear middays: a sun high enough for a clear-sky UV of 3+, little cloud.
+    if (isDay && cc <= 10 && uvc >= 3 && uv / uvc > 0.9) {
+      clearMiddays++;
+      moved += Math.abs(f.sun - feels(h).sun);
+    }
+  }
+  assert.ok(clearMiddays > 100 && moved / clearMiddays < 1, `clear middays ${clearMiddays}, mean move ${moved / clearMiddays}`);
+});

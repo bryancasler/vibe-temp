@@ -677,15 +677,28 @@
             <div class="adv-col">
               <h4 class="adv-h4">Formula</h4>
               <pre class="formula">
-          ShadeVibe(T, RH, Wind) = T + (RH - 40) / 15 - 0.7 × Wind
-          
-          SunVibe(ShadeVibe, Solar, Reflect) = ShadeVibe + 8 × Solar + 4 × Reflect
-                    </pre
+Shade = T + (RH - 40) / 15
+        - 0.7 × Wind
+
+Sun = Shade + 8 × Solar
+      + 4 × Reflect
+(Sun = Shade when Solar is 0)
+
+Solar = UV / ClearSkyUV
+  × (1 - (Cloud / 100)^0.7)
+
+Beam = Direct / Shortwave
+Cloud = 100
+  × (1 - Beam / 0.85)</pre
               >
               <div class="hint">
-                Solar is auto-derived from UV Index (vs clear-sky UV) and cloud
-                cover, and zeroed at night. Reflectivity influences how much
-                extra radiant heat you feel.
+                Cloud comes from how much of the sunlight arrives as a direct
+                beam, so thin high cloud with the sun out still counts as sun,
+                and an hour whose sunlight reads 0 counts as full cloud. It
+                falls back to the forecast's cloud cover when a sunlight
+                reading is missing. Solar is 0 at night, and the reflect term
+                applies only while Solar is above 0. Numbers shown are the
+                defaults.
               </div>
             </div>
           </div>
