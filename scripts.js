@@ -4789,7 +4789,14 @@
         getAir(lastCoords.latitude, lastCoords.longitude),
         getStorms(lastCoords.latitude, lastCoords.longitude),
       ]);
-      if (seq !== primeSeq || !dogsOn) return; // another place, or Dogs off
+      // Another place, or Dogs off, meanwhile
+      if (
+        seq !== primeSeq ||
+        !dogsOn ||
+        !lastCoords ||
+        forecastKey(lastCoords.latitude, lastCoords.longitude) !== key
+      )
+        return;
       dogExtras = {
         key,
         air: air.status === "fulfilled" ? air.value : null,
@@ -4875,22 +4882,32 @@
       const hours = dogHours();
       const now = Date.now() / 1000;
       const labels = timelineState.labels;
+      // Air and storms only for the place they were fetched for
+      const extras =
+        lastCoords &&
+        dogExtras.key === forecastKey(lastCoords.latitude, lastCoords.longitude)
+          ? dogExtras
+          : { storms: null, air: null, airFailed: false };
       const viewEnd = labels[labels.length - 1].getTime() / 1000 + 900;
-      const week = daysAhead >= 7;
+      // Views of three days or more mark each day's best, like the week.
+      const week = daysAhead >= 3;
       const days = sunDays();
       const readShown = drawnSunReader(timelineState);
       const scan = (readSun, to) =>
         VibeDogs.scanPawToGrass({ hours, sunDays: days, readSun, from: now, to });
-      const dayScan = week ? null : scan(readShown, Math.min(viewEnd, now + 24 * 3600));
-      // The week's best, for the caption: off a 7-day line built the same way.
-      let weekScan = null;
-      if (week) weekScan = scan(readShown, viewEnd);
-      else {
-        const full = buildTimelineDataset(currentForecast.hourly, 7);
-        weekScan = full.labels.length
-          ? scan(drawnSunReader(full), full.labels[full.labels.length - 1].getTime() / 1000 + 900)
-          : null;
-      }
+      // A 7-day line built the same way, for the week's best and for the
+      // next 24 hours when the view ends sooner.
+      const full = buildTimelineDataset(currentForecast.hourly, 7);
+      const fullEnd = full.labels.length
+        ? full.labels[full.labels.length - 1].getTime() / 1000 + 900
+        : now;
+      const readFull = full.labels.length ? drawnSunReader(full) : readShown;
+      const dayScan = week
+        ? null
+        : viewEnd >= now + 24 * 3600
+        ? scan(readShown, now + 24 * 3600)
+        : scan(readFull, Math.min(fullEnd, now + 24 * 3600));
+      const weekScan = week ? scan(readShown, viewEnd) : scan(readFull, fullEnd);
       const paws = week ? (weekScan ? weekScan.days : []) : dayScan && dayScan.best ? [dayScan.best] : [];
       const walkByT = new Map(hours.map((h) => [h.t, VibeDogs.classifyHour(h)]));
       const nowHourDate = PlaceTime.dayKey(Date.now(), placeZone);
@@ -4903,11 +4920,15 @@
         week,
         plan: VibeDogs.walkPlan(hours, nowHourDate, now, placeZone),
         cards: VibeDogs.dogSignals({ hours, now, zone: placeZone, units: unit }),
-        stormsStatus: dogExtras.storms ? dogExtras.storms.status : "loading",
+        stormsStatus: extras.storms ? extras.storms.status : "loading",
+        // No usable forecast, or one with no word at all for the next 48 hours.
         stormsMissing:
-          dogExtras.storms &&
-          dogExtras.storms.status === "unavailable",
-        airShown: !!dogExtras.air,
+          !!extras.storms &&
+          (extras.storms.status === "unavailable" ||
+            (extras.storms.status === "ok" &&
+              VibeDogs.stormForecastMissing(hours, now))),
+        airShown: !!extras.air,
+        airFailed: !!extras.airFailed,
       };
     }
 
@@ -5014,6 +5035,24 @@
         p.append(link("https://www.weather.gov/", "weather.gov"), " has it in the meantime.");
         nodes.push(p);
       }
+      if (s.stormsStatus === "outside") {
+        nodes.push(
+          dogEl(
+            "p",
+            "dog-storms-missing",
+            "Thunderstorms aren't covered here: they come from the US National Weather Service, which doesn't forecast this place."
+          )
+        );
+      }
+      if (s.airFailed) {
+        nodes.push(
+          dogEl(
+            "p",
+            "dog-storms-missing",
+            "Air quality didn't load just now, so it isn't part of these ratings or cards."
+          )
+        );
+      }
       const cards = dogEl("div", "dog-cards");
       for (const c of s.cards) {
         const card = dogEl("article", `dog-card dog-card--${c.level}`);
@@ -5051,7 +5090,7 @@
         );
         nodes.push(cams);
       }
-      if (s.stormsStatus === "ok") {
+      if (s.stormsStatus === "ok" && !s.stormsMissing) {
         const nws = dogEl("p", "dog-credit");
         nws.append(link("https://www.weather.gov/", "Thunderstorm forecast by the National Weather Service"));
         nodes.push(nws);
@@ -6365,7 +6404,9 @@
           els.lineSmoothingVal &&
             (els.lineSmoothingVal.textContent = lineSmoothing.toFixed(1));
           storageCacheSet(LINE_SMOOTHING_KEY, String(lineSmoothing));
-          // Update chart if it exists (debounced)
+          // Update chart if it exists (debounced); the paw is read off the
+          // drawn line, so it moves with it
+          if (dogsOn) renderDogs();
           debouncedChartUpdate("none");
         });
 
