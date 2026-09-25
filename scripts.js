@@ -4376,6 +4376,15 @@
       renderReadout(i, options);
     }
 
+    // The point now falls on: the last one at or before now.
+    function nowPointIndex() {
+      const labels = timelineState ? timelineState.labels : [];
+      const now = Date.now();
+      let i = 0;
+      while (i < labels.length - 1 && labels[i + 1].getTime() <= now) i++;
+      return i;
+    }
+
     function pointIndexAt(clientX) {
       if (!vibeChart || !timelineState) return null;
       const rect = els.chartCanvas.getBoundingClientRect();
@@ -4387,10 +4396,14 @@
         : null;
     }
 
+    // The time under clientX, held to the plot's ends, so a drag released
+    // past an edge still ends at that edge.
     function timeAtClientX(clientX) {
       if (!vibeChart || !timelineState) return null;
       const rect = els.chartCanvas.getBoundingClientRect();
-      return pixelToTime(clientX - rect.left, timelineState.labels, vibeChart.scales);
+      const { left, right } = vibeChart.chartArea;
+      const x = Math.min(right, Math.max(left, clientX - rect.left));
+      return pixelToTime(x, timelineState.labels, vibeChart.scales);
     }
 
     // Near a touch-grass leaf, the card names it (as it always has).
@@ -4464,17 +4477,30 @@
           selecting: false,
           previous: selectionRange,
         };
+        // Capture now, so the release reaches the chart wherever it happens.
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch {}
       });
+
+      // A press that ended without a release here (a context menu, a lost
+      // capture) must not turn the next hover into a drag.
+      const dropDrag = () => {
+        if (drag && drag.selecting) {
+          selectionRange = drag.previous;
+          isSelectingActive = false;
+          vibeChart && vibeChart.update("none");
+        }
+        drag = null;
+      };
 
       canvas.addEventListener("pointermove", (e) => {
         if (!vibeChart || !timelineState) return;
+        if (drag && e.pointerType === "mouse" && e.buttons === 0) dropDrag();
         if (drag && drag.id === e.pointerId) {
           if (!drag.selecting && drag.startTime && Math.abs(e.clientX - drag.x) > 5) {
             drag.selecting = true;
             isSelectingActive = true;
-            try {
-              canvas.setPointerCapture(e.pointerId);
-            } catch {}
             hideReadout();
           }
           if (drag.selecting) {
@@ -4521,13 +4547,9 @@
       });
 
       // The browser took the gesture (a scroll): drop an unfinished drag.
-      canvas.addEventListener("pointercancel", () => {
-        if (drag && drag.selecting) {
-          selectionRange = drag.previous;
-          isSelectingActive = false;
-          vibeChart && vibeChart.update("none");
-        }
-        drag = null;
+      canvas.addEventListener("pointercancel", dropDrag);
+      canvas.addEventListener("lostpointercapture", (e) => {
+        if (drag && drag.id === e.pointerId) dropDrag();
       });
 
       canvas.addEventListener("pointerleave", (e) => {
@@ -4548,7 +4570,7 @@
         const stepMs =
           n > 1 ? timelineState.labels[1].getTime() - timelineState.labels[0].getTime() : HOUR_MS;
         const perHour = Math.max(1, Math.round(HOUR_MS / stepMs));
-        const start = readoutIndex ?? Math.max(0, vibeChart._nowIdx ?? 0);
+        const start = readoutIndex ?? nowPointIndex();
         const step = (k) => (readoutIndex === null ? start : Math.min(n - 1, Math.max(0, start + k)));
         let next = null;
         if (e.key === "ArrowRight") next = step(e.shiftKey ? 1 : perHour);
@@ -4572,8 +4594,7 @@
       canvas.addEventListener("focus", () => {
         // Only keyboard focus opens it at now; a click or a tap focuses too.
         if (!canvas.matches(":focus-visible") || !timelineState) return;
-        const i = Math.max(0, vibeChart?._nowIdx ?? 0);
-        showPoint(i, { speak: true });
+        showPoint(nowPointIndex(), { speak: true });
         readoutPinned = true;
       });
       canvas.addEventListener("blur", () => {
