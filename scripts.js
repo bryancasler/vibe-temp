@@ -6359,9 +6359,11 @@
           }
         }
       });
-      // Parse URL parameters and apply settings
+      // Parse URL parameters and apply settings. Returns true when the URL
+      // named a place and its weather is loading.
       function applyURLParameters() {
         const params = new URLSearchParams(location.search);
+        let loadingPlace = false;
 
         // Apply unit
         const urlUnit = params.get("unit");
@@ -6394,6 +6396,7 @@
           const lon = parseFloat(urlLon);
           if (!isNaN(lat) && !isNaN(lon)) {
             primeWeatherForCoords(lat, lon, "shared location");
+            loadingPlace = true;
           }
         } else if (urlZip) {
           const zip5 = normalizeZip(urlZip);
@@ -6406,6 +6409,7 @@
 
             // Only fetch weather if there's no highlight (highlight will wait for location)
             if (!hasHighlight) {
+              loadingPlace = true;
               getCoordsForZip(zip5)
                 .then(({ latitude, longitude, place }) =>
                   primeWeatherForCoords(
@@ -6431,7 +6435,7 @@
             if (endTime < now) {
               // Show modal instead of setting selectionRange
               showExpiredSelectionModal();
-              return; // Don't set selectionRange if expired
+              return loadingPlace; // Don't set selectionRange if expired
             }
             // Still show the highlight if not expired
             selectionRange = { startTime, endTime };
@@ -6466,6 +6470,7 @@
             console.warn("Failed to parse time range from URL", e);
           }
         }
+        return loadingPlace;
       }
 
       // Boot
@@ -6480,7 +6485,7 @@
         const urlEnd = params.get("end");
         const hasUrlHighlight = urlStart && urlEnd;
 
-        applyURLParameters();
+        const loadingFromUrl = applyURLParameters();
 
         // If there's a ZIP in URL with a highlight, skip location request
         // Location will be requested when highlight is cleared
@@ -6489,7 +6494,7 @@
           if (lastCoords) {
             updateChartTitle();
           }
-        } else if (!lastCoords) {
+        } else if (!lastCoords && !loadingFromUrl) {
           // If no location was set from URL, use saved ZIP or prompt for browser location
           const savedZip = storageCacheGet(ZIP_KEY);
           if (savedZip && zipEls.input) {
