@@ -613,6 +613,7 @@
     }
     let currentIsDay = null;
     let currentPlaceName = "";
+    let currentZip = null; // the ZIP of the place on screen, when it came from one
     // Clock and calendar follow the place's own time zone (Open-Meteo's
     // `timezone`), not the browser's: the browser's until a forecast arrives.
     const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -736,13 +737,12 @@
       // Add settings
       if (unit) params.set("unit", unit);
       if (daysAhead) params.set("days", String(daysAhead));
-      // The place, no more precisely than the forecast needs: the ZIP when
-      // there is one, otherwise coordinates to 2 dp (about 1 km), which is
+      // The place on screen, no more precisely than the forecast needs: its
+      // ZIP when it came from one, otherwise coordinates to 2 dp (about 1 km), which is
       // also what the forecast is fetched for. A shared link never carries
       // a GPS fix.
-      const savedZip = storageCacheGet(ZIP_KEY);
-      if (savedZip) {
-        params.set("zip", savedZip);
+      if (currentZip) {
+        params.set("zip", currentZip);
       } else if (lastCoords) {
         params.set("lat", roundCoord(lastCoords.latitude).toFixed(2));
         params.set("lon", roundCoord(lastCoords.longitude).toFixed(2));
@@ -2485,7 +2485,8 @@
                 latitude,
                 longitude,
                 `ZIP ${zip5} (${place})`,
-                place
+                place,
+                zip5
               );
               // hideError() is called in primeWeatherForCoords on success, but ensure it's hidden here too
               hideError();
@@ -4871,7 +4872,7 @@
     // Draws a forecast for a place: cards, chart, summaries, status.
     async function applyForecast(
       data,
-      { latitude, longitude, sourceLabel, placeName, seq }
+      { latitude, longitude, sourceLabel, placeName, zip, seq }
     ) {
       if (seq !== primeSeq) return; // a newer place was chosen meanwhile
       drawnSeq = seq;
@@ -4884,6 +4885,7 @@
       const dailySun = sunTimesFrom(data.daily, daysAhead);
       sunTimes = dailySun;
       lastCoords = { latitude, longitude };
+      currentZip = zip || null; // the ZIP this place came from, if any
 
       // The place comes from the ZIP lookup (or a saved favorite); a GPS
       // fix has none, since there is no reverse geocoding.
@@ -4951,7 +4953,8 @@
       latitude,
       longitude,
       sourceLabel = "",
-      placeName = ""
+      placeName = "",
+      zip = null
     ) {
       statusEl &&
         (statusEl.textContent = sourceLabel
@@ -4960,7 +4963,7 @@
       // Only show loading if chart doesn't exist yet
       if (!vibeChart) showChartLoading();
       const seq = ++primeSeq;
-      const place = { latitude, longitude, sourceLabel, placeName, seq };
+      const place = { latitude, longitude, sourceLabel, placeName, zip, seq };
       const held = peekForecast(latitude, longitude);
       let drawn = false;
       if (held) {
@@ -5573,6 +5576,8 @@
 
       // Storage sync across tabs
       window.addEventListener("storage", (e) => {
+        // Another tab changed a setting: read it fresh next time.
+        if (e.key) storageCache.delete(e.key);
         if (e.key === UNIT_KEY) {
           const newVal = e.newValue === "C" ? "C" : "F";
           if (newVal !== unit) setUnit(newVal, { persist: false });
@@ -5588,7 +5593,8 @@
                   latitude,
                   longitude,
                   `ZIP ${zipVal} (${place})`,
-                  place
+                  place,
+                  zipVal
                 )
               )
               .then(() => hideError()) // Ensure error is hidden after successful weather fetch
@@ -6048,7 +6054,8 @@
             latitude,
             longitude,
             `ZIP ${zip5} (${place})`,
-            place
+            place,
+            zip5
           );
           hideError();
 
@@ -6252,7 +6259,8 @@
                     latitude,
                     longitude,
                     `ZIP ${savedZip} (${place})`,
-                    place
+                    place,
+                    savedZip
                   )
                 )
                 .then(() => {
@@ -6513,7 +6521,8 @@
                     latitude,
                     longitude,
                     `ZIP ${zip5} (${place})`,
-                    place
+                    place,
+                    zip5
                   )
                 )
                 .catch(() => {});
@@ -6552,7 +6561,8 @@
                       latitude,
                       longitude,
                       `ZIP ${zip5} (${place})`,
-                      place
+                      place,
+                      zip5
                     )
                   )
                   .catch(() => {});
@@ -6603,7 +6613,8 @@
                   latitude,
                   longitude,
                   `ZIP ${savedZip} (${place})`,
-                  place
+                  place,
+                  savedZip
                 )
               )
               .then(() => {
