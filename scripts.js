@@ -1664,21 +1664,12 @@
       return cloudSuffix ? `${description} (${cloudSuffix})` : description;
     }
 
-    // Formulas
+    // Formulas (model.js), with this page's calibration
     function shadeVibeOf(T, RH, Wind) {
-      return (
-        T +
-        (RH - calibration.humidityBaseline) / (1 / calibration.humidityCoeff) -
-        calibration.windCoeff * Wind
-      );
+      return VibeModel.shadeVibeOf(T, RH, Wind, calibration);
     }
     function sunVibeOf(shadeV, solarExposure, R) {
-      // Only apply reflectivity when there's actual solar exposure
-      const reflectivityEffect =
-        solarExposure > 0 ? calibration.reflectCoeff * R : 0;
-      return (
-        shadeV + calibration.solarCoeff * solarExposure + reflectivityEffect
-      );
+      return VibeModel.sunVibeOf(shadeV, solarExposure, R, calibration);
     }
     function reflectivity() {
       const sel = parseFloat(els.reflect?.value ?? "0");
@@ -1688,23 +1679,8 @@
     }
 
     // Solar exposure
-    function solarFromUVandCloud({
-      uv_index,
-      uv_index_clear_sky,
-      cloud_cover,
-      is_day,
-    }) {
-      const isDaylight = is_day === 1 || is_day === true;
-      const baseUV =
-        typeof uv_index_clear_sky === "number" && uv_index_clear_sky > 0
-          ? uv_index / uv_index_clear_sky
-          : typeof uv_index === "number"
-          ? uv_index / 10
-          : 0;
-      const cloudAtten =
-        1 - Math.pow((cloud_cover ?? 0) / 100, calibration.cloudExp);
-      const solar = isDaylight ? baseUV * cloudAtten : 0;
-      return clamp(solar, 0, 1);
+    function solarFromUVandCloud(inputs) {
+      return VibeModel.solarFromUVandCloud(inputs, calibration);
     }
 
     // Compute card values (cards show °F/°C)
