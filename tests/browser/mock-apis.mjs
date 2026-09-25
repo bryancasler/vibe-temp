@@ -88,8 +88,8 @@ export function forecastResponse(url, { nowUnix, zone = "America/New_York", scen
   const unixtime = q.get("timeformat") === "unixtime";
   const pastDays = Number(q.get("past_days") || 0);
   const days = Number(q.get("forecast_days") || 7);
-  const start = localMidnight(zone, nowUnix) - pastDays * 86400;
-  const end = localMidnight(zone, nowUnix) + days * 86400;
+  const start = localMidnight(zone, localMidnight(zone, nowUnix) - pastDays * 86400 + 43200);
+  const end = localMidnight(zone, localMidnight(zone, nowUnix) + days * 86400 + 43200);
   const fixedOffset = offsetSeconds(zone, start);
   const stamp = (u) => (unixtime ? u : isoLocal(u, fixedOffset));
   const body = {
@@ -152,7 +152,7 @@ export function forecastResponse(url, { nowUnix, zone = "America/New_York", scen
   }
   if (q.get("daily")) {
     const daily = { time: [], sunrise: [], sunset: [] };
-    for (let u = start; u < end; u += 86400) {
+    for (let u = start; u < end; u = localMidnight(zone, u + 86400 + 43200)) {
       const date = new Date((u + offsetSeconds(zone, u + 43200)) * 1000).toISOString().slice(0, 10);
       const row = year.days.find((d) => d[0] === date);
       daily.time.push(unixtime ? u : date);
@@ -168,8 +168,8 @@ export function airQualityResponse(url, { nowUnix, zone = "America/New_York", sc
   const q = url.searchParams;
   const unixtime = q.get("timeformat") === "unixtime";
   const days = Number(q.get("forecast_days") || 5);
-  const start = localMidnight(zone, nowUnix) - Number(q.get("past_days") || 0) * 86400;
-  const end = localMidnight(zone, nowUnix) + days * 86400;
+  const start = localMidnight(zone, localMidnight(zone, nowUnix) - Number(q.get("past_days") || 0) * 86400 + 43200);
+  const end = localMidnight(zone, localMidnight(zone, nowUnix) + days * 86400 + 43200);
   const fixedOffset = offsetSeconds(zone, start);
   const hourly = { time: [], us_aqi: [] };
   for (let u = start; u < end; u += 3600) {

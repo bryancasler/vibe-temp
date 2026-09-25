@@ -114,26 +114,29 @@
     // Function to update headline date display
     function updateHeadlineDate() {
       if (headlineDateEl) {
-        const today = new Date();
-        today.setDate(today.getDate() + dateOffset);
+        // Today at the place, not in the browser's zone
+        const today = new Date(
+          PlaceTime.startOfDay(new Date(), placeZone, dateOffset)
+        );
 
         // If week is selected (daysAhead === 7), show date range
         if (daysAhead === 7) {
-          const startDate = new Date(today);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(startDate);
-          endDate.setDate(endDate.getDate() + 6); // 7 days total (0-6 = 7 days)
+          const startDate = today;
+          // 7 days total (0-6 = 7 days)
+          const endDate = new Date(PlaceTime.startOfDay(today, placeZone, 6));
 
           // Format with full month names and ordinals: "January 5th - 11th" or "January 5th - February 3rd"
-          const startMonth = startDate.toLocaleDateString("en-US", {
-            month: "long",
-          });
-          const startDay = startDate.getDate();
+          const startMonth = startDate.toLocaleDateString(
+            "en-US",
+            inZone({ month: "long" })
+          );
+          const startDay = zp(startDate).day;
           const startOrdinal = getOrdinalSuffix(startDay);
-          const endMonth = endDate.toLocaleDateString("en-US", {
-            month: "long",
-          });
-          const endDay = endDate.getDate();
+          const endMonth = endDate.toLocaleDateString(
+            "en-US",
+            inZone({ month: "long" })
+          );
+          const endDay = zp(endDate).day;
           const endOrdinal = getOrdinalSuffix(endDay);
 
           if (startMonth === endMonth) {
@@ -143,8 +146,11 @@
           }
         } else {
           // Single date format with full month name and ordinal, no year
-          const month = today.toLocaleDateString("en-US", { month: "long" });
-          const day = today.getDate();
+          const month = today.toLocaleDateString(
+            "en-US",
+            inZone({ month: "long" })
+          );
+          const day = zp(today).day;
           const ordinal = getOrdinalSuffix(day);
           headlineDateEl.textContent = `${month}, ${day}${ordinal}`;
         }
@@ -524,6 +530,12 @@
     }
     let currentIsDay = null;
     let currentPlaceName = "";
+    // Clock and calendar follow the place's own time zone (Open-Meteo's
+    // `timezone`), not the browser's: the browser's until a forecast arrives.
+    const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let placeZone = browserZone;
+    const zp = (d) => PlaceTime.parts(d, placeZone);
+    const inZone = (opts = {}) => ({ ...opts, timeZone: placeZone });
 
     let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, now } all in °F
     window.timelineState = null; // Expose timeline state for tooltip data access
@@ -699,7 +711,7 @@
 
           dataPoints.push({
             time: time.toISOString(),
-            hour: time.getHours(),
+            hour: zp(time).hour,
             shadeVibe: toUserTemp(shadeF),
             sunVibe: toUserTemp(sunF),
             solar: solar,
@@ -927,10 +939,10 @@
       const start = new Date(startTime);
       const end = new Date(endTime);
 
-      const startDay = start.toLocaleDateString([], { weekday: "long" });
-      const endDay = end.toLocaleDateString([], { weekday: "long" });
-      const startHour = start.getHours();
-      const endHour = end.getHours();
+      const startDay = start.toLocaleDateString([], inZone({ weekday: "long" }));
+      const endDay = end.toLocaleDateString([], inZone({ weekday: "long" }));
+      const startHour = zp(start).hour;
+      const endHour = zp(end).hour;
 
       // Helper to get time of day
       function getTimeOfDay(hour) {
@@ -944,7 +956,8 @@
       const endTimeOfDay = getTimeOfDay(endHour);
 
       // Check if same day
-      const isSameDay = start.toDateString() === end.toDateString();
+      const isSameDay =
+        PlaceTime.dayKey(start, placeZone) === PlaceTime.dayKey(end, placeZone);
 
       if (isSameDay) {
         // Single day
@@ -957,19 +970,8 @@
         }
       } else {
         // Multiple days
-        const startDate = start.getDate();
-        const endDate = end.getDate();
-        const startMonth = start.getMonth();
-        const endMonth = end.getMonth();
-        const startYear = start.getFullYear();
-        const endYear = end.getFullYear();
-
         // Check if consecutive days (same calendar date difference)
-        const startDayOnly = new Date(startYear, startMonth, startDate);
-        const endDayOnly = new Date(endYear, endMonth, endDate);
-        const daysDiff = Math.round(
-          (endDayOnly - startDayOnly) / (1000 * 60 * 60 * 24)
-        );
+        const daysDiff = PlaceTime.daysBetween(start, end, placeZone);
 
         if (daysDiff === 1) {
           // Consecutive days - check for night into morning transition
@@ -1005,8 +1007,8 @@
       }
 
       const now = new Date();
-      const endOfDay = new Date(now);
-      endOfDay.setHours(23, 59, 59, 999);
+      // The last moment of today at the place
+      const endOfDay = new Date(PlaceTime.startOfDay(now, placeZone, 1) - 1);
 
       // Find the latest time in timelineState that's still today
       const { labels } = timelineState;
@@ -1027,9 +1029,8 @@
         if (lastLabel) {
           const lastLabelDate = new Date(lastLabel);
           if (
-            lastLabelDate.getDate() === now.getDate() &&
-            lastLabelDate.getMonth() === now.getMonth() &&
-            lastLabelDate.getFullYear() === now.getFullYear()
+            PlaceTime.dayKey(lastLabelDate, placeZone) ===
+            PlaceTime.dayKey(now, placeZone)
           ) {
             endTime = lastLabelDate;
           } else {
@@ -1053,20 +1054,15 @@
 
       // Update time range display
       if (remainderTimeRangeEl) {
-        const startStr = now.toLocaleString([], {
+        const rangeFormat = inZone({
           weekday: "short",
           month: "short",
           day: "numeric",
           hour: "numeric",
           minute: "2-digit",
         });
-        const endStr = endTime.toLocaleString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        });
+        const startStr = now.toLocaleString([], rangeFormat);
+        const endStr = endTime.toLocaleString([], rangeFormat);
         remainderTimeRangeEl.textContent = `${startStr} → ${endStr}`;
       }
 
@@ -1090,16 +1086,12 @@
         // Find Touch Grass time for today if it exists
         let touchGrassTime = null;
         if (vibeChart && vibeChart._touchGrassTimes) {
-          const todayKey = `${now.getFullYear()}-${String(
-            now.getMonth() + 1
-          ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+          const todayKey = PlaceTime.dayKey(now, placeZone);
           const touchGrassTimes = vibeChart._touchGrassTimes || [];
           for (const tgTime of touchGrassTimes) {
             const tgDate =
               tgTime.time instanceof Date ? tgTime.time : new Date(tgTime.time);
-            const tgDayKey = `${tgDate.getFullYear()}-${String(
-              tgDate.getMonth() + 1
-            ).padStart(2, "0")}-${String(tgDate.getDate()).padStart(2, "0")}`;
+            const tgDayKey = PlaceTime.dayKey(tgDate, placeZone);
             const tgTimeMs = tgDate.getTime();
             if (
               tgDayKey === todayKey &&
@@ -1237,20 +1229,15 @@
       if (summaryTimeRangeEl && selectionRange) {
         const start = new Date(selectionRange.startTime);
         const end = new Date(selectionRange.endTime);
-        const startStr = start.toLocaleString([], {
+        const rangeFormat = inZone({
           weekday: "short",
           month: "short",
           day: "numeric",
           hour: "numeric",
           minute: "2-digit",
         });
-        const endStr = end.toLocaleString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        });
+        const startStr = start.toLocaleString([], rangeFormat);
+        const endStr = end.toLocaleString([], rangeFormat);
         summaryTimeRangeEl.textContent = `${startStr} → ${endStr}`;
       }
 
@@ -1372,13 +1359,16 @@
     };
 
     function fmtHM(d) {
-      return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      return d.toLocaleTimeString(
+        [],
+        inZone({ hour: "numeric", minute: "2-digit" })
+      );
     }
     function fmtHMWithSmallAMPM(d) {
-      const timeStr = d.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      });
+      const timeStr = d.toLocaleTimeString(
+        [],
+        inZone({ hour: "numeric", minute: "2-digit" })
+      );
       // Split time and AM/PM, wrap AM/PM in span with smaller font
       // Handle both "6:43 AM" and "6:43AM" formats
       const parts = timeStr.split(/(\s*[AP]M)/i);
@@ -1388,11 +1378,10 @@
       return timeStr;
     }
     function fmtHMS(d) {
-      return d.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-      });
+      return d.toLocaleTimeString(
+        [],
+        inZone({ hour: "numeric", minute: "2-digit", second: "2-digit" })
+      );
     }
 
     function paintUnitToggle() {
@@ -1836,7 +1825,9 @@
           stored.data &&
           stored.data.current &&
           stored.data.hourly &&
-          stored.data.daily
+          stored.data.daily &&
+          Array.isArray(stored.data.hourly.time) &&
+          typeof stored.data.hourly.time[0] === "number"
         ) {
           entry = stored;
           forecastMemory.set(key, entry);
@@ -1871,6 +1862,10 @@
         temperature_unit: "fahrenheit",
         wind_speed_unit: "mph",
         timezone: "auto",
+        // Unix times: Open-Meteo's local-time strings carry one fixed
+        // offset for the whole range, and new Date() would read them in the
+        // viewer's zone.
+        timeformat: "unixtime",
         forecast_days: 7,
       });
       let r;
@@ -1894,7 +1889,14 @@
           ? new Error("TIMEOUT")
           : new Error("INVALID_RESPONSE");
       }
-      if (!data || !data.current || !data.hourly || !data.daily)
+      if (
+        !data ||
+        !data.current ||
+        !data.hourly ||
+        !data.daily ||
+        !Array.isArray(data.hourly.time) ||
+        typeof data.hourly.time[0] !== "number"
+      )
         throw new Error("INVALID_RESPONSE");
       return data;
     }
@@ -1933,8 +1935,8 @@
       return (await getForecast(lat, lon, options)).hourly;
     }
     function sunTimesFrom(daily, daysAheadParam = daysAhead) {
-      const rises = daily?.sunrise?.map((t) => new Date(t)) ?? [];
-      const sets = daily?.sunset?.map((t) => new Date(t)) ?? [];
+      const rises = daily?.sunrise?.map((t) => new Date(t * 1000)) ?? [];
+      const sets = daily?.sunset?.map((t) => new Date(t * 1000)) ?? [];
       // Return arrays of all sunrise/sunset times for the visible range
       return {
         sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
@@ -1956,13 +1958,11 @@
     // Timeline
     function buildTimelineDataset(hourly, daysAheadParam = daysAhead) {
       const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(now);
-      end.setDate(end.getDate() + daysAheadParam);
-      end.setHours(0, 0, 0, 0);
+      // From the place's midnight today, daysAheadParam days.
+      const start = new Date(PlaceTime.startOfDay(now, placeZone));
+      const end = new Date(PlaceTime.startOfDay(now, placeZone, daysAheadParam));
 
-      const times = hourly.time.map((t) => new Date(t));
+      const times = hourly.time.map((t) => new Date(t * 1000));
       const startIdx = times.findIndex((d) => d >= start);
       const endIdx = times.findIndex((d) => d >= end);
       const s = startIdx === -1 ? 0 : startIdx;
@@ -2047,8 +2047,9 @@
 
         // Add 4 points per hour (0, 15, 30, 45 minutes)
         for (let minuteOffset = 0; minuteOffset < 60; minuteOffset += 15) {
-          const interpolatedTime = new Date(currentTime);
-          interpolatedTime.setMinutes(minuteOffset, 0, 0);
+          const interpolatedTime = new Date(
+            currentTime.getTime() + minuteOffset * 60000
+          );
 
           // Only add if within the time range (use <= for end to include the last point)
           if (interpolatedTime >= start && interpolatedTime <= end) {
@@ -2135,20 +2136,16 @@
       };
     }
     function hourKey(d) {
-      const k = new Date(d);
-      k.setMinutes(0, 0, 0);
-      return k.getTime();
+      return PlaceTime.startOfHour(d, placeZone);
     }
 
     function nearestLabelIndex(labelDates, target) {
       if (!target) return -1;
-      const tg = new Date(target);
-      tg.setMinutes(0, 0, 0);
+      const tg = hourKey(target);
       let bestIdx = -1,
         bestDiff = Infinity;
       for (let i = 0; i < labelDates.length; i++) {
-        const d = new Date(labelDates[i]);
-        d.setMinutes(0, 0, 0);
+        const d = hourKey(labelDates[i]);
         const diff = Math.abs(d - tg);
         if (diff < bestDiff) {
           bestDiff = diff;
@@ -2398,7 +2395,7 @@
       });
 
       const displayLabels = labels.map((d) =>
-        d.toLocaleString([], { weekday: "short", hour: "numeric" })
+        d.toLocaleString([], inZone({ weekday: "short", hour: "numeric" }))
       );
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
@@ -2469,9 +2466,7 @@
         // Check if temperature is in ideal range
         if (sunTemp >= idealMin && sunTemp <= idealMax) {
           // Create day key (YYYY-MM-DD)
-          const dayKey = `${time.getFullYear()}-${String(
-            time.getMonth() + 1
-          ).padStart(2, "0")}-${String(time.getDate()).padStart(2, "0")}`;
+          const dayKey = PlaceTime.dayKey(time, placeZone);
 
           // Score: prefer temperatures closer to the middle of the range
           const midPoint = (idealMin + idealMax) / 2;
@@ -2479,7 +2474,7 @@
           const score = 100 - distanceFromMid * 10; // Higher score = better
 
           // Prefer times between 10am and 4pm (better for outdoor activities)
-          const hour = time.getHours();
+          const hour = zp(time).hour;
           const hourBonus = hour >= 10 && hour <= 16 ? 20 : 0;
           const finalScore = score + hourBonus;
 
@@ -2532,7 +2527,7 @@
       });
 
       const displayLabels = labels.map((d) =>
-        d.toLocaleString([], { weekday: "short", hour: "numeric" })
+        d.toLocaleString([], inZone({ weekday: "short", hour: "numeric" }))
       );
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
@@ -2572,8 +2567,7 @@
 
       // Helper to format time (e.g., "4am", "12pm")
       function formatTime(date) {
-        const hour = date.getHours();
-        const minute = date.getMinutes();
+        const { hour, minute } = zp(date);
         if (minute !== 0) return ""; // Only show labels on the hour
         const period = hour >= 12 ? "pm" : "am";
         const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
@@ -2582,7 +2576,7 @@
 
       // Helper to format day (e.g., "Fri")
       function formatDay(date) {
-        return date.toLocaleDateString([], { weekday: "short" });
+        return date.toLocaleDateString([], inZone({ weekday: "short" }));
       }
 
       // Day separator plugin - vertical lines at midnight boundaries
@@ -2594,7 +2588,7 @@
           for (let i = 1; i < labels.length; i++) {
             const prevDate = new Date(labels[i - 1]);
             const currDate = new Date(labels[i]);
-            if (prevDate.getDate() !== currDate.getDate()) {
+            if (zp(prevDate).day !== zp(currDate).day) {
               midnightIndices.push(i);
             }
           }
@@ -3449,7 +3443,7 @@
           for (let i = 0; i < rawLabels.length; i++) {
             const label = rawLabels[i];
             const date = new Date(label);
-            const minutes = date.getMinutes();
+            const minutes = zp(date).minute;
 
             // Skip non-hourly points
             if (minutes !== 0) continue;
@@ -3832,12 +3826,8 @@
 
             // Helper function to round time down to current hour, then add 2 hours
             function roundDownAndAddTwoHours(date) {
-              const rounded = new Date(date);
-              rounded.setMinutes(0);
-              rounded.setSeconds(0);
-              rounded.setMilliseconds(0);
-              rounded.setHours(rounded.getHours() + 2); // Add 2 hours (1 hour later than rounding up to next hour)
-              return rounded.getTime();
+              // Add 2 hours (1 hour later than rounding up to next hour)
+              return PlaceTime.startOfHour(date, placeZone) + 2 * 3600000;
             }
 
             // Get all sunrise and sunset times, sorted
@@ -4119,13 +4109,16 @@
                       const d = new Date(rawTime);
                       // Format: "Fri, 6pm"
                       return (
-                        d.toLocaleDateString("en-US", { weekday: "short" }) +
+                        d.toLocaleDateString(
+                          "en-US",
+                          inZone({ weekday: "short" })
+                        ) +
                         ", " +
                         d
-                          .toLocaleTimeString("en-US", {
-                            hour: "numeric",
-                            hour12: true,
-                          })
+                          .toLocaleTimeString(
+                            "en-US",
+                            inZone({ hour: "numeric", hour12: true })
+                          )
                           .toLowerCase()
                           .replace(" ", "")
                       );
@@ -4490,15 +4483,11 @@
           const clickedTime = getTimeFromClientX(e.clientX);
           if (clickedTime) {
             // Round to nearest hour
-            const clickedHour = new Date(clickedTime);
-            clickedHour.setMinutes(0, 0, 0);
+            const clickedHour = hourKey(clickedTime);
 
             // Create selection: clicked hour - 1 hour, clicked hour, clicked hour + 1 hour
-            const startTime = new Date(clickedHour);
-            startTime.setHours(startTime.getHours() - 1);
-
-            const endTime = new Date(clickedHour);
-            endTime.setHours(endTime.getHours() + 1);
+            const startTime = new Date(clickedHour - 3600000);
+            const endTime = new Date(clickedHour + 3600000);
 
             selectionRange = { startTime, endTime };
             isSelectingActive = false;
@@ -4848,6 +4837,10 @@
       { latitude, longitude, sourceLabel, placeName, seq }
     ) {
       if (seq !== primeSeq) return; // a newer place was chosen meanwhile
+      placeZone = PlaceTime.isValidZone(data.timezone)
+        ? data.timezone
+        : browserZone;
+      updateHeadlineDate();
       const cur = data.current;
       const hourly = data.hourly;
       const dailySun = sunTimesFrom(data.daily, daysAhead);
@@ -5390,27 +5383,21 @@
                 const now = new Date();
                 let filterStart, filterEnd;
 
+                // Days are the place's days
+                const placeDay = (n) =>
+                  new Date(PlaceTime.startOfDay(now, placeZone, n));
                 if (preset === "today") {
                   // Filter to only today (from start of today to end of today)
-                  filterStart = new Date(now);
-                  filterStart.setHours(0, 0, 0, 0);
-                  filterStart.setDate(filterStart.getDate() + dateOffset);
-                  filterEnd = new Date(filterStart);
-                  filterEnd.setDate(filterEnd.getDate() + 1);
+                  filterStart = placeDay(dateOffset);
+                  filterEnd = placeDay(dateOffset + 1);
                 } else if (preset === "tomorrow") {
                   // Filter to only tomorrow (from start of tomorrow to end of tomorrow)
-                  filterStart = new Date(now);
-                  filterStart.setDate(filterStart.getDate() + 1 + dateOffset);
-                  filterStart.setHours(0, 0, 0, 0);
-                  filterEnd = new Date(filterStart);
-                  filterEnd.setDate(filterEnd.getDate() + 1);
+                  filterStart = placeDay(1 + dateOffset);
+                  filterEnd = placeDay(2 + dateOffset);
                 } else if (dateOffset !== 0) {
                   // For other presets, only filter if dateOffset is applied (arrow navigation)
-                  filterStart = new Date(now);
-                  filterStart.setHours(0, 0, 0, 0);
-                  filterStart.setDate(filterStart.getDate() + dateOffset);
-                  filterEnd = new Date(filterStart);
-                  filterEnd.setDate(filterEnd.getDate() + daysAhead);
+                  filterStart = placeDay(dateOffset);
+                  filterEnd = placeDay(dateOffset + daysAhead);
                 }
 
                 if (filterStart && filterEnd) {
