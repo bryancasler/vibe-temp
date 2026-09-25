@@ -13,13 +13,15 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://api.zippopotam.us; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://api.zippopotam.us https://air-quality-api.open-meteo.com https://api.weather.gov; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <link rel="stylesheet" href="styles.css" />
     <script src="model.js"></script>
     <script src="time.js"></script>
     <script src="curve.js"></script>
     <script src="weather.js"></script>
+    <script src="dogs.js"></script>
+    <script src="sources.js"></script>
     <script src="scripts.js"></script>
   </head>
   <body>
@@ -71,6 +73,18 @@
         </div>
 
         <div class="header-controls">
+          <!-- Dogs mode (off by default, remembered per browser) -->
+          <button
+            id="dogsToggle"
+            class="theme-btn dogs-btn"
+            type="button"
+            aria-pressed="false"
+            aria-label="Dogs"
+            title="Dogs: walk times and dog cards"
+          >
+            <span aria-hidden="true">🐾</span
+            ><span class="dogs-label" aria-hidden="true"> Dogs</span>
+          </button>
           <!-- Theme toggle -->
           <div class="theme-toggle" aria-label="Theme">
             <button
@@ -203,6 +217,12 @@
             Page Down a day, Home and End to either end. Escape closes.
           </span>
         </div>
+        <div id="dogLegend" class="dog-legend" hidden></div>
+        <p class="data-credit">
+          <a href="https://open-meteo.com/" target="_blank" rel="noopener"
+            >Weather data by <span translate="no">Open-Meteo.com</span></a
+          >
+        </p>
       </section>
 
       <!-- Remainder of Day Summary -->
@@ -254,6 +274,9 @@
           <div id="summaryText" class="summary-text">Generating summary...</div>
         </div>
       </section>
+
+      <!-- Dogs mode: captions, walk times, dog cards -->
+      <section id="dogPanel" class="dog-panel" hidden></section>
 
       <!-- Combined temperature card -->
       <section class="cards">

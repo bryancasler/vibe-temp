@@ -1779,3 +1779,209 @@ select {
     font-size: 24px;
   }
 }
+
+/* ── Dogs mode ── */
+:root {
+  --paw: #d9b98c; /* the paw's brown, lightened to read on the dark card */
+  --leaf: #8fc28c;
+  --alert: #f87171;
+  --dog-warning-bg: #7f1d1d;
+  --dog-caution-bg: rgba(212, 168, 83, 0.18);
+  --dog-info-bg: rgba(124, 174, 122, 0.18);
+}
+[data-theme="light"] {
+  --paw: #3d2e1c;
+  --leaf: #3f7d3c;
+  --alert: #b42318;
+  --dog-warning-bg: #b42318;
+  --dog-caution-bg: rgba(212, 168, 83, 0.22);
+  --dog-info-bg: rgba(124, 174, 122, 0.22);
+}
+.dogs-btn {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.dogs-btn[aria-pressed="true"] {
+  background: var(--good);
+  border-color: var(--good);
+  color: #05130a;
+}
+.data-credit {
+  margin: 6px 0 0;
+  font-size: 11px;
+  text-align: right;
+  color: var(--muted);
+}
+.data-credit a,
+.dog-panel a,
+.dog-legend a {
+  color: var(--accent);
+}
+.dog-legend {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.dog-legend[hidden],
+.dog-panel[hidden] {
+  display: none;
+}
+.dog-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dog-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.dog-swatch {
+  display: inline-flex;
+  align-items: flex-end;
+  width: 12px;
+  height: 11px;
+  flex-shrink: 0;
+}
+.dog-swatch-bar {
+  display: block;
+  width: 100%;
+  border-radius: 1px;
+}
+.dog-legend-note {
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+.dog-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin: 10px 0 16px;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.dog-panel .summary-title {
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.dog-panel p {
+  margin: 0 0 8px;
+}
+.dog-caption {
+  font-weight: 600;
+}
+.dog-caption--paw {
+  color: var(--paw);
+}
+.dog-caption--leaf {
+  color: var(--leaf);
+}
+.dog-walk-note,
+.dog-storms-missing,
+.dog-disclaimer,
+.dog-credit {
+  color: var(--muted);
+  font-size: 13px;
+}
+.dog-cards {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+.dog-card {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.dog-card--warning {
+  border-left-color: var(--alert);
+}
+.dog-card--caution {
+  border-left-color: #d4a853;
+}
+.dog-card--info {
+  border-left-color: #7cae7a;
+}
+.dog-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dog-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.dog-badge--warning {
+  background: var(--dog-warning-bg);
+  color: #fff;
+}
+.dog-badge--caution {
+  background: var(--dog-caution-bg);
+}
+.dog-badge--info {
+  background: var(--dog-info-bg);
+}
+.dog-card-headline {
+  font-weight: 600;
+  margin: 6px 0 4px !important;
+}
+.dog-card-detail {
+  color: var(--text);
+  font-size: 13px;
+}
+.dog-card-sources {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 !important;
+}
+.readout-walk {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px !important;
+}
+.readout-walk .dog-swatch {
+  margin-top: 2px;
+}
+.readout-storm {
+  margin-top: 4px !important;
+  font-weight: 600;
+  color: var(--alert);
+}
+.readout-mark--paw {
+  color: var(--paw);
+}
+.readout-mark--leaf {
+  color: var(--leaf);
+}
+@media (max-width: 500px) {
+  /* The header's row fits at 390px with the paw alone. */
+  .dogs-label {
+    display: none;
+  }
+  .dogs-btn {
+    font-size: 16px;
+  }
+  .header-controls {
+    gap: 6px;
+  }
+  .header-controls .theme-btn,
+  .header-controls .unit-btn {
+    padding: 6px 8px;
+  }
+  .unit-toggle {
+    gap: 4px;
+  }
+}

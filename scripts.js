@@ -2632,6 +2632,8 @@
       }
 
       updateCardVisibility();
+      if (dogsOn) renderDogs();
+      refreshReadout();
     }
 
     // The touch-grass rule reads the sun line with the old 5% snap: a sun
@@ -2764,6 +2766,8 @@
         hideChartLoading();
         // Update card visibility in case day/night status changed
         updateCardVisibility();
+        if (dogsOn) renderDogs();
+        refreshReadout();
         return;
       }
 
@@ -3174,6 +3178,8 @@
             window.timelineState?.hourlyLabels || chart._rawLabels || [];
           const fullLabels = chart._rawLabels || [];
           if (hourlyLabels.length === 0 || fullLabels.length === 0) return;
+          // Below the walk strip in Dogs mode
+          const labelDrop = dogsOn ? DOG_STRIP_SPACE : 0;
 
           ctx.save();
           ctx.textAlign = "center";
@@ -3236,10 +3242,10 @@
                 const firstTimeStr = formatTime(firstHourlyTime);
                 const firstDayStr = formatDay(firstHourlyTime);
                 if (firstTimeStr) {
-                  ctx.fillText(firstTimeStr, firstX, chartArea.bottom + 4);
+                  ctx.fillText(firstTimeStr, firstX, chartArea.bottom + labelDrop + 4);
                 }
                 if (firstDayStr) {
-                  ctx.fillText(firstDayStr, firstX, chartArea.bottom + 18);
+                  ctx.fillText(firstDayStr, firstX, chartArea.bottom + labelDrop + 18);
                 }
               }
             }
@@ -3250,10 +3256,10 @@
                 const lastTimeStr = formatTime(lastHourlyTime);
                 const lastDayStr = formatDay(lastHourlyTime);
                 if (lastTimeStr) {
-                  ctx.fillText(lastTimeStr, lastX, chartArea.bottom + 4);
+                  ctx.fillText(lastTimeStr, lastX, chartArea.bottom + labelDrop + 4);
                 }
                 if (lastDayStr) {
-                  ctx.fillText(lastDayStr, lastX, chartArea.bottom + 18);
+                  ctx.fillText(lastDayStr, lastX, chartArea.bottom + labelDrop + 18);
                 }
               }
             }
@@ -3265,10 +3271,10 @@
             const dayStr = formatDay(date);
 
             if (timeStr) {
-              ctx.fillText(timeStr, x, chartArea.bottom + 4);
+              ctx.fillText(timeStr, x, chartArea.bottom + labelDrop + 4);
             }
             if (dayStr) {
-              ctx.fillText(dayStr, x, chartArea.bottom + 18);
+              ctx.fillText(dayStr, x, chartArea.bottom + labelDrop + 18);
             }
           });
 
@@ -3538,8 +3544,10 @@
             // Only draw if within chart area
             if (x < chartArea.left || x > chartArea.right) return;
 
-            // Get y position on sun vibe line
-            const ySun = scales.y.getPixelForValue(sunData[tgTime.index]);
+            // Get y position on sun vibe line (moved off the paw in Dogs mode)
+            const ySun =
+              scales.y.getPixelForValue(sunData[tgTime.index]) +
+              ((chart._leafShift && chart._leafShift[tgTime.index]) || 0);
 
             // Store position for hover detection
             positions.push({
@@ -4099,7 +4107,8 @@
           layout: {
             padding: {
               top: 20, // Extra space for time labels above lines
-              bottom: 40, // Extra space for two-line labels
+              // Extra space for two-line labels, and the walk strip in Dogs mode
+              bottom: 40 + (dogsOn ? DOG_STRIP_SPACE : 0),
             },
           },
           scales: {
@@ -4153,6 +4162,8 @@
           currentLine,
           sunMarkerPlugin,
           touchGrassPlugin,
+          dogStripPlugin,
+          dogMarksPlugin,
           windChillPlugin,
           precipitationIconsPlugin,
           timelineLabelsPlugin,
@@ -4180,6 +4191,7 @@
       // Pointer, keyboard and the readout are wired once (below); refresh an
       // open readout for the new data.
       wireChartPointer();
+      if (dogsOn) renderDogs();
       refreshReadout();
     }
 
@@ -4263,6 +4275,28 @@
         if (nearEvent(t, tg.time))
           marks.push({ kind: "leaf", text: `Touch grass: ${fmtClock(new Date(tg.time))}` });
       }
+      // Dogs mode: the walk rating, air quality, storm words and the paw.
+      let walk = null;
+      let aqi = null;
+      let storm = null;
+      if (dogsOn && dogState) {
+        const w = walkAt(t);
+        if (w) walk = { kind: w.kind, text: VibeDogs.walkWords(w) };
+        const hourT = PlaceTime.startOfHour(t, placeZone) / 1000;
+        const h = dogState.hours.find((x) => x.t === hourT);
+        if (h) {
+          aqi = VibeDogs.aqiWords(h.aqi);
+          storm = VibeDogs.isThunderLikely(h)
+            ? "Thunderstorms likely"
+            : VibeDogs.isThunder(h)
+            ? "Thunderstorms possible"
+            : null;
+        }
+        for (const p of dogState.paws) {
+          if (nearEvent(t, p.t * 1000))
+            marks.unshift({ kind: "paw", text: `Paw to grass: ${fmtClock(new Date(p.t * 1000))}` });
+        }
+      }
       return {
         when: whenWords(t, stepMs),
         sun: temp(s.sunVals[i]),
@@ -4276,6 +4310,9 @@
         ),
         facts,
         sky: VibeWeather.conditionLabel(s.weathercodeByHour?.[i], isDay),
+        aqi,
+        storm,
+        walk,
         marks,
       };
     }
@@ -4290,6 +4327,9 @@
           ? `${r.facts.map(([k, v], n) => `${n ? k.toLowerCase() : k} ${v}`).join(", ")}.`
           : "",
         r.sky ? `${r.sky}.` : "",
+        r.aqi ? `AQI ${r.aqi}.` : "",
+        r.storm ? `${r.storm}.` : "",
+        r.walk ? `${r.walk.text}.` : "",
         ...r.marks.map((m) => `${m.text}.`),
       ]
         .filter(Boolean)
@@ -4334,10 +4374,24 @@
       if (r.words) nodes.push(el("p", "readout-words", r.words));
       if (r.facts.length)
         nodes.push(el("p", "readout-facts", r.facts.map(([k, v]) => `${k} ${v}`).join(" · ")));
-      if (r.sky) nodes.push(el("p", "readout-facts", r.sky));
+      const skyLine = [r.sky, r.aqi ? `AQI ${r.aqi}` : null].filter(Boolean).join(" · ");
+      if (skyLine) nodes.push(el("p", "readout-facts", skyLine));
+      if (r.storm) nodes.push(el("p", "readout-storm", r.storm));
+      if (r.walk) {
+        // The strip's own swatch: the kind by colour, the level by height.
+        const line = el("p", "readout-walk");
+        const sw = el("span", "dog-swatch");
+        const bar = el("span", "dog-swatch-bar");
+        bar.style.background = VibeDogs.WALK_COLORS[r.walk.kind];
+        bar.style.height = `${VibeDogs.WALK_HEIGHT[r.walk.kind] * 100}%`;
+        sw.append(bar);
+        line.append(sw, el("span", "", r.walk.text));
+        nodes.push(line);
+      }
+      const markIcon = { leaf: "\u{1F343}", paw: "\u{1F43E}", sun: "\u{2600}\u{FE0F}" };
       for (const m of r.marks) {
         nodes.push(
-          el("p", `readout-mark readout-mark--${m.kind}`, `${m.kind === "leaf" ? "\u{1F343}" : "\u{2600}\u{FE0F}"} ${m.text}`)
+          el("p", `readout-mark readout-mark--${m.kind}`, `${markIcon[m.kind]} ${m.text}`)
         );
       }
       readoutEl.replaceChildren(...nodes);
@@ -4613,6 +4667,628 @@
       });
     }
 
+    // ── Dogs mode ──
+    // Off by default and remembered per browser. On, it adds dcgoldens'
+    // Dog Weather (dogs.js): a walk rating for every hour (the strip under
+    // the chart), the paw-to-grass time for goldens, the six dog cards and
+    // best walk times, and names the touch-grass time for people beside it.
+    // The human view is untouched while it is off, and nothing extra is
+    // fetched: air quality and the Weather Service's storms load only here.
+    const DOGS_KEY = STORE + "dogs";
+    const DOG_STRIP_SPACE = 16; // px under the plot for the walk strip
+    const PAW_BROWN = "#3D2E1C";
+    const LEAF_GREEN = "#3F7D3C";
+    let dogsOn = storeGet(DOGS_KEY) === "true";
+    let currentForecast = null; // the raw forecast behind the chart
+    // Air and storms for the place on screen: { key, air: Map|null,
+    // airFailed, storms: { status, byT } }
+    let dogExtras = { key: null, air: null, airFailed: false, storms: null };
+    let dogState = null; // the latest computed hours, paws and cards
+
+    const dogPanelEl = $("#dogPanel");
+    const dogLegendEl = $("#dogLegend");
+    const dogsToggleEl = $("#dogsToggle");
+
+    // A small store of JSON entries under one key, each { fetchedAt, ... }.
+    function cacheGet(key, id, maxAgeMs) {
+      const all = storeJSON(key, {});
+      const e = all && all[id];
+      if (!e || typeof e.fetchedAt !== "number") return null;
+      const age = Date.now() - e.fetchedAt;
+      return age >= 0 && age < maxAgeMs ? e : null;
+    }
+    function cachePut(key, id, entry, keep = 6) {
+      const all = storeJSON(key, {});
+      const next = { ...(all && typeof all === "object" ? all : {}), [id]: { ...entry, fetchedAt: Date.now() } };
+      const kept = Object.entries(next)
+        .filter(([, v]) => v && typeof v.fetchedAt === "number")
+        .sort((a, b) => b[1].fetchedAt - a[1].fetchedAt)
+        .slice(0, keep);
+      storeSet(key, JSON.stringify(Object.fromEntries(kept)));
+    }
+
+    // Air quality: Open-Meteo's US AQI (from the Copernicus Atmosphere
+    // Monitoring Service's forecast), cached apart from the forecast so one
+    // failing never blanks the other.
+    const AIR_CACHE_KEY = STORE + "airCache";
+    const AIR_FRESH_MS = 60 * 60 * 1000;
+    async function getAir(lat, lon) {
+      const id = forecastKey(lat, lon);
+      const held = cacheGet(AIR_CACHE_KEY, id, AIR_FRESH_MS);
+      if (held && Array.isArray(held.hours)) return new Map(held.hours);
+      const params = new URLSearchParams({
+        latitude: roundCoord(lat).toFixed(2),
+        longitude: roundCoord(lon).toFixed(2),
+        hourly: "us_aqi",
+        timezone: "auto",
+        timeformat: "unixtime",
+        forecast_days: 5,
+      });
+      const r = await fetch(
+        `https://air-quality-api.open-meteo.com/v1/air-quality?${params}`,
+        { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
+      );
+      if (!r.ok) throw new Error(`AIR_${r.status}`);
+      const data = await r.json();
+      const times = data?.hourly?.time;
+      const aqi = data?.hourly?.us_aqi;
+      if (!Array.isArray(times) || !Array.isArray(aqi)) throw new Error("AIR_SHAPE");
+      const hours = times.map((t, i) => [t, typeof aqi[i] === "number" ? aqi[i] : null]);
+      cachePut(AIR_CACHE_KEY, id, { hours });
+      return new Map(hours);
+    }
+
+    // Thunderstorms: the National Weather Service's own words for each hour,
+    // from the office that covers the place (US only). The office and grid
+    // square are kept a day, the grid an hour. A point the Weather Service
+    // doesn't cover (outside the US) has no storm line at all; a failure
+    // says so where the storm line would be.
+    const NWS_POINTS_KEY = STORE + "nwsPoints";
+    const NWS_GRID_KEY = STORE + "nwsGrid";
+    async function getStorms(lat, lon) {
+      const id = forecastKey(lat, lon);
+      const nowSec = Date.now() / 1000;
+      let point = cacheGet(NWS_POINTS_KEY, id, 24 * 60 * 60 * 1000);
+      if (!point) {
+        const r = await fetch(
+          `https://api.weather.gov/points/${roundCoord(lat).toFixed(2)},${roundCoord(lon).toFixed(2)}`,
+          { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
+        );
+        if (r.status === 404) {
+          cachePut(NWS_POINTS_KEY, id, { outside: true });
+          return { status: "outside", byT: new Map() };
+        }
+        if (!r.ok) throw new Error(`NWS_POINTS_${r.status}`);
+        point = { grid: VibeDogs.parsePoint(await r.json()) };
+        cachePut(NWS_POINTS_KEY, id, point);
+      }
+      if (point.outside) return { status: "outside", byT: new Map() };
+      const { gridId, gridX, gridY } = VibeDogs.parsePoint({ properties: point.grid });
+      const gridPath = `${gridId}/${gridX},${gridY}`;
+      let grid = cacheGet(NWS_GRID_KEY, gridPath, 60 * 60 * 1000);
+      if (!grid) {
+        const r = await fetch(`https://api.weather.gov/gridpoints/${gridPath}`, {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+        if (!r.ok) throw new Error(`NWS_GRID_${r.status}`);
+        grid = VibeDogs.parseStormGrid(await r.json());
+        cachePut(NWS_GRID_KEY, gridPath, grid, 3);
+      }
+      if (!VibeDogs.stormUpdateUsable(grid.updateTime, nowSec)) {
+        return { status: "unavailable", byT: new Map() };
+      }
+      return { status: "ok", byT: new Map(grid.hours) };
+    }
+
+    // Loads air and storms for the place on screen, then redraws.
+    async function refreshDogExtras() {
+      if (!dogsOn || !lastCoords) return;
+      const seq = primeSeq;
+      const key = forecastKey(lastCoords.latitude, lastCoords.longitude);
+      const [air, storms] = await Promise.allSettled([
+        getAir(lastCoords.latitude, lastCoords.longitude),
+        getStorms(lastCoords.latitude, lastCoords.longitude),
+      ]);
+      if (seq !== primeSeq || !dogsOn) return; // another place, or Dogs off
+      dogExtras = {
+        key,
+        air: air.status === "fulfilled" ? air.value : null,
+        airFailed: air.status !== "fulfilled",
+        storms: storms.status === "fulfilled" ? storms.value : { status: "unavailable", byT: new Map() },
+      };
+      renderDogs();
+    }
+
+    // Every forecast hour, as dogs.js reads it.
+    function dogHours() {
+      const h = currentForecast && currentForecast.hourly;
+      if (!h || !Array.isArray(h.time)) return [];
+      const place = lastCoords ? forecastKey(lastCoords.latitude, lastCoords.longitude) : null;
+      const extras = dogExtras.key === place ? dogExtras : { air: null, storms: null };
+      return h.time.map((t, i) => {
+        const p = PlaceTime.parts(t * 1000, placeZone);
+        const rank = extras.storms && extras.storms.status === "ok" ? extras.storms.byT.get(t) : undefined;
+        return {
+          t,
+          date: PlaceTime.dayKey(t * 1000, placeZone),
+          hour: p.hour,
+          tempF: h.temperature_2m?.[i] ?? null,
+          rh: h.relative_humidity_2m?.[i] ?? null,
+          windMph: h.wind_speed_10m?.[i] ?? null,
+          uv: h.uv_index?.[i] ?? null,
+          isDay: h.is_day?.[i] === 1 ? true : h.is_day?.[i] === 0 ? false : null,
+          pop: h.precipitation_probability?.[i] ?? null,
+          code: h.weathercode?.[i] ?? null,
+          snowIn: h.snowfall?.[i] ?? null,
+          aqi: extras.air ? extras.air.get(t) ?? null : null,
+          storm: VibeDogs.stormWordForRank(rank),
+        };
+      });
+    }
+
+    // The sun line exactly as the chart draws it (°F against Unix seconds):
+    // the 15-minute points, split at sunrise and sunset, on the monotone
+    // curve at the Line smoothing setting. The paw is read off this.
+    function drawnSunReader(ds) {
+      const events = [...(sunTimes.sunrises || []), ...(sunTimes.sunsets || [])]
+        .map((d) => new Date(d).getTime())
+        .sort((a, b) => a - b);
+      const build = (vals) => {
+        const pts = [];
+        for (let i = 0; i < ds.labels.length; i++) {
+          const t = ds.labels[i].getTime();
+          pts.push({ x: t / 1000, y: vals[i] });
+          if (i < ds.labels.length - 1) {
+            const next = ds.labels[i + 1].getTime();
+            for (const e of events) {
+              if (e <= t || e >= next) continue;
+              const f = (e - t) / (next - t);
+              pts.push({ x: e / 1000, y: vals[i] + (vals[i + 1] - vals[i]) * f });
+            }
+          }
+        }
+        pts.sort((a, b) => a.x - b.x);
+        return pts.filter((p, i) => i === 0 || Math.floor(p.x) !== Math.floor(pts[i - 1].x));
+      };
+      const sun = build(ds.sunVals);
+      const shade = build(ds.shadeVals);
+      const sunSlopes = MonotoneCurve.slopes(sun);
+      const shadeSlopes = MonotoneCurve.slopes(shade);
+      MonotoneCurve.shareSlopesWhereEqual(sun, sunSlopes, shade, shadeSlopes, 0.01);
+      return MonotoneCurve.reader(sun, sunSlopes, lineSmoothing);
+    }
+
+    // Sunrise and sunset per place date, Unix seconds.
+    function sunDays() {
+      const d = currentForecast && currentForecast.daily;
+      if (!d || !Array.isArray(d.time)) return [];
+      return d.time.map((t, i) => ({
+        date: PlaceTime.dayKey(t * 1000, placeZone),
+        sunrise: d.sunrise?.[i] ?? null,
+        sunset: d.sunset?.[i] ?? null,
+      }));
+    }
+
+    // Everything Dogs mode shows, worked out from the forecast on screen.
+    function computeDogs() {
+      if (!timelineState || !currentForecast) return null;
+      const hours = dogHours();
+      const now = Date.now() / 1000;
+      const labels = timelineState.labels;
+      const viewEnd = labels[labels.length - 1].getTime() / 1000 + 900;
+      const week = daysAhead >= 7;
+      const days = sunDays();
+      const readShown = drawnSunReader(timelineState);
+      const scan = (readSun, to) =>
+        VibeDogs.scanPawToGrass({ hours, sunDays: days, readSun, from: now, to });
+      const dayScan = week ? null : scan(readShown, Math.min(viewEnd, now + 24 * 3600));
+      // The week's best, for the caption: off a 7-day line built the same way.
+      let weekScan = null;
+      if (week) weekScan = scan(readShown, viewEnd);
+      else {
+        const full = buildTimelineDataset(currentForecast.hourly, 7);
+        weekScan = full.labels.length
+          ? scan(drawnSunReader(full), full.labels[full.labels.length - 1].getTime() / 1000 + 900)
+          : null;
+      }
+      const paws = week ? (weekScan ? weekScan.days : []) : dayScan && dayScan.best ? [dayScan.best] : [];
+      const walkByT = new Map(hours.map((h) => [h.t, VibeDogs.classifyHour(h)]));
+      const nowHourDate = PlaceTime.dayKey(Date.now(), placeZone);
+      return {
+        hours,
+        walkByT,
+        paws,
+        dayScan,
+        weekScan,
+        week,
+        plan: VibeDogs.walkPlan(hours, nowHourDate, now, placeZone),
+        cards: VibeDogs.dogSignals({ hours, now, zone: placeZone, units: unit }),
+        stormsStatus: dogExtras.storms ? dogExtras.storms.status : "loading",
+        stormsMissing:
+          dogExtras.storms &&
+          dogExtras.storms.status === "unavailable",
+        airShown: !!dogExtras.air,
+      };
+    }
+
+    // The rating of the hour a point falls in.
+    function walkAt(t) {
+      if (!dogState) return null;
+      const hourStart = Math.floor(t.getTime() / 3600000) * 3600;
+      // Open-Meteo's hours start on the place's hour; for half-hour zones
+      // step back to it.
+      return (
+        dogState.walkByT.get(hourStart) ||
+        dogState.walkByT.get(PlaceTime.startOfHour(t, placeZone) / 1000) ||
+        null
+      );
+    }
+
+    // Draws Dogs mode (or clears it) after any change.
+    function renderDogs() {
+      document.body.classList.toggle("dogs-on", dogsOn);
+      if (dogsToggleEl) dogsToggleEl.setAttribute("aria-pressed", String(dogsOn));
+      if (!dogsOn) {
+        dogState = null;
+        if (dogPanelEl) dogPanelEl.hidden = true;
+        if (dogLegendEl) dogLegendEl.hidden = true;
+        if (vibeChart) {
+          vibeChart.options.layout.padding.bottom = 40;
+          vibeChart.update("none");
+        }
+        return;
+      }
+      dogState = computeDogs();
+      if (vibeChart) {
+        vibeChart.options.layout.padding.bottom = 40 + DOG_STRIP_SPACE;
+        vibeChart.update("none");
+      }
+      renderDogPanel();
+      renderDogLegend();
+      refreshReadout();
+    }
+
+    function dogEl(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function link(href, text) {
+      const a = dogEl("a", "", text);
+      a.href = href;
+      if (/^https?:/.test(href)) {
+        a.target = "_blank";
+        a.rel = "noopener";
+      }
+      return a;
+    }
+
+    // The touch-grass caption for people: the next leaf in the view.
+    function leafCaption() {
+      const leaves = ((vibeChart && vibeChart._touchGrassTimes) || [])
+        .filter((tg) => new Date(tg.time).getTime() >= Date.now() - 15 * 60 * 1000)
+        .sort((a, b) => a.time - b.time);
+      const tg = leaves[0];
+      if (!tg) return null;
+      const t = new Date(tg.time).getTime() / 1000;
+      const when = VibeDogs.grassWhen(t, Date.now() / 1000, placeZone, false);
+      return `Touch grass for people: ${when}, ${Math.round(tg.temp)}${unitSuffix()} in the sun.`;
+    }
+
+    const LEVEL_WORDS = { warning: "Warning", caution: "Take care", info: "Good to know" };
+    const CARD_ICONS = { heat: "\u{1F321}\u{FE0F}", storms: "\u{26C8}\u{FE0F}", air: "\u{1F4A8}", pavement: "\u{2600}\u{FE0F}", salt: "\u{1F9C2}", cold: "\u{2744}\u{FE0F}" };
+
+    function renderDogPanel() {
+      if (!dogPanelEl || !dogState) return;
+      const s = dogState;
+      const nodes = [dogEl("h3", "summary-title", "For dogs")];
+      const units = unit;
+      nodes.push(
+        dogEl(
+          "p",
+          "dog-caption dog-caption--paw",
+          VibeDogs.pawCaption({
+            day: s.dayScan,
+            week: s.weekScan,
+            now: Date.now() / 1000,
+            zone: placeZone,
+            units,
+            weekView: s.week,
+            weekMarks: s.paws.length,
+          })
+        )
+      );
+      const leaf = leafCaption();
+      if (leaf) nodes.push(dogEl("p", "dog-caption dog-caption--leaf", leaf));
+      const walk = VibeDogs.walkSummary(s.plan, PlaceTime.dayKey(Date.now(), placeZone), placeZone);
+      nodes.push(dogEl("p", "dog-walk", walk.sentence));
+      if (walk.note) nodes.push(dogEl("p", "dog-walk-note", walk.note));
+      if (s.stormsMissing) {
+        const p = dogEl(
+          "p",
+          "dog-storms-missing",
+          "The National Weather Service's thunderstorm forecast didn't load just now, so no storm line here doesn't mean no storms. "
+        );
+        p.append(link("https://www.weather.gov/", "weather.gov"), " has it in the meantime.");
+        nodes.push(p);
+      }
+      const cards = dogEl("div", "dog-cards");
+      for (const c of s.cards) {
+        const card = dogEl("article", `dog-card dog-card--${c.level}`);
+        const head = dogEl("div", "dog-card-head");
+        head.append(
+          dogEl("span", "dog-card-icon", CARD_ICONS[c.id] || ""),
+          dogEl("span", `dog-badge dog-badge--${c.level}`, LEVEL_WORDS[c.level])
+        );
+        card.append(head, dogEl("p", "dog-card-headline", c.headline), dogEl("p", "dog-card-detail", c.detail));
+        const labels = (window.VibeSources && window.VibeSources.SHORT_LABELS) || {};
+        const byId = new Map(((window.VibeSources && window.VibeSources.SOURCES) || []).map((x) => [x.id, x]));
+        if (c.sourceIds.length) {
+          const src = dogEl("p", "dog-card-sources", "Sources: ");
+          c.sourceIds.forEach((id, i) => {
+            const meta = byId.get(id);
+            if (i) src.append(", ");
+            src.append(meta ? link(meta.url, labels[id] || meta.title) : labels[id] || id);
+          });
+          card.append(src);
+        }
+        cards.append(card);
+      }
+      if (s.cards.length) nodes.push(cards);
+      else nodes.push(dogEl("p", "dog-walk-note", "No dog cards for the next 24 hours."));
+      const foot = dogEl("p", "dog-disclaimer",
+        "This is guidance, not veterinary advice. Every golden is different, and the thresholds behind these are thinner than you would hope: there is no published heat index for dogs, and nobody has measured what temperature burns a paw. When in doubt, ask your vet, and watch your dog rather than the number. ");
+      foot.append(link("methodology.html", "How Dogs mode works"));
+      nodes.push(foot);
+      if (s.airShown) {
+        const cams = dogEl("p", "dog-credit", "Air quality: ");
+        cams.append(
+          "Contains modified ",
+          link("https://atmosphere.copernicus.eu/", "Copernicus Atmosphere Monitoring Service"),
+          " information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the Copernicus information or data it contains."
+        );
+        nodes.push(cams);
+      }
+      if (s.stormsStatus === "ok") {
+        const nws = dogEl("p", "dog-credit");
+        nws.append(link("https://www.weather.gov/", "Thunderstorm forecast by the National Weather Service"));
+        nodes.push(nws);
+      }
+      dogPanelEl.replaceChildren(...nodes);
+      dogPanelEl.hidden = false;
+    }
+
+    // The legend: only what this view draws.
+    function renderDogLegend() {
+      if (!dogLegendEl || !dogState || !timelineState) return;
+      const s = dogState;
+      const shown = new Set();
+      let hiAboveSun = false;
+      const labels = timelineState.labels;
+      for (let i = 0; i < labels.length; i += 1) {
+        const w = walkAt(labels[i]);
+        if (w) shown.add(w.kind);
+        if (w && w.heatIndexF !== null && w.heatIndexF >= VibeDogs.T.NWS_CAUTION_HI_F && w.heatIndexF > timelineState.sunVals[i]) hiAboveSun = true;
+      }
+      const items = [];
+      for (const kind of VibeDogs.WALK_KINDS) {
+        if (!shown.has(kind)) continue;
+        const li = dogEl("li", "dog-legend-item");
+        const sw = dogEl("span", "dog-swatch");
+        const bar = dogEl("span", "dog-swatch-bar");
+        bar.style.background = VibeDogs.WALK_COLORS[kind];
+        bar.style.height = `${VibeDogs.WALK_HEIGHT[kind] * 100}%`;
+        sw.append(bar);
+        li.append(sw, VibeDogs.WALK_WORDS[kind]);
+        items.push(li);
+      }
+      const notes = [];
+      if (s.paws.length) {
+        const li = dogEl("li", "dog-legend-item");
+        li.append(dogEl("span", "dog-legend-paw", "\u{1F43E}"), "Paw to grass time (Goldens)");
+        items.push(li);
+        notes.push([
+          `${s.week ? "A paw marks the time each day" : "The paw marks the time"}, in daylight and good for a walk, that comes closest to ${VibeDogs.formatTemp(VibeDogs.T.PAW_TO_GRASS_TARGET_F, unit)} in the sun, our own pick for a golden. `,
+          "methodology.html#paw-to-grass",
+          "How it's picked",
+        ]);
+      }
+      if (((vibeChart && vibeChart._touchGrassTimes) || []).length) {
+        const li = dogEl("li", "dog-legend-item");
+        li.append(dogEl("span", "dog-legend-leaf", "\u{1F343}"), "Touch grass time (people)");
+        items.push(li);
+        notes.push([
+          `The leaf marks the daylight time that comes closest to ${unit === "F" ? "70°F" : "21°C"} in the sun, anywhere from ${unit === "F" ? "65°F to 75°F" : "18°C to 24°C"}, favoring 10am to 5pm: Vibe Temp's rule for people. `,
+          "methodology.html#touch-grass",
+          "Where it comes from",
+        ]);
+      }
+      if (hiAboveSun) {
+        notes.push([
+          "The colours under the chart judge heat by the heat index, a different scale made for people, and on a humid afternoon it can read higher than both lines. ",
+          "methodology.html#walk-ratings",
+          "Walk ratings",
+        ]);
+      }
+      const list = dogEl("ul", "dog-legend-list");
+      list.append(...items);
+      const noteEls = notes.map(([text, href, label]) => {
+        const p = dogEl("p", "dog-legend-note", text);
+        p.append(link(href, label));
+        return p;
+      });
+      dogLegendEl.replaceChildren(list, ...noteEls);
+      dogLegendEl.hidden = false;
+    }
+
+    // Pixel x for an instant on a chart built on 15-minute points.
+    function pixelForTime(chart, ms) {
+      const labels = chart._rawLabels || [];
+      const n = labels.length;
+      if (!n) return null;
+      let i = 0;
+      while (i < n - 1 && labels[i + 1].getTime() <= ms) i++;
+      const t0 = labels[i].getTime();
+      const x0 = chart.scales.x.getPixelForValue(i);
+      if (i === n - 1 || ms <= t0) return x0;
+      const t1 = labels[i + 1].getTime();
+      const x1 = chart.scales.x.getPixelForValue(i + 1);
+      return x0 + ((x1 - x0) * (ms - t0)) / (t1 - t0);
+    }
+
+    // The walk strip: one bar per hour under the plot, its colour the kind
+    // of hour and its height the level, so it reads without colour too.
+    const dogStripPlugin = {
+      id: "dogStrip",
+      afterDatasetsDraw(chart) {
+        if (!dogsOn || !dogState) return;
+        const { ctx, chartArea } = chart;
+        const labels = chart._rawLabels || [];
+        const top = chartArea.bottom + 3;
+        const height = DOG_STRIP_SPACE - 5;
+        ctx.save();
+        for (let i = 0; i < labels.length; i++) {
+          if (zp(labels[i]).minute !== 0) continue;
+          const w = walkAt(labels[i]);
+          if (!w) continue;
+          const x0 = Math.max(chartArea.left, pixelForTime(chart, labels[i].getTime()));
+          const x1 = Math.min(chartArea.right, pixelForTime(chart, labels[i].getTime() + 3600000) ?? chartArea.right);
+          const h = height * VibeDogs.WALK_HEIGHT[w.kind];
+          ctx.fillStyle = VibeDogs.WALK_COLORS[w.kind];
+          ctx.fillRect(x0 + 0.5, top + height - h, Math.max(1, x1 - x0 - 1), h);
+        }
+        ctx.restore();
+      },
+    };
+
+    // The paw, drawn over the leaf, and in the 24-hour view each mark's
+    // time beside it. Where the two would cover each other they part up and
+    // down just enough; a time that would run off the plot slides back
+    // inside; if both times can't fit, only the paw's shows (the captions
+    // still name both).
+    function drawPaw(ctx, x, y) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = PAW_BROWN;
+      ctx.stroke();
+      ctx.fillStyle = PAW_BROWN;
+      ctx.translate(x - 6, y - 6);
+      ctx.scale(0.75, 0.75);
+      ctx.fill(new Path2D("M8 7.7C5.8 7.7 3.5 10.2 3.5 12.3 3.5 13.7 4.5 14.5 5.8 14.5 6.7 14.5 7.2 14 8 14S9.3 14.5 10.2 14.5C11.5 14.5 12.5 13.7 12.5 12.3 12.5 10.2 10.2 7.7 8 7.7Z"));
+      for (const [cx, cy, rx, ry, rot] of [[2.8, 7.3, 1.45, 1.9, -24], [5.8, 3.9, 1.5, 2.05, -8], [10.2, 3.9, 1.5, 2.05, 8], [13.2, 7.3, 1.45, 1.9, 24]]) {
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, (rot * Math.PI) / 180, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function timePill(ctx, text, x, y, color, chartArea, side) {
+      ctx.save();
+      ctx.font = "600 11px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      const w = ctx.measureText(text).width + 8;
+      const h = 16;
+      let left = side === "left" ? x - 13 - w : x + 13;
+      left = Math.max(chartArea.left + 1, Math.min(chartArea.right - w - 1, left));
+      const top = Math.max(chartArea.top + 1, Math.min(chartArea.bottom - h - 1, y - h / 2));
+      ctx.restore();
+      return { text, color, left, top, w, h };
+    }
+    function drawPill(ctx, p) {
+      ctx.save();
+      ctx.font = "600 11px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.beginPath();
+      ctx.roundRect(p.left, p.top, p.w, p.h, 5);
+      ctx.fill();
+      ctx.fillStyle = p.color;
+      ctx.textBaseline = "middle";
+      ctx.fillText(p.text, p.left + 4, p.top + p.h / 2 + 0.5);
+      ctx.restore();
+    }
+    const overlaps = (a, b) => a.left < b.left + b.w && b.left < a.left + a.w && a.top < b.top + b.h && b.top < a.top + a.h;
+
+    const dogMarksPlugin = {
+      id: "dogMarks",
+      beforeDatasetsDraw(chart) {
+        chart._leafShift = {};
+        chart._pawLayout = [];
+        chart._pillLayout = [];
+        if (!dogsOn || !dogState || !chart.scales.x) return;
+        const { chartArea, scales } = chart;
+        const leaves = chart._touchGrassTimes || [];
+        const sunData = chart.data.datasets[0].data;
+        for (const p of dogState.paws) {
+          const x = pixelForTime(chart, p.t * 1000);
+          if (x === null || x < chartArea.left || x > chartArea.right) continue;
+          let y = scales.y.getPixelForValue(toUserTemp(p.sunF));
+          // The leaf sits 8px above its point; part the two just enough.
+          for (const tg of leaves) {
+            const lx = scales.x.getPixelForValue(tg.index);
+            const ly = scales.y.getPixelForValue(sunData[tg.index]) - 8;
+            const dx = Math.abs(lx - x);
+            const dy = Math.abs(ly - y);
+            if (dx < 18 && dy < 18) {
+              const push = (18 - dy) / 2 + 1;
+              const leafUp = ly <= y;
+              chart._leafShift[tg.index] = leafUp ? -push : push;
+              y += leafUp ? push : -push;
+            }
+          }
+          chart._pawLayout.push({ x, y, t: p.t });
+        }
+      },
+      afterDatasetsDraw(chart) {
+        if (!dogsOn || !dogState) return;
+        const { ctx, chartArea, scales } = chart;
+        for (const p of chart._pawLayout || []) drawPaw(ctx, p.x, p.y);
+        if (dogState.week) return;
+        // Times beside the marks, 24-hour view only.
+        const pills = [];
+        for (const p of chart._pawLayout || []) {
+          const side = p.x > (chartArea.left + chartArea.right) / 2 ? "left" : "right";
+          pills.push(timePill(ctx, VibeDogs.formatClock(p.t, placeZone), p.x, p.y, PAW_BROWN, chartArea, side));
+        }
+        // One of each: the next leaf gets its time, the one the caption names.
+        const leafPills = [];
+        const nextLeaf = (chart._touchGrassTimes || [])
+          .filter((tg) => {
+            const t = new Date(tg.time).getTime();
+            return t >= Date.now() - 15 * 60 * 1000 && t <= Date.now() + 24 * 3600 * 1000;
+          })
+          .sort((a, b) => a.time - b.time)
+          .slice(0, 1);
+        for (const tg of nextLeaf) {
+          const t = new Date(tg.time).getTime();
+          const x = scales.x.getPixelForValue(tg.index);
+          const y = scales.y.getPixelForValue(chart.data.datasets[0].data[tg.index]) - 8 + (chart._leafShift?.[tg.index] || 0);
+          const pawSide = pills[0] && pills[0].left > x ? "left" : "right";
+          const pill = timePill(ctx, VibeDogs.formatClock(t / 1000, placeZone), x, y, LEAF_GREEN, chartArea, pills.length ? pawSide : x > (chartArea.left + chartArea.right) / 2 ? "left" : "right");
+          if (!pills.some((q) => overlaps(q, pill))) leafPills.push(pill);
+        }
+        chart._pillLayout = [...pills, ...leafPills];
+        for (const p of [...leafPills, ...pills]) drawPill(ctx, p);
+      },
+    };
+
+    // The toggle.
+    function setDogs(on) {
+      dogsOn = !!on;
+      storeSet(DOGS_KEY, String(dogsOn));
+      renderDogs();
+      if (dogsOn) refreshDogExtras();
+    }
+    dogsToggleEl && dogsToggleEl.addEventListener("click", () => setDogs(!dogsOn));
+    document.body.classList.toggle("dogs-on", dogsOn);
+    dogsToggleEl && dogsToggleEl.setAttribute("aria-pressed", String(dogsOn));
+
+
     // Current time + next sun event
     function chooseNextSunEvent() {
       const now = new Date();
@@ -4807,6 +5483,7 @@
         });
         // Another place was chosen while this loaded: leave it be.
         if (seq !== primeSeq) return;
+        currentForecast = data;
         const cur = data.current;
         const hourlyMaybe = wantHourly ? data.hourly : null;
 
@@ -4848,6 +5525,7 @@
           if (selectionRange) {
             updateWeatherSummary();
           }
+          if (dogsOn) refreshDogExtras();
         }
 
         const nowTime = new Date();
@@ -4890,6 +5568,7 @@
         ? data.timezone
         : browserZone;
       updateHeadlineDate();
+      currentForecast = data;
       const cur = data.current;
       const hourly = data.hourly;
       const dailySun = sunTimesFrom(data.daily, daysAhead);
@@ -4948,6 +5627,9 @@
           : "Using chosen coordinates");
       restartScheduler();
       hideError();
+
+      // Dogs mode: air and storms for this place
+      if (dogsOn) refreshDogExtras();
 
       // Update favorites UI and offer to save current location
       updateFavoritesUI();
