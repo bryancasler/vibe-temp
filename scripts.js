@@ -5378,6 +5378,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             });
         }
       );
+    });
 
       // Time preset functions
       function setTimePreset(preset) {
@@ -6913,7 +6914,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           updateChartTitle();
         }
       }, 300);
-    });
 
     // Cleanup on page unload to prevent memory leaks
     window.addEventListener("beforeunload", () => {
