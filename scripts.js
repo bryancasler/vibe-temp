@@ -59,6 +59,68 @@
   onReady(() => {
     // Elements
     const $ = (s) => document.querySelector(s);
+
+    // localStorage, safely: a private window, blocked site data or a full
+    // disk makes every call throw, and the page has to work without it.
+    // Keys are versioned (vibe.v1.<name>); values saved under the old
+    // names move over once.
+    const STORE = "vibe.v1.";
+    const storeGet = (key) => {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        return null;
+      }
+    };
+    const storeSet = (key, value) => {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    };
+    const storeRemove = (key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {}
+    };
+    const storeJSON = (key, fallback) => {
+      try {
+        const raw = storeGet(key);
+        return raw === null ? fallback : JSON.parse(raw);
+      } catch (e) {
+        return fallback;
+      }
+    };
+    (function migrateStorage() {
+      const legacy = {
+        vibeTheme: "theme",
+        vibeTemp_advConfigExpanded: "advExpanded",
+        vibeUnit: "unit",
+        vibeZip: "zip",
+        vibeDaysAhead: "daysAhead",
+        vibeNightShading: "nightShading",
+        vibeNightLineDarkening: "nightLineDarkening",
+        vibeLineSmoothing: "lineSmoothing",
+        vibeFavorites: "favorites",
+        vibeChartColors: "chartColors",
+        vibeTempZones: "tempZones",
+        vibeHumidityVis: "humidityVis",
+        vibeSunMarkers: "sunMarkers",
+        vibeRainIcons: "rainIcons",
+        vibeSnowIcons: "snowIcons",
+        vibeIceIcons: "iceIcons",
+        vibeWindIcons: "windIcons",
+        vibeCalibration: "calibration",
+      };
+      for (const [old, name] of Object.entries(legacy)) {
+        const value = storeGet(old);
+        if (value === null) continue;
+        if (storeGet(STORE + name) === null) storeSet(STORE + name, value);
+        storeRemove(old);
+      }
+    })();
     const statusEl = $("#status");
     const chartStatusEl = $("#chartStatus");
     const chartTitleEl = $(".chart-title");
@@ -164,12 +226,11 @@
     const themeToggle = $("#themeToggle");
 
     // Theme management - respect browser preference by default
-    // Note: Use localStorage directly here since storageCache isn't initialized yet
-    const THEME_KEY = "vibeTheme";
+    const THEME_KEY = STORE + "theme";
     function getDefaultTheme() {
       // Check if user has a saved preference
-      const saved = localStorage.getItem(THEME_KEY);
-      if (saved) return saved;
+      const saved = storeGet(THEME_KEY);
+      if (saved === "light" || saved === "dark") return saved;
 
       // Otherwise, respect browser preference
       if (
@@ -184,12 +245,12 @@
     let currentTheme = getDefaultTheme();
     let vibeChart = null; // Declare early to avoid reference errors
 
-    function applyTheme(theme) {
+    // Only a choice made with the toggle is saved, so a page that follows
+    // the browser's preference keeps following it.
+    function applyTheme(theme, { persist = false } = {}) {
       document.documentElement.setAttribute("data-theme", theme);
       currentTheme = theme;
-      // Use localStorage directly since storageCache may not be initialized yet
-      // The cache will be populated automatically on first access via storageCacheGet
-      localStorage.setItem(THEME_KEY, theme);
+      if (persist) storeSet(THEME_KEY, theme);
       if (themeToggle) {
         themeToggle.textContent =
           theme === "dark" ? "\u{1F319}" : "\u{2600}\u{FE0F}"; // Use Unicode for moon and sun emojis
@@ -202,7 +263,7 @@
 
     function toggleTheme() {
       const newTheme = currentTheme === "dark" ? "light" : "dark";
-      applyTheme(newTheme);
+      applyTheme(newTheme, { persist: true });
     }
 
     // Listen for system theme changes
@@ -211,7 +272,7 @@
         .matchMedia("(prefers-color-scheme: light)")
         .addEventListener("change", (e) => {
           // Only auto-update if user hasn't manually set a preference
-          if (!storageCacheGet(THEME_KEY)) {
+          if (!storeGet(THEME_KEY)) {
             applyTheme(e.matches ? "light" : "dark");
           }
         });
@@ -333,7 +394,7 @@
     // Advanced Configuration Toggle
     const advConfigToggle = $("#advConfigToggle");
     const advPanel = $("#advPanel");
-    const ADV_CONFIG_STORAGE_KEY = "vibeTemp_advConfigExpanded";
+    const ADV_CONFIG_STORAGE_KEY = STORE + "advExpanded";
 
     function toggleAdvConfig() {
       if (!advPanel || !advConfigToggle) return;
@@ -347,11 +408,7 @@
       advPanel.style.display = newState ? "block" : "none";
 
       // Save state to localStorage
-      try {
-        localStorage.setItem(ADV_CONFIG_STORAGE_KEY, newState.toString());
-      } catch (e) {
-        console.warn("Failed to save advanced config state:", e);
-      }
+      storeSet(ADV_CONFIG_STORAGE_KEY, newState.toString());
 
       // Update stats when opened
       if (newState) {
@@ -364,7 +421,7 @@
       if (!advPanel || !advConfigToggle) return;
 
       try {
-        const savedState = localStorage.getItem(ADV_CONFIG_STORAGE_KEY);
+        const savedState = storeGet(ADV_CONFIG_STORAGE_KEY);
         if (savedState !== null) {
           const isExpanded = savedState === "true";
           advConfigToggle.setAttribute("aria-expanded", isExpanded.toString());
@@ -404,50 +461,52 @@
     }
 
     // State
-    const UNIT_KEY = "vibeUnit";
-    const ZIP_KEY = "vibeZip";
-    const DAYS_AHEAD_KEY = "vibeDaysAhead";
-    const NIGHT_SHADING_KEY = "vibeNightShading";
-    const NIGHT_LINE_DARKENING_KEY = "vibeNightLineDarkening";
-    const LINE_SMOOTHING_KEY = "vibeLineSmoothing";
-    const FAVORITES_KEY = "vibeFavorites";
-    const CHART_COLORS_KEY = "vibeChartColors";
-    const TEMP_ZONES_KEY = "vibeTempZones";
-    const HUMIDITY_VIS_KEY = "vibeHumidityVis";
-    const SUN_MARKERS_KEY = "vibeSunMarkers";
-    const RAIN_ICONS_KEY = "vibeRainIcons";
-    const SNOW_ICONS_KEY = "vibeSnowIcons";
-    const ICE_ICONS_KEY = "vibeIceIcons";
-    const WIND_ICONS_KEY = "vibeWindIcons";
-    const CALIBRATION_KEY = "vibeCalibration";
-    // THEME_KEY is defined earlier (line 82) for getDefaultTheme()
+    const UNIT_KEY = STORE + "unit";
+    const ZIP_KEY = STORE + "zip";
+    const DAYS_AHEAD_KEY = STORE + "daysAhead";
+    const NIGHT_SHADING_KEY = STORE + "nightShading";
+    const NIGHT_LINE_DARKENING_KEY = STORE + "nightLineDarkening";
+    const LINE_SMOOTHING_KEY = STORE + "lineSmoothing";
+    const FAVORITES_KEY = STORE + "favorites";
+    const CHART_COLORS_KEY = STORE + "chartColors";
+    const TEMP_ZONES_KEY = STORE + "tempZones";
+    const HUMIDITY_VIS_KEY = STORE + "humidityVis";
+    const SUN_MARKERS_KEY = STORE + "sunMarkers";
+    const RAIN_ICONS_KEY = STORE + "rainIcons";
+    const SNOW_ICONS_KEY = STORE + "snowIcons";
+    const ICE_ICONS_KEY = STORE + "iceIcons";
+    const WIND_ICONS_KEY = STORE + "windIcons";
+    const CALIBRATION_KEY = STORE + "calibration";
+    // THEME_KEY is defined earlier, for getDefaultTheme()
 
     // localStorage cache layer to reduce repeated access
     const storageCache = new Map();
     const storageCacheGet = (key, defaultValue = null) => {
       if (!storageCache.has(key)) {
-        const value = localStorage.getItem(key);
+        const value = storeGet(key);
         storageCache.set(key, value !== null ? value : defaultValue);
       }
       return storageCache.get(key);
     };
     const storageCacheSet = (key, value) => {
-      localStorage.setItem(key, value);
+      storeSet(key, value);
       storageCache.set(key, value);
     };
     const storageCacheRemove = (key) => {
-      localStorage.removeItem(key);
+      storeRemove(key);
       storageCache.delete(key);
     };
 
     // Initialize cached values
     let unit = storageCacheGet(UNIT_KEY, "F") === "C" ? "C" : "F";
     let daysAhead = parseInt(storageCacheGet(DAYS_AHEAD_KEY, "2"), 10);
+    if (!(daysAhead >= 1 && daysAhead <= 7)) daysAhead = 2;
     let nightShadingEnabled = storageCacheGet(NIGHT_SHADING_KEY) === "true";
     let nightLineDarkeningEnabled =
       storageCacheGet(NIGHT_LINE_DARKENING_KEY) === "true";
-    let lineSmoothing =
-      parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1")) || 1;
+    // 0 (straight lines) is a real choice, not a missing value.
+    let lineSmoothing = parseFloat(storageCacheGet(LINE_SMOOTHING_KEY, "1"));
+    if (!(lineSmoothing >= 0 && lineSmoothing <= 1)) lineSmoothing = 1;
     let temperatureZonesEnabled = storageCacheGet(TEMP_ZONES_KEY) === "true";
     let humidityVisualizationEnabled =
       storageCacheGet(HUMIDITY_VIS_KEY) === "true";
@@ -496,14 +555,33 @@
       storageCacheSet(NIGHT_LINE_DARKENING_KEY, "false");
     }
     let lastCoords = null;
-    let favorites = JSON.parse(storageCacheGet(FAVORITES_KEY, "[]"));
-    let chartColors = JSON.parse(
-      storageCacheGet(CHART_COLORS_KEY) ||
-        JSON.stringify({
-          sun: { start: "#ffb86b", end: "#ff9500" },
-          shade: { start: "#6ea8fe", end: "#4a90e2" },
-        })
-    );
+    // Saved favorites and colours are checked before use: anything that
+    // isn't the expected shape is dropped for the defaults.
+    let favorites = storeJSON(FAVORITES_KEY, []);
+    favorites = Array.isArray(favorites)
+      ? favorites.filter(
+          (f) =>
+            f &&
+            typeof f.name === "string" &&
+            Number.isFinite(Number(f.lat)) &&
+            Number.isFinite(Number(f.lon))
+        )
+      : [];
+    const DEFAULT_CHART_COLORS = {
+      sun: { start: "#ffb86b", end: "#ff9500" },
+      shade: { start: "#6ea8fe", end: "#4a90e2" },
+    };
+    const isHexColor = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
+    let chartColors = storeJSON(CHART_COLORS_KEY, null);
+    chartColors = ["sun", "shade"].every(
+      (k) =>
+        chartColors &&
+        chartColors[k] &&
+        isHexColor(chartColors[k].start) &&
+        isHexColor(chartColors[k].end)
+    )
+      ? chartColors
+      : structuredClone(DEFAULT_CHART_COLORS);
     // vibeChart is declared earlier (line 90) to avoid reference errors
     let pollTimer = null;
     let nextUpdateAt = null;
@@ -1424,7 +1502,7 @@
       return m ? m[1] : null;
     }
     // A ZIP's centroid never moves, so each lookup is kept for next time.
-    const ZIP_CACHE_KEY = "vibeZipCache.v1";
+    const ZIP_CACHE_KEY = STORE + "zipCache";
     function readZipCache() {
       try {
         const parsed = JSON.parse(localStorage.getItem(ZIP_CACHE_KEY) || "{}");
@@ -1830,7 +1908,7 @@
     const FETCH_TIMEOUT_MS = 5000;
     const FORECAST_FRESH_MS = 15 * 60 * 1000;
     const FORECAST_MAX_AGE_MS = 3 * 60 * 60 * 1000;
-    const FORECAST_CACHE_KEY = "vibeForecastCache.v1";
+    const FORECAST_CACHE_KEY = STORE + "forecastCache";
     const FORECAST_CACHE_PLACES = 6;
     const forecastMemory = new Map(); // key -> { fetchedAt, data }
     const pendingForecasts = new Map(); // key -> Promise
@@ -5715,10 +5793,7 @@
 
       resetColorsBtn &&
         resetColorsBtn.addEventListener("click", () => {
-          chartColors = {
-            sun: { start: "#ffb86b", end: "#ff9500" },
-            shade: { start: "#6ea8fe", end: "#4a90e2" },
-          };
+          chartColors = structuredClone(DEFAULT_CHART_COLORS);
           if (sunColorStart) sunColorStart.value = chartColors.sun.start;
           if (sunColorEnd) sunColorEnd.value = chartColors.sun.end;
           if (shadeColorStart) shadeColorStart.value = chartColors.shade.start;
