@@ -1420,9 +1420,43 @@
       const m = s.match(/^(\d{5})(?:-\d{4})?$/);
       return m ? m[1] : null;
     }
-    async function getCoordsForZip(zip5) {
+    // A ZIP's centroid never moves, so each lookup is kept for next time.
+    const ZIP_CACHE_KEY = "vibeZipCache.v1";
+    function readZipCache() {
       try {
-        const r = await fetch(`https://api.zippopotam.us/us/${zip5}`);
+        const parsed = JSON.parse(localStorage.getItem(ZIP_CACHE_KEY) || "{}");
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch (e) {
+        return {};
+      }
+    }
+    async function getCoordsForZip(zip5) {
+      const known = readZipCache()[zip5];
+      if (
+        known &&
+        Number.isFinite(known.latitude) &&
+        Number.isFinite(known.longitude) &&
+        typeof known.place === "string"
+      ) {
+        return { ...known };
+      }
+      const found = await lookUpZip(zip5);
+      try {
+        const cache = readZipCache();
+        cache[zip5] = found;
+        const keys = Object.keys(cache);
+        if (keys.length > 20) delete cache[keys[0]];
+        localStorage.setItem(ZIP_CACHE_KEY, JSON.stringify(cache));
+      } catch (e) {
+        // Storage full or blocked: look it up again next time.
+      }
+      return found;
+    }
+    async function lookUpZip(zip5) {
+      try {
+        const r = await fetch(`https://api.zippopotam.us/us/${zip5}`, {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
         if (!r.ok) {
           if (r.status === 404) throw new Error("ZIP_NOT_FOUND");
           throw new Error("ZIP_LOOKUP_FAILED");
@@ -1430,9 +1464,13 @@
         const data = await r.json();
         const p = data.places?.[0];
         if (!p) throw new Error("ZIP_NOT_FOUND");
+        const latitude = parseFloat(p.latitude);
+        const longitude = parseFloat(p.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude))
+          throw new Error("ZIP_LOOKUP_FAILED");
         return {
-          latitude: parseFloat(p.latitude),
-          longitude: parseFloat(p.longitude),
+          latitude,
+          longitude,
           place: `${p["place name"]}, ${p["state abbreviation"]}`,
         };
       } catch (e) {
@@ -1759,191 +1797,184 @@
       return solar;
     }
 
-    // API request cache and deduplication
-    const apiRequestCache = new Map();
-    const pendingRequests = new Map();
-    const CACHE_TTL = 60000; // 1 minute cache TTL
+    // Forecast: one Open-Meteo request per place for current conditions,
+    // the hourly forecast and sunrise/sunset. Kept in memory and in
+    // localStorage per location rounded to 2 dp (about 1 km), so a reload or
+    // a return visit draws at once. Data younger than FORECAST_FRESH_MS is
+    // used as is; older data (up to FORECAST_MAX_AGE_MS) is drawn first and
+    // then refreshed.
+    const FETCH_TIMEOUT_MS = 5000;
+    const FORECAST_FRESH_MS = 15 * 60 * 1000;
+    const FORECAST_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+    const FORECAST_CACHE_KEY = "vibeForecastCache.v1";
+    const FORECAST_CACHE_PLACES = 6;
+    const forecastMemory = new Map(); // key -> { fetchedAt, data }
+    const pendingForecasts = new Map(); // key -> Promise
 
-    function getCacheKey(type, lat, lon, extra = "") {
-      return `${type}_${lat.toFixed(4)}_${lon.toFixed(4)}_${extra}`;
+    const roundCoord = (v) => Math.round(v * 100) / 100;
+    function forecastKey(lat, lon) {
+      return `${roundCoord(lat).toFixed(2)},${roundCoord(lon).toFixed(2)}`;
     }
 
-    function isCacheValid(entry) {
-      return Date.now() - entry.timestamp < CACHE_TTL;
-    }
-
-    // API with error handling and request deduplication
-    async function getCurrentWeather(lat, lon) {
-      const cacheKey = getCacheKey("current", lat, lon);
-
-      // Check cache
-      if (apiRequestCache.has(cacheKey)) {
-        const cached = apiRequestCache.get(cacheKey);
-        if (isCacheValid(cached)) {
-          return cached.data;
-        }
-      }
-
-      // Check for pending request
-      if (pendingRequests.has(cacheKey)) {
-        return pendingRequests.get(cacheKey);
-      }
-
-      // Create new request
-      const requestPromise = (async () => {
-        try {
-          const params = new URLSearchParams({
-            latitude: lat,
-            longitude: lon,
-            current:
-              "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
-            temperature_unit: "fahrenheit",
-            wind_speed_unit: "mph",
-            timezone: "auto",
-          });
-          const r = await fetch(
-            `https://api.open-meteo.com/v1/forecast?${params}`
-          );
-          if (!r.ok) {
-            if (r.status === 429) {
-              throw new Error("RATE_LIMIT");
-            } else if (r.status >= 500) {
-              throw new Error("SERVER_ERROR");
-            } else {
-              throw new Error(`API_ERROR_${r.status}`);
-            }
-          }
-          const data = await r.json();
-          if (!data.current) throw new Error("INVALID_RESPONSE");
-          const result = data.current;
-
-          // Cache the result
-          apiRequestCache.set(cacheKey, {
-            data: result,
-            timestamp: Date.now(),
-          });
-          pendingRequests.delete(cacheKey);
-
-          return result;
-        } catch (e) {
-          pendingRequests.delete(cacheKey);
-          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
-          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
-          if (e.message.startsWith("API_ERROR_")) throw e;
-          if (e.message === "INVALID_RESPONSE")
-            throw new Error("INVALID_RESPONSE");
-          throw new Error("NETWORK_ERROR");
-        }
-      })();
-
-      pendingRequests.set(cacheKey, requestPromise);
-      return requestPromise;
-    }
-    async function getHourlyWeather(lat, lon) {
-      const cacheKey = getCacheKey("hourly", lat, lon);
-
-      // Check cache
-      if (apiRequestCache.has(cacheKey)) {
-        const cached = apiRequestCache.get(cacheKey);
-        if (isCacheValid(cached)) {
-          return cached.data;
-        }
-      }
-
-      // Check for pending request
-      if (pendingRequests.has(cacheKey)) {
-        return pendingRequests.get(cacheKey);
-      }
-
-      // Create new request
-      const requestPromise = (async () => {
-        try {
-          const params = new URLSearchParams({
-            latitude: lat,
-            longitude: lon,
-            hourly:
-              "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day,precipitation,weathercode",
-            temperature_unit: "fahrenheit",
-            wind_speed_unit: "mph",
-            timezone: "auto",
-          });
-          const r = await fetch(
-            `https://api.open-meteo.com/v1/forecast?${params}`
-          );
-          if (!r.ok) {
-            if (r.status === 429) {
-              throw new Error("RATE_LIMIT");
-            } else if (r.status >= 500) {
-              throw new Error("SERVER_ERROR");
-            } else {
-              throw new Error(`API_ERROR_${r.status}`);
-            }
-          }
-          const data = await r.json();
-          if (!data.hourly) throw new Error("INVALID_RESPONSE");
-          const result = data.hourly;
-
-          // Cache the result
-          apiRequestCache.set(cacheKey, {
-            data: result,
-            timestamp: Date.now(),
-          });
-          pendingRequests.delete(cacheKey);
-
-          return result;
-        } catch (e) {
-          pendingRequests.delete(cacheKey);
-          if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
-          if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
-          if (e.message.startsWith("API_ERROR_")) throw e;
-          if (e.message === "INVALID_RESPONSE")
-            throw new Error("INVALID_RESPONSE");
-          throw new Error("NETWORK_ERROR");
-        }
-      })();
-
-      pendingRequests.set(cacheKey, requestPromise);
-      return requestPromise;
-    }
-    async function getDailySun(lat, lon, daysAheadParam = daysAhead) {
+    function readForecastStore() {
       try {
-        const params = new URLSearchParams({
-          latitude: lat,
-          longitude: lon,
-          daily: "sunrise,sunset",
-          timezone: "auto",
-          forecast_days: Math.max(daysAheadParam, 7), // Request at least 7 days to ensure we have enough
-        });
-        const r = await fetch(
-          `https://api.open-meteo.com/v1/forecast?${params}`
-        );
-        if (!r.ok) {
-          if (r.status === 429) throw new Error("RATE_LIMIT");
-          if (r.status >= 500) throw new Error("SERVER_ERROR");
-          throw new Error(`API_ERROR_${r.status}`);
-        }
-        const data = await r.json();
-        if (!data.daily) throw new Error("INVALID_RESPONSE");
-        const rises = data?.daily?.sunrise?.map((t) => new Date(t)) ?? [];
-        const sets = data?.daily?.sunset?.map((t) => new Date(t)) ?? [];
-        // Return arrays of all sunrise/sunset times for the visible range
-        return {
-          sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
-          sunsets: sets.slice(0, daysAheadParam + 1),
-          // Keep legacy properties for backward compatibility
-          sunriseToday: rises[0] ?? null,
-          sunsetToday: sets[0] ?? null,
-          sunriseTomorrow: rises[1] ?? null,
-          sunsetTomorrow: sets[1] ?? null,
-        };
+        const raw = localStorage.getItem(FORECAST_CACHE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === "object" ? parsed : {};
       } catch (e) {
-        if (e.message === "RATE_LIMIT") throw new Error("RATE_LIMIT");
-        if (e.message === "SERVER_ERROR") throw new Error("SERVER_ERROR");
-        if (e.message.startsWith("API_ERROR_")) throw e;
-        if (e.message === "INVALID_RESPONSE")
-          throw new Error("INVALID_RESPONSE");
-        throw new Error("NETWORK_ERROR");
+        return {};
       }
+    }
+
+    function writeForecastStore(key, entry) {
+      try {
+        const store = readForecastStore();
+        store[key] = entry;
+        const now = Date.now();
+        const keep = Object.entries(store)
+          .filter(
+            ([, v]) =>
+              v && typeof v.fetchedAt === "number" &&
+              now - v.fetchedAt < FORECAST_MAX_AGE_MS
+          )
+          .sort((x, y) => y[1].fetchedAt - x[1].fetchedAt)
+          .slice(0, FORECAST_CACHE_PLACES);
+        localStorage.setItem(
+          FORECAST_CACHE_KEY,
+          JSON.stringify(Object.fromEntries(keep))
+        );
+      } catch (e) {
+        // Storage full or blocked: the in-memory copy still works.
+      }
+    }
+
+    /** The newest copy we hold for this place, or null. */
+    function peekForecast(lat, lon) {
+      const key = forecastKey(lat, lon);
+      let entry = forecastMemory.get(key) || null;
+      if (!entry) {
+        const stored = readForecastStore()[key];
+        if (
+          stored &&
+          typeof stored.fetchedAt === "number" &&
+          stored.data &&
+          stored.data.current &&
+          stored.data.hourly &&
+          stored.data.daily
+        ) {
+          entry = stored;
+          forecastMemory.set(key, entry);
+        }
+      }
+      if (!entry) return null;
+      const age = Date.now() - entry.fetchedAt;
+      if (age < 0 || age >= FORECAST_MAX_AGE_MS) return null;
+      return { data: entry.data, age };
+    }
+
+    function forecastError(e) {
+      if (e && e.name === "TimeoutError") return new Error("TIMEOUT");
+      if (
+        e &&
+        ["RATE_LIMIT", "SERVER_ERROR", "INVALID_RESPONSE"].includes(e.message)
+      )
+        return e;
+      if (e && e.message && e.message.startsWith("API_ERROR_")) return e;
+      return new Error("NETWORK_ERROR");
+    }
+
+    async function fetchForecast(lat, lon) {
+      const params = new URLSearchParams({
+        latitude: roundCoord(lat).toFixed(2),
+        longitude: roundCoord(lon).toFixed(2),
+        current:
+          "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day",
+        hourly:
+          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,is_day,precipitation,weathercode",
+        daily: "sunrise,sunset",
+        temperature_unit: "fahrenheit",
+        wind_speed_unit: "mph",
+        timezone: "auto",
+        forecast_days: 7,
+      });
+      let r;
+      try {
+        r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+      } catch (e) {
+        throw forecastError(e);
+      }
+      if (!r.ok) {
+        if (r.status === 429) throw new Error("RATE_LIMIT");
+        if (r.status >= 500) throw new Error("SERVER_ERROR");
+        throw new Error(`API_ERROR_${r.status}`);
+      }
+      let data;
+      try {
+        data = await r.json();
+      } catch (e) {
+        throw e && e.name === "TimeoutError"
+          ? new Error("TIMEOUT")
+          : new Error("INVALID_RESPONSE");
+      }
+      if (!data || !data.current || !data.hourly || !data.daily)
+        throw new Error("INVALID_RESPONSE");
+      return data;
+    }
+
+    /**
+     * The forecast for a place, from the cache when it is younger than
+     * maxAgeMs, otherwise fetched. A failed fetch falls back to any copy we
+     * still hold (up to FORECAST_MAX_AGE_MS old) before giving up.
+     */
+    async function getForecast(lat, lon, { maxAgeMs = FORECAST_FRESH_MS } = {}) {
+      const key = forecastKey(lat, lon);
+      const held = peekForecast(lat, lon);
+      if (held && held.age < maxAgeMs) return held.data;
+      if (pendingForecasts.has(key)) return pendingForecasts.get(key);
+      const request = fetchForecast(lat, lon)
+        .then((data) => {
+          const entry = { fetchedAt: Date.now(), data };
+          forecastMemory.set(key, entry);
+          writeForecastStore(key, entry);
+          return data;
+        })
+        .catch((e) => {
+          const fallback = peekForecast(lat, lon);
+          if (fallback) return fallback.data;
+          throw e;
+        })
+        .finally(() => pendingForecasts.delete(key));
+      pendingForecasts.set(key, request);
+      return request;
+    }
+
+    async function getCurrentWeather(lat, lon, options) {
+      return (await getForecast(lat, lon, options)).current;
+    }
+    async function getHourlyWeather(lat, lon, options) {
+      return (await getForecast(lat, lon, options)).hourly;
+    }
+    function sunTimesFrom(daily, daysAheadParam = daysAhead) {
+      const rises = daily?.sunrise?.map((t) => new Date(t)) ?? [];
+      const sets = daily?.sunset?.map((t) => new Date(t)) ?? [];
+      // Return arrays of all sunrise/sunset times for the visible range
+      return {
+        sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
+        sunsets: sets.slice(0, daysAheadParam + 1),
+        // Keep legacy properties for backward compatibility
+        sunriseToday: rises[0] ?? null,
+        sunsetToday: sets[0] ?? null,
+        sunriseTomorrow: rises[1] ?? null,
+        sunsetTomorrow: sets[1] ?? null,
+      };
+    }
+    async function getDailySun(lat, lon, daysAheadParam = daysAhead, options) {
+      return sunTimesFrom(
+        (await getForecast(lat, lon, options)).daily,
+        daysAheadParam
+      );
     }
 
     // Timeline
@@ -2247,7 +2278,7 @@
         (title.includes("Permission") ||
           title.includes("Denied") ||
           title.includes("Unavailable"));
-      if (isLocationError) {
+      if (isLocationError || !vibeChart) {
         document.body.classList.add("error-displayed");
       }
 
@@ -4705,7 +4736,7 @@
       updateAdvStats();
       pollTimer = setTimeout(runUpdateCycle, ms);
     }
-    async function runUpdateCycle() {
+    async function runUpdateCycle({ force = false } = {}) {
       if (!lastCoords) {
         scheduleNextTick(els.updateInterval?.value || 1);
         return;
@@ -4724,12 +4755,13 @@
 
       try {
         const wantHourly = !!els.updateHourlyToggle?.checked;
-        const [cur, hourlyMaybe] = await Promise.all([
-          getCurrentWeather(latitude, longitude),
-          wantHourly
-            ? getHourlyWeather(latitude, longitude)
-            : Promise.resolve(null),
-        ]);
+        // Refetch unless the copy is under a minute old (or always, for
+        // Update Now).
+        const data = await getForecast(latitude, longitude, {
+          maxAgeMs: force ? 0 : 60 * 1000,
+        });
+        const cur = data.current;
+        const hourlyMaybe = wantHourly ? data.hourly : null;
 
         if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
 
@@ -4759,13 +4791,7 @@
         updateChartTitle();
 
         if (hourlyMaybe) {
-          // Refetch sunrise/sunset data if needed (in case days ahead changed)
-          try {
-            const dailySun = await getDailySun(latitude, longitude, daysAhead);
-            sunTimes = dailySun;
-          } catch (e) {
-            // If fetch fails, continue with existing sunTimes
-          }
+          sunTimes = sunTimesFrom(data.daily, daysAhead);
           // Only show loading if chart doesn't exist yet
           if (!vibeChart) showChartLoading();
           let ds;
@@ -4817,6 +4843,106 @@
     }
 
     // Prime weather
+    let primeSeq = 0; // the latest place asked for wins
+
+    // Draws a forecast for a place: cards, chart, summaries, status.
+    async function applyForecast(
+      data,
+      { latitude, longitude, sourceLabel, placeName, seq }
+    ) {
+      if (seq !== primeSeq) return; // a newer place was chosen meanwhile
+      const cur = data.current;
+      const hourly = data.hourly;
+      const dailySun = sunTimesFrom(data.daily, daysAhead);
+      sunTimes = dailySun;
+      lastCoords = { latitude, longitude };
+
+      // The place comes from the ZIP lookup (or a saved favorite); a GPS
+      // fix has none, since there is no reverse geocoding.
+      currentPlaceName = placeName;
+      updateChartTitle();
+      updateAdvStats();
+
+      const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
+      if (tempF != null)
+        els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
+      els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
+      els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
+      if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
+
+      if (
+        typeof cur.uv_index === "number" &&
+        (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
+      ) {
+        const solar = solarFromUVandCloud({
+          uv_index: cur.uv_index,
+          uv_index_clear_sky: cur.uv_index_clear_sky,
+          cloud_cover: cur.cloud_cover ?? 0,
+          is_day: cur.is_day,
+        });
+        els.solar.value = solar.toFixed(1);
+        els.solarVal.textContent = solar.toFixed(1);
+      } else if (typeof cur.cloud_cover === "number") {
+        autoSolarFromCloudCover(cur.cloud_cover);
+      }
+
+      compute();
+      updateChartTitle();
+
+      // Only show loading if chart doesn't exist yet
+      if (!vibeChart) showChartLoading();
+      let ds;
+      try {
+        ds = buildTimelineDataset(hourly);
+        if (!ds || !ds.labels || ds.labels.length === 0) {
+          throw new Error("Empty dataset from buildTimelineDataset");
+        }
+      } catch (e) {
+        console.error("Error building timeline dataset:", e);
+        // Fallback: try to continue with hourly data only
+        throw new Error("Failed to process weather data. Please try again.");
+      }
+      timelineState = ds;
+      window.timelineState = timelineState; // Expose for tooltip data access
+      // Store hourly labels separately for axis display
+      window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
+      await renderChart(
+        ds.labels,
+        ds.shadeVals,
+        ds.sunVals,
+        ds.now,
+        ds.isDayByHour
+      );
+      // Update remainder of day summary after chart renders
+      await updateRemainderOfDaySummary();
+      updateAdvStats(); // Update stats after chart is rendered
+      // Update summary if selection exists (weather data may have changed)
+      if (selectionRange) {
+        updateWeatherSummary();
+      }
+
+      const nowTime = new Date();
+      els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
+      updateAdvStats();
+      statusEl &&
+        (statusEl.textContent = sourceLabel
+          ? `Using ${sourceLabel}`
+          : "Using chosen coordinates");
+      restartScheduler();
+      hideError();
+
+      // Update favorites UI and offer to save current location
+      updateFavoritesUI();
+      if (currentPlaceName && lastCoords) {
+        offerToSaveFavorite();
+      }
+
+      // Check for notification conditions
+      checkNotificationConditions();
+    }
+
+    // Prime weather: draw from a copy we already hold (instant on reload),
+    // then fetch a fresh one if that copy is older than FORECAST_FRESH_MS.
     async function primeWeatherForCoords(
       latitude,
       longitude,
@@ -4829,99 +4955,25 @@
           : "Getting weather…");
       // Only show loading if chart doesn't exist yet
       if (!vibeChart) showChartLoading();
-      try {
-        const [cur, hourly, dailySun] = await Promise.all([
-          getCurrentWeather(latitude, longitude),
-          getHourlyWeather(latitude, longitude),
-          getDailySun(latitude, longitude, daysAhead),
-        ]);
-        sunTimes = dailySun;
-        lastCoords = { latitude, longitude };
-
-        // The place comes from the ZIP lookup (or a saved favorite); a GPS
-        // fix has none, since there is no reverse geocoding.
-        currentPlaceName = placeName;
-        updateChartTitle();
-        updateAdvStats();
-
-        const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
-        if (tempF != null)
-          els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
-        els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
-        els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
-        if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
-
-        if (
-          typeof cur.uv_index === "number" &&
-          (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
-        ) {
-          const solar = solarFromUVandCloud({
-            uv_index: cur.uv_index,
-            uv_index_clear_sky: cur.uv_index_clear_sky,
-            cloud_cover: cur.cloud_cover ?? 0,
-            is_day: cur.is_day,
-          });
-          els.solar.value = solar.toFixed(1);
-          els.solarVal.textContent = solar.toFixed(1);
-        } else if (typeof cur.cloud_cover === "number") {
-          autoSolarFromCloudCover(cur.cloud_cover);
-        }
-
-        compute();
-        updateChartTitle();
-
-        // Only show loading if chart doesn't exist yet
-        if (!vibeChart) showChartLoading();
-        let ds;
+      const seq = ++primeSeq;
+      const place = { latitude, longitude, sourceLabel, placeName, seq };
+      const held = peekForecast(latitude, longitude);
+      let drawn = false;
+      if (held) {
         try {
-          ds = buildTimelineDataset(hourly);
-          if (!ds || !ds.labels || ds.labels.length === 0) {
-            throw new Error("Empty dataset from buildTimelineDataset");
-          }
+          await applyForecast(held.data, place);
+          drawn = true;
         } catch (e) {
-          console.error("Error building timeline dataset:", e);
-          // Fallback: try to continue with hourly data only
-          throw new Error("Failed to process weather data. Please try again.");
+          log(e);
         }
-        timelineState = ds;
-        window.timelineState = timelineState; // Expose for tooltip data access
-        // Store hourly labels separately for axis display
-        window.timelineState.hourlyLabels = ds.hourlyLabels || ds.labels;
-        await renderChart(
-          ds.labels,
-          ds.shadeVals,
-          ds.sunVals,
-          ds.now,
-          ds.isDayByHour
-        );
-        // Update remainder of day summary after chart renders
-        await updateRemainderOfDaySummary();
-        updateAdvStats(); // Update stats after chart is rendered
-        // Update summary if selection exists (weather data may have changed)
-        if (selectionRange) {
-          updateWeatherSummary();
-        }
-
-        const nowTime = new Date();
-        els.lastUpdated && (els.lastUpdated.textContent = fmtHMS(nowTime));
-        updateAdvStats();
-        statusEl &&
-          (statusEl.textContent = sourceLabel
-            ? `Using ${sourceLabel}`
-            : "Using chosen coordinates");
-        restartScheduler();
-        hideError();
-
-        // Update favorites UI and offer to save current location
-        updateFavoritesUI();
-        if (currentPlaceName && lastCoords) {
-          offerToSaveFavorite();
-        }
-
-        // Check for notification conditions
-        checkNotificationConditions();
+        if (drawn && held.age < FORECAST_FRESH_MS) return;
+      }
+      try {
+        const data = await getForecast(latitude, longitude, { maxAgeMs: 0 });
+        if (!drawn || data !== held.data) await applyForecast(data, place);
       } catch (e) {
         log(e);
+        if (drawn || seq !== primeSeq) return; // keep showing what we have
 
         // Delay showing error to allow time for localStorage/cookies to be read
         setTimeout(() => {
@@ -4934,7 +4986,13 @@
           let errorDetails = "Could not retrieve weather data.";
           let errorSuggestion = "";
 
-          if (e.message === "RATE_LIMIT") {
+          if (e.message === "TIMEOUT") {
+            errorTitle = "Weather Is Taking Too Long";
+            errorDetails = `The weather service didn't answer within ${
+              FETCH_TIMEOUT_MS / 1000
+            } seconds.`;
+            errorSuggestion = "Try again, or enter a ZIP code.";
+          } else if (e.message === "RATE_LIMIT") {
             errorTitle = "Rate Limit Exceeded";
             errorDetails =
               "Too many requests to the weather service. Please wait a moment.";
@@ -4955,6 +5013,13 @@
           }
 
           showError(errorTitle, errorDetails, errorSuggestion, {
+            retry: () =>
+              primeWeatherForCoords(
+                latitude,
+                longitude,
+                sourceLabel,
+                placeName
+              ),
             zip: () => {}, // ZIP input will be shown in error message
           });
           statusEl && (statusEl.textContent = "Failed to fetch weather data.");
@@ -5166,8 +5231,10 @@
                 "Location denied. Enter values manually or set a ZIP.");
           }, 1500); // 1.5 second delay
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      ); // maximumAge: 0 forces fresh location
+        // City-level accuracy is plenty for weather, and a fix up to ten
+        // minutes old saves waiting on the GPS.
+        { timeout: 8000, maximumAge: 600000 }
+      );
     }
 
     // Inputs auto-update
@@ -5569,7 +5636,7 @@
       els.updateNow &&
         els.updateNow.addEventListener("click", () => {
           clearPollTimer();
-          runUpdateCycle();
+          runUpdateCycle({ force: true });
         });
 
       // Days ahead setting
@@ -6093,10 +6160,6 @@
             storageCacheRemove(ZIP_KEY);
             currentPlaceName = null;
 
-            // Clear API cache to force fresh data fetch for new location
-            apiRequestCache.clear();
-            pendingRequests.clear();
-
             // Strip zip parameter from URL
             const params = new URLSearchParams(location.search);
             params.delete("zip");
@@ -6140,10 +6203,6 @@
           // Clear saved ZIP from storage
           storageCacheRemove(ZIP_KEY);
           currentPlaceName = null;
-
-          // Clear API cache to force fresh data fetch for new location
-          apiRequestCache.clear();
-          pendingRequests.clear();
 
           // Strip zip parameter from URL
           const params = new URLSearchParams(location.search);
@@ -6597,10 +6656,6 @@
       if (pollTimer) clearTimeout(pollTimer);
       if (colorUpdateTimeout) clearTimeout(colorUpdateTimeout);
       if (calibrationUpdateTimeout) clearTimeout(calibrationUpdateTimeout);
-
-      // Clear API cache (optional - could keep for faster reload)
-      apiRequestCache.clear();
-      pendingRequests.clear();
     });
   });
 })();

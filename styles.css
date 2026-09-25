@@ -1577,6 +1577,19 @@ select {
 .error-displayed .skeleton-line {
   animation: none;
 }
+.chart-skeleton-msg {
+  display: none;
+  margin: auto;
+  color: var(--muted);
+  text-align: center;
+  font-size: 15px;
+}
+.error-displayed .chart-skeleton .skeleton-line {
+  display: none;
+}
+.error-displayed .chart-skeleton-msg {
+  display: block;
+}
 [data-theme="light"] .skeleton-text {
   background: linear-gradient(90deg, #e5e7eb 25%, #d1d5db 50%, #e5e7eb 75%);
   background-size: 200% 100%;

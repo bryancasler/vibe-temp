@@ -191,7 +191,7 @@ export const PROFILES = {
   fast: { openMeteo: 250, zip: 250, cdn: 150, allorigins: 1500, alloriginsFails: false, nws: 300 },
   badProxy: { openMeteo: 250, zip: 250, cdn: 150, allorigins: 12000, alloriginsFails: true, nws: 300 },
   slowOpenMeteo: { openMeteo: 9000, zip: 250, cdn: 150, allorigins: 1500, alloriginsFails: false, nws: 300 },
-  hungOpenMeteo: { openMeteo: 120000, zip: 250, cdn: 150, allorigins: 1500, alloriginsFails: false, nws: 300 },
+  hungOpenMeteo: { openMeteo: 15000, zip: 250, cdn: 150, allorigins: 1500, alloriginsFails: false, nws: 300 },
 };
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
