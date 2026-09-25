@@ -1920,7 +1920,7 @@
         current:
           "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day",
         hourly:
-          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,precipitation,weathercode",
+          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,precipitation,precipitation_probability,weathercode",
         daily: "sunrise,sunset",
         temperature_unit: "fahrenheit",
         wind_speed_unit: "mph",
@@ -2058,7 +2058,9 @@
         hourlyWindByHour = [],
         hourlyHumidityByHour = [],
         hourlyPrecipitationByHour = [],
-        hourlyWeathercodeByHour = [];
+        hourlyWeathercodeByHour = [],
+        hourlyAirTempByHour = [],
+        hourlyPopByHour = [];
 
       for (let i = s; i < e; i++) {
         const T = hourly.temperature_2m[i];
@@ -2091,6 +2093,8 @@
         hourlyHumidityByHour.push(RH ?? 0);
         hourlyPrecipitationByHour.push(precip);
         hourlyWeathercodeByHour.push(wmo);
+        hourlyAirTempByHour.push(T);
+        hourlyPopByHour.push(hourly.precipitation_probability?.[i] ?? null);
       }
 
       // Now interpolate to 15-minute increments
@@ -2102,7 +2106,9 @@
         windByHour = [],
         humidityByHour = [],
         precipitationByHour = [],
-        weathercodeByHour = [];
+        weathercodeByHour = [],
+        airTempByHour = [], // °F
+        popByHour = []; // chance of precipitation, %, the hour's own
 
       // Ensure we have hourly data before interpolating
       if (hourlyLabels.length === 0) {
@@ -2117,6 +2123,8 @@
           humidityByHour: hourlyHumidityByHour,
           precipitationByHour: hourlyPrecipitationByHour,
           weathercodeByHour: hourlyWeathercodeByHour,
+          airTempByHour: hourlyAirTempByHour,
+          popByHour: hourlyPopByHour,
           now,
           hourlyLabels,
         };
@@ -2146,6 +2154,8 @@
               humidityByHour.push(hourlyHumidityByHour[i]);
               precipitationByHour.push(hourlyPrecipitationByHour[i]);
               weathercodeByHour.push(hourlyWeathercodeByHour[i]);
+              airTempByHour.push(hourlyAirTempByHour[i]);
+              popByHour.push(hourlyPopByHour[i]);
             } else if (!isLastHour && i + 1 < hourlyShadeVals.length) {
               // Interpolate between current and next hour
               const fraction = minuteOffset / 60;
@@ -2187,6 +2197,12 @@
                     fraction
               );
               weathercodeByHour.push(hourlyWeathercodeByHour[i]);
+              airTempByHour.push(
+                hourlyAirTempByHour[i] +
+                  (hourlyAirTempByHour[i + 1] - hourlyAirTempByHour[i]) *
+                    fraction
+              );
+              popByHour.push(hourlyPopByHour[i]);
             } else {
               // Last hour, use current values
               shadeVals.push(parseFloat(hourlyShadeVals[i].toFixed(1)));
@@ -2197,6 +2213,8 @@
               humidityByHour.push(hourlyHumidityByHour[i]);
               precipitationByHour.push(hourlyPrecipitationByHour[i]);
               weathercodeByHour.push(hourlyWeathercodeByHour[i]);
+              airTempByHour.push(hourlyAirTempByHour[i]);
+              popByHour.push(hourlyPopByHour[i]);
             }
           }
         }
@@ -2212,6 +2230,8 @@
         humidityByHour,
         precipitationByHour,
         weathercodeByHour,
+        airTempByHour,
+        popByHour,
         now,
         hourlyLabels, // Keep original hourly labels for bottom axis
       };
@@ -5309,46 +5329,19 @@
                   }
 
                   if (filteredIndices.length > 0) {
-                    // Pre-allocate arrays with known length
-                    const len = filteredIndices.length;
-                    const newLabels = new Array(len);
-                    const newShadeVals = new Array(len);
-                    const newSunVals = new Array(len);
-                    const newSolarByHour = new Array(len);
-                    const newIsDayByHour = new Array(len);
-                    const newWindByHour = new Array(len);
-                    const newHumidityByHour = new Array(len);
-                    const newPrecipitationByHour = new Array(len);
-                    const newWeathercodeByHour = new Array(len);
-
-                    // Single loop to populate all arrays
-                    for (let j = 0; j < len; j++) {
-                      const i = filteredIndices[j];
-                      newLabels[j] = ds.labels[i];
-                      newShadeVals[j] = ds.shadeVals[i];
-                      newSunVals[j] = ds.sunVals[i];
-                      newSolarByHour[j] = ds.solarByHour[i];
-                      newIsDayByHour[j] = ds.isDayByHour[i];
-                      newWindByHour[j] = ds.windByHour?.[i] ?? 0;
-                      newHumidityByHour[j] = ds.humidityByHour?.[i] ?? 0;
-                      newPrecipitationByHour[j] =
-                        ds.precipitationByHour?.[i] ?? 0;
-                      newWeathercodeByHour[j] = ds.weathercodeByHour?.[i] ?? 0;
+                    // Keep every per-point series, cut to the same points
+                    const len = ds.labels.length;
+                    const cut = {};
+                    for (const [key, value] of Object.entries(ds)) {
+                      cut[key] =
+                        Array.isArray(value) &&
+                        value.length === len &&
+                        key !== "hourlyLabels"
+                          ? filteredIndices.map((i) => value[i])
+                          : value;
                     }
-
-                    ds = {
-                      labels: newLabels,
-                      shadeVals: newShadeVals,
-                      sunVals: newSunVals,
-                      solarByHour: newSolarByHour,
-                      isDayByHour: newIsDayByHour,
-                      windByHour: newWindByHour,
-                      humidityByHour: newHumidityByHour,
-                      precipitationByHour: newPrecipitationByHour,
-                      weathercodeByHour: newWeathercodeByHour,
-                      now: ds.now,
-                      hourlyLabels: ds.hourlyLabels || ds.labels, // Preserve hourlyLabels
-                    };
+                    cut.hourlyLabels = ds.hourlyLabels || ds.labels; // Preserve hourlyLabels
+                    ds = cut;
                   }
                 }
               }
