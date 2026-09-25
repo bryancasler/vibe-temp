@@ -3797,293 +3797,128 @@
             return beforePixel + (afterPixel - beforePixel) * fraction;
           }
 
-          // Helper function to interpolate y position for a given x position on a bezier curve
-          function getYOnBezierCurve(p1, p2, cp1x, cp1y, cp2x, cp2y, x) {
-            // Binary search to find t value that gives us the desired x
-            let t = 0.5;
-            let iterations = 20;
-            for (let i = 0; i < iterations; i++) {
-              const bezierX =
-                Math.pow(1 - t, 3) * p1.x +
-                3 * Math.pow(1 - t, 2) * t * cp1x +
-                3 * (1 - t) * Math.pow(t, 2) * cp2x +
-                Math.pow(t, 3) * p2.x;
+          // Each line's points: every plotted point, plus split points at
+          // sunrise and sunset.
+          function drawPointsFor(points) {
+            const drawPoints = [];
 
-              if (Math.abs(bezierX - x) < 0.1) break;
+            // Get all sunrise/sunset events
+            const allEvents = [
+              ...sunTimes.sunsets.map((t) => new Date(t).getTime()),
+              ...sunTimes.sunrises.map((t) => new Date(t).getTime()),
+            ].sort((a, b) => a - b);
 
-              if (bezierX < x) {
-                t = t + (1 - t) / 2;
-              } else {
-                t = t / 2;
+            for (let i = 0; i < points.length; i++) {
+              const point = points[i];
+              const timeMs = new Date(rawLabels[i]).getTime();
+              drawPoints.push({ x: point.x, y: point.y, time: timeMs });
+
+              if (i < points.length - 1) {
+                const nextTimeMs = new Date(rawLabels[i + 1]).getTime();
+                // Add split points for each event between this and the next
+                for (const eventTime of allEvents) {
+                  if (eventTime <= timeMs || eventTime >= nextTimeMs) continue;
+                  const nextPoint = points[i + 1];
+                  const t = (eventTime - timeMs) / (nextTimeMs - timeMs);
+                  drawPoints.push({
+                    x: getPixelForExactTime(new Date(eventTime)),
+                    // Linear interpolation for y value between current and next point
+                    y: point.y + (nextPoint.y - point.y) * t,
+                    time: eventTime,
+                  });
+                }
               }
             }
 
-            // Calculate y at this t
-            return (
-              Math.pow(1 - t, 3) * p1.y +
-              3 * Math.pow(1 - t, 2) * t * cp1y +
-              3 * (1 - t) * Math.pow(t, 2) * cp2y +
-              Math.pow(t, 3) * p2.y
+            // Sort by time and drop duplicates (points at the same second)
+            drawPoints.sort((a, b) => a.time - b.time);
+            const unique = [];
+            const seenTimes = new Set();
+            for (const dp of drawPoints) {
+              const timeKey = Math.floor(dp.time / 1000);
+              if (!seenTimes.has(timeKey)) {
+                seenTimes.add(timeKey);
+                unique.push(dp);
+              }
+            }
+            return unique;
+          }
+
+          const lines = [];
+          datasets.forEach((dataset, datasetIndex) => {
+            if (
+              dataset.label !== "Sun Vibe" &&
+              dataset.label !== "Shade Vibe"
+            )
+              return;
+            const meta = chart.getDatasetMeta(datasetIndex);
+            if (!meta || !meta.data || meta.data.length === 0) return;
+            const pts = drawPointsFor(meta.data);
+            lines.push({
+              label: dataset.label,
+              color:
+                dataset.label === "Sun Vibe"
+                  ? chartColors.sun.start
+                  : chartColors.shade.start,
+              pts,
+              slopes: MonotoneCurve.slopes(pts),
+            });
+          });
+
+          // Where the two lines meet (all night, and any hour with no sun),
+          // they share a slope, so the sun line never dips under the shade
+          // line between points.
+          const sunLine = lines.find((l) => l.label === "Sun Vibe");
+          const shadeLine = lines.find((l) => l.label === "Shade Vibe");
+          if (sunLine && shadeLine) {
+            MonotoneCurve.shareSlopesWhereEqual(
+              sunLine.pts,
+              sunLine.slopes,
+              shadeLine.pts,
+              shadeLine.slopes,
+              0.01
             );
           }
 
-          // Helper function to subdivide a bezier curve at parameter t using de Casteljau's algorithm
-          // Returns control points for the first portion of the curve (from p1 to point at t)
-          // Parameters: p1 (start point), p2 (end point), cp1x/cp1y (first control point), cp2x/cp2y (second control point), t (0-1)
-          // Returns: { cp1x, cp1y, cp2x, cp2y, endX, endY } where endX/endY is the point at t
-          function subdivideBezier(p1, p2, cp1x, cp1y, cp2x, cp2y, t) {
-            // De Casteljau's algorithm for cubic bezier subdivision
-            // For a cubic bezier: P(t) = (1-t)^3*P0 + 3*(1-t)^2*t*P1 + 3*(1-t)*t^2*P2 + t^3*P3
-            // Where P0=p1, P1=cp1, P2=cp2, P3=p2
-
-            // Intermediate points for subdivision
-            const q0x = p1.x;
-            const q0y = p1.y;
-            const q1x = (1 - t) * p1.x + t * cp1x;
-            const q1y = (1 - t) * p1.y + t * cp1y;
-            const q2x = (1 - t) * cp1x + t * cp2x;
-            const q2y = (1 - t) * cp1y + t * cp2y;
-            const q3x = (1 - t) * cp2x + t * p2.x;
-            const q3y = (1 - t) * cp2y + t * p2.y;
-
-            const r0x = (1 - t) * q0x + t * q1x;
-            const r0y = (1 - t) * q0y + t * q1y;
-            const r1x = (1 - t) * q1x + t * q2x;
-            const r1y = (1 - t) * q1y + t * q2y;
-            const r2x = (1 - t) * q2x + t * q3x;
-            const r2y = (1 - t) * q2y + t * q3y;
-
-            const s0x = (1 - t) * r0x + t * r1x;
-            const s0y = (1 - t) * r0y + t * r1y;
-            const s1x = (1 - t) * r1x + t * r2x;
-            const s1y = (1 - t) * r1y + t * r2y;
-
-            // The point at t
-            const endX = (1 - t) * s0x + t * s1x;
-            const endY = (1 - t) * s0y + t * s1y;
-
-            // Control points for the first portion: p1 (q0), r0, s0, end point
-            return {
-              cp1x: r0x,
-              cp1y: r0y,
-              cp2x: s0x,
-              cp2y: s0y,
-              endX: endX,
-              endY: endY,
-            };
-          }
-
-          // Helper function to check if a time is nighttime (between sunset and sunrise)
-          function isNighttime(time) {
-            if (!time || !sunTimes.sunrises || !sunTimes.sunsets) return false;
-            const timeMs = new Date(time).getTime();
-
-            // Helper function to round time down to current hour, then add 2 hours
-            function roundDownAndAddTwoHours(date) {
-              // Add 2 hours (1 hour later than rounding up to next hour)
-              return PlaceTime.startOfHour(date, placeZone) + 2 * 3600000;
-            }
-
-            // Get all sunrise and sunset times, sorted
-            const allEvents = [
-              ...sunTimes.sunsets.map((t) => ({
-                time: new Date(t).getTime(),
-                roundedTime: roundDownAndAddTwoHours(t), // Round sunset down to current hour, then add 2 hours
-                type: "sunset",
-              })),
-              ...sunTimes.sunrises.map((t) => ({
-                time: new Date(t).getTime(),
-                roundedTime: new Date(t).getTime(), // Sunrise stays as-is
-                type: "sunrise",
-              })),
-            ].sort((a, b) => a.time - b.time);
-
-            if (allEvents.length === 0) return false;
-
-            // Find the most recent event before or at this time
-            let lastEvent = null;
-            for (let i = 0; i < allEvents.length; i++) {
-              if (allEvents[i].time <= timeMs) {
-                lastEvent = allEvents[i];
+          lines.forEach(({ color, pts, slopes }) => {
+            ctx.save();
+            ctx.lineWidth = 3;
+            ctx.lineJoin = "round";
+            ctx.lineCap = "round";
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            if (pts.length === 1) ctx.lineTo(pts[0].x, pts[0].y);
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const dx = p2.x - p1.x;
+              if (lineSmoothing > 0 && dx > 0) {
+                // Monotone cubic (curve.js), its Bezier handles a third of
+                // the way along on each point's slope, blended toward a
+                // straight line by the "Line smoothing" setting. Either way
+                // it stays between the two points' values.
+                const [m1, m2] = MonotoneCurve.segmentSlopes(
+                  pts,
+                  slopes,
+                  i,
+                  lineSmoothing
+                );
+                const third = dx / 3;
+                ctx.bezierCurveTo(
+                  p1.x + third,
+                  p1.y + m1 * third,
+                  p2.x - third,
+                  p2.y - m2 * third,
+                  p2.x,
+                  p2.y
+                );
               } else {
-                break;
+                ctx.lineTo(p2.x, p2.y);
               }
             }
-
-            // If no event found, check if we're before the first event
-            if (!lastEvent) {
-              // Before first event - check if it's a sunrise (day) or sunset (night)
-              // For sunset, check if we're past the rounded time
-              if (allEvents[0].type === "sunset") {
-                return timeMs >= allEvents[0].roundedTime;
-              }
-              return false; // Before sunrise means it's still night from previous day
-            }
-
-            // If last event was a sunset, check if we're past the rounded sunset time
-            if (lastEvent.type === "sunset") {
-              return timeMs >= lastEvent.roundedTime;
-            }
-
-            // If last event was a sunrise, we're in daytime
-            return false;
-          }
-
-          datasets.forEach((dataset, datasetIndex) => {
-            if (
-              dataset.label === "Sun Vibe" ||
-              dataset.label === "Shade Vibe"
-            ) {
-              const meta = chart.getDatasetMeta(datasetIndex);
-              if (!meta || !meta.data || meta.data.length === 0) return;
-
-              ctx.save();
-              ctx.lineWidth = 3;
-              ctx.lineJoin = "round";
-              ctx.lineCap = "round";
-
-              const points = meta.data;
-
-              // Day colors
-              const dayColors =
-                dataset.label === "Sun Vibe"
-                  ? chartColors.sun
-                  : chartColors.shade;
-
-              if (points.length === 0) {
-                ctx.restore();
-                return;
-              }
-
-              if (points.length === 1) {
-                // Single point
-                ctx.strokeStyle = dayColors.start;
-                ctx.beginPath();
-                ctx.moveTo(points[0].x, points[0].y);
-                ctx.lineTo(points[0].x, points[0].y);
-                ctx.stroke();
-                ctx.restore();
-                return;
-              }
-
-              // Build list of all points to draw, including sunset/sunrise splits
-              const drawPoints = [];
-
-              // Get all sunrise/sunset events
-              const allEvents = [
-                ...sunTimes.sunsets.map((t) => ({
-                  time: new Date(t).getTime(),
-                  type: "sunset",
-                })),
-                ...sunTimes.sunrises.map((t) => ({
-                  time: new Date(t).getTime(),
-                  type: "sunrise",
-                })),
-              ].sort((a, b) => a.time - b.time);
-
-              // Process each segment between consecutive data points
-              for (let i = 0; i < points.length; i++) {
-                const point = points[i];
-                const time = rawLabels[i];
-                const timeMs = new Date(time).getTime();
-                const isDay = !isNighttime(time);
-
-                // Add the data point
-                drawPoints.push({
-                  x: point.x,
-                  y: point.y,
-                  time: timeMs,
-                  isDay: isDay,
-                });
-
-                // If this is not the last point, check for events between this and next point
-                if (i < points.length - 1) {
-                  const nextTime = rawLabels[i + 1];
-                  const nextTimeMs = new Date(nextTime).getTime();
-
-                  // Find events between this point and the next
-                  const eventsBetween = allEvents.filter(
-                    (e) => e.time > timeMs && e.time < nextTimeMs
-                  );
-
-                  // Add split points for each event
-                  for (const event of eventsBetween) {
-                    const eventX = getPixelForExactTime(new Date(event.time));
-                    // Linear interpolation for y value between current and next point
-                    const nextPoint = points[i + 1];
-                    const t = (event.time - timeMs) / (nextTimeMs - timeMs);
-                    const eventY = point.y + (nextPoint.y - point.y) * t;
-
-                    drawPoints.push({
-                      x: eventX,
-                      y: eventY,
-                      time: event.time,
-                      isDay: event.type === "sunrise",
-                    });
-                  }
-                }
-              }
-
-              // Sort all points by time to ensure correct order
-              drawPoints.sort((a, b) => a.time - b.time);
-
-              // Remove duplicates (points at the same time)
-              const uniqueDrawPoints = [];
-              const seenTimes = new Set();
-              for (const dp of drawPoints) {
-                const timeKey = Math.floor(dp.time / 1000); // Round to nearest second
-                if (!seenTimes.has(timeKey)) {
-                  seenTimes.add(timeKey);
-                  uniqueDrawPoints.push(dp);
-                }
-              }
-
-              // Draw lines between consecutive points
-              if (uniqueDrawPoints.length > 1) {
-                for (let i = 0; i < uniqueDrawPoints.length - 1; i++) {
-                  const p1 = uniqueDrawPoints[i];
-                  const p2 = uniqueDrawPoints[i + 1];
-
-                  // Always use day colors (night lines removed)
-                  ctx.strokeStyle = dayColors.start;
-
-                  ctx.beginPath();
-                  ctx.moveTo(p1.x, p1.y);
-
-                  // Use smoothing if enabled
-                  if (lineSmoothing > 0 && uniqueDrawPoints.length > 2) {
-                    // Calculate control points for bezier curve
-                    const p0 = i > 0 ? uniqueDrawPoints[i - 1] : p1;
-                    const p3 =
-                      i < uniqueDrawPoints.length - 2
-                        ? uniqueDrawPoints[i + 2]
-                        : p2;
-
-                    // Calculate direction vectors
-                    const dx1 = p2.x - p0.x;
-                    const dy1 = p2.y - p0.y;
-                    const dx2 = p3.x - p1.x;
-                    const dy2 = p3.y - p1.y;
-
-                    // Control points based on smoothing factor
-                    const cp1x = p1.x + (dx1 / 6) * lineSmoothing;
-                    const cp1y = p1.y + (dy1 / 6) * lineSmoothing;
-                    const cp2x = p2.x - (dx2 / 6) * lineSmoothing;
-                    const cp2y = p2.y - (dy2 / 6) * lineSmoothing;
-
-                    // Draw bezier curve
-                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-                  } else {
-                    // Draw straight line (no smoothing)
-                    ctx.lineTo(p2.x, p2.y);
-                  }
-
-                  ctx.stroke();
-                }
-              }
-
-              ctx.restore();
-            }
+            ctx.stroke();
+            ctx.restore();
           });
         },
       };
