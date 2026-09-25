@@ -927,7 +927,7 @@
       // Add touch grass time if it exists
       if (touchGrassTime) {
         const touchGrassTimeStr = fmtHM(new Date(touchGrassTime.time));
-        const touchGrassTempStr = `${formatTemp(
+        const touchGrassTempStr = `${formatUserTemp(
           touchGrassTime.temp
         )}${unitSuffix()}`;
         sentences.push(
@@ -1362,6 +1362,10 @@
       }
       return displayTemp.toFixed(1);
     };
+
+    // Formats a temperature already in the display unit (formatTemp takes °F).
+    const formatUserTemp = (temp) =>
+      unit === "F" ? Math.round(temp).toString() : temp.toFixed(1);
 
     function fmtHM(d) {
       return d.toLocaleTimeString(
@@ -4339,7 +4343,7 @@
           if (distance < 20) {
             // Show Touch Grass info in temp section
             const timeStr = fmtHM(touchGrassPos.time);
-            const tempStr = `${formatTemp(touchGrassPos.temp)}${unitSuffix()}`;
+            const tempStr = `${formatUserTemp(touchGrassPos.temp)}${unitSuffix()}`;
 
             if (els.combinedLabel) {
               els.combinedLabel.innerHTML = `🍃 Touch Grass - ${timeStr} - ${tempStr}`;
