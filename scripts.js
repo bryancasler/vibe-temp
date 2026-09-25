@@ -658,12 +658,17 @@
       // Add settings
       if (unit) params.set("unit", unit);
       if (daysAhead) params.set("days", String(daysAhead));
-      if (lastCoords) {
-        params.set("lat", String(lastCoords.latitude));
-        params.set("lon", String(lastCoords.longitude));
-      }
+      // The place, no more precisely than the forecast needs: the ZIP when
+      // there is one, otherwise coordinates to 2 dp (about 1 km), which is
+      // also what the forecast is fetched for. A shared link never carries
+      // a GPS fix.
       const savedZip = storageCacheGet(ZIP_KEY);
-      if (savedZip) params.set("zip", savedZip);
+      if (savedZip) {
+        params.set("zip", savedZip);
+      } else if (lastCoords) {
+        params.set("lat", roundCoord(lastCoords.latitude).toFixed(2));
+        params.set("lon", roundCoord(lastCoords.longitude).toFixed(2));
+      }
 
       // Add time range (ISO strings)
       params.set("start", startTime.toISOString());
