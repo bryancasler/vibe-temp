@@ -4729,16 +4729,21 @@
       if (pollTimer) clearTimeout(pollTimer);
       pollTimer = null;
     }
+    // Open-Meteo refreshes current conditions every 15 minutes, so polling
+    // faster only repeats the same numbers.
+    const DEFAULT_UPDATE_MINUTES = 15;
     function scheduleNextTick(minutes) {
-      const ms = Math.max(0.5, parseFloat(minutes) || 1) * 60 * 1000;
+      const ms =
+        Math.max(0.5, parseFloat(minutes) || DEFAULT_UPDATE_MINUTES) * 60 * 1000;
       nextUpdateAt = new Date(Date.now() + ms);
       els.nextUpdated && (els.nextUpdated.textContent = fmtHMS(nextUpdateAt));
       updateAdvStats();
       pollTimer = setTimeout(runUpdateCycle, ms);
     }
     async function runUpdateCycle({ force = false } = {}) {
-      if (!lastCoords) {
-        scheduleNextTick(els.updateInterval?.value || 1);
+      // A hidden tab waits; it refreshes when it is shown again.
+      if (!lastCoords || (document.hidden && !force)) {
+        scheduleNextTick(els.updateInterval?.value || DEFAULT_UPDATE_MINUTES);
         return;
       }
 
@@ -4834,13 +4839,22 @@
         // Don't show error for update cycle failures, just log them
         // User can manually retry with "Update Now" button
       } finally {
-        scheduleNextTick(els.updateInterval?.value || 1);
+        scheduleNextTick(els.updateInterval?.value || DEFAULT_UPDATE_MINUTES);
       }
     }
     function restartScheduler() {
       clearPollTimer();
-      scheduleNextTick(els.updateInterval?.value || 1);
+      scheduleNextTick(els.updateInterval?.value || DEFAULT_UPDATE_MINUTES);
     }
+    // Coming back to a tab whose data has gone stale refreshes it at once.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden || !lastCoords) return;
+      const held = peekForecast(lastCoords.latitude, lastCoords.longitude);
+      if (!held || held.age >= FORECAST_FRESH_MS) {
+        clearPollTimer();
+        runUpdateCycle();
+      }
+    });
 
     // Prime weather
     let primeSeq = 0; // the latest place asked for wins
@@ -5626,12 +5640,12 @@
       els.updateInterval &&
         els.updateInterval.addEventListener("change", () => {
           clearPollTimer();
-          scheduleNextTick(els.updateInterval?.value || 1);
+          scheduleNextTick(els.updateInterval?.value || DEFAULT_UPDATE_MINUTES);
         });
       els.updateHourlyToggle &&
         els.updateHourlyToggle.addEventListener("change", () => {
           clearPollTimer();
-          scheduleNextTick(els.updateInterval?.value || 1);
+          scheduleNextTick(els.updateInterval?.value || DEFAULT_UPDATE_MINUTES);
         });
       els.updateNow &&
         els.updateNow.addEventListener("click", () => {
