@@ -2438,22 +2438,19 @@
       const savedHoverIndex = vibeChart._hoverIndex;
 
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
-      const sunValsRaw = sunValsFF.map((v) => toUserTemp(v));
-
-      // If Sun Vibe is less than 5% different from Shade Vibe, treat it as the same (only on graph)
-      const sunVals = sunValsRaw.map((sunVal, i) => {
-        const shadeVal = shadeVals[i];
-        if (shadeVal === 0) return sunVal; // Avoid division by zero
-        const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
-        return percentDiff < 0.05 ? shadeVal : sunVal;
-      });
+      const sunVals = sunValsFF.map((v) => toUserTemp(v));
 
       const displayLabels = labels.map((d) =>
         d.toLocaleString([], inZone({ weekday: "short", hour: "numeric" }))
       );
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
-      const touchGrassTimes = findTouchGrassTimes(labels, sunVals, isDayByHour);
+      const touchGrassTimes = touchGrassFor(
+        labels,
+        sunVals,
+        shadeVals,
+        isDayByHour
+      );
 
       // Update chart data directly
       vibeChart.data.labels = displayLabels;
@@ -2494,6 +2491,25 @@
       }
 
       updateCardVisibility();
+    }
+
+    // The touch-grass rule reads the sun line with the old 5% snap: a sun
+    // value within 5% of shade (in display units) counts as the shade value.
+    // The chart no longer draws the snap, which hid real gaps on a fifth to a
+    // quarter of daylight hours, but the rule keeps reading it so its picks
+    // stay where they were (Bryan, 2026-09-25). The leaf's temperature is
+    // the drawn line's value at the time the rule picked.
+    function touchGrassFor(labels, sunVals, shadeVals, isDayByHour) {
+      const snapped = sunVals.map((sunVal, i) => {
+        const shadeVal = shadeVals[i];
+        if (shadeVal === 0) return sunVal; // Avoid division by zero
+        const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
+        return percentDiff < 0.05 ? shadeVal : sunVal;
+      });
+      return findTouchGrassTimes(labels, snapped, isDayByHour).map((t) => ({
+        ...t,
+        temp: sunVals[t.index],
+      }));
     }
 
     // Find ideal "Touch Grass" time per day (65-75°F / 18-24°C during daytime)
@@ -2570,15 +2586,7 @@
       }
 
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
-      const sunValsRaw = sunValsFF.map((v) => toUserTemp(v));
-
-      // If Sun Vibe is less than 5% different from Shade Vibe, treat it as the same (only on graph)
-      const sunVals = sunValsRaw.map((sunVal, i) => {
-        const shadeVal = shadeVals[i];
-        if (shadeVal === 0) return sunVal; // Avoid division by zero
-        const percentDiff = Math.abs((sunVal - shadeVal) / shadeVal);
-        return percentDiff < 0.05 ? shadeVal : sunVal;
-      });
+      const sunVals = sunValsFF.map((v) => toUserTemp(v));
 
       const displayLabels = labels.map((d) =>
         d.toLocaleString([], inZone({ weekday: "short", hour: "numeric" }))
@@ -2586,7 +2594,12 @@
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
 
-      const touchGrassTimes = findTouchGrassTimes(labels, sunVals, isDayByHour);
+      const touchGrassTimes = touchGrassFor(
+        labels,
+        sunVals,
+        shadeVals,
+        isDayByHour
+      );
 
       // Optimize: If chart exists and structure hasn't changed, just update data
       if (vibeChart && vibeChart.data.labels.length === displayLabels.length) {
