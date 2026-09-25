@@ -6457,6 +6457,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
       function showShortcutsModal() {
         if (shortcutsModalEl) {
           shortcutsModalEl.style.display = "flex";
+          if (closeShortcutsBtn) closeShortcutsBtn.focus();
         }
       }
 
@@ -6466,58 +6467,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         }
       }
 
-      // Keyboard shortcuts
-      document.addEventListener("keydown", (e) => {
-        // Don't trigger shortcuts when typing in inputs
-        if (
-          e.target.tagName === "INPUT" ||
-          e.target.tagName === "TEXTAREA" ||
-          e.target.isContentEditable
-        ) {
-          return;
-        }
-
-        if (e.key === "c" || e.key === "C") {
-          // Clear highlight
-          if (selectionRange) {
-            clearHighlightBtn?.click();
-          }
-        } else if (e.key === "s" || e.key === "S") {
-          // Share (copy URL)
-          if (selectionRange) {
-            const url = generateShareURL(
-              selectionRange.startTime,
-              selectionRange.endTime
-            );
-            copyToClipboard(url);
-            showNotification("Link copied to clipboard!", "success");
-          }
-        } else if (e.key === "f" || e.key === "F") {
-          // Toggle unit
-          toggleUnit();
-        } else if (e.key === "?" || e.key === "h" || e.key === "H") {
-          // Show shortcuts
-          showShortcutsModal();
-        } else if (e.key === "Escape") {
-          // Close modals or clear selection
-          if (shortcutsModalEl && shortcutsModalEl.style.display !== "none") {
-            hideShortcutsModal();
-          } else if (selectionRange) {
-            clearHighlightBtn?.click();
-          }
-        }
-      });
-
       closeShortcutsBtn &&
         closeShortcutsBtn.addEventListener("click", hideShortcutsModal);
-
-      // Time presets
-      presetDefaultBtn &&
-        presetDefaultBtn.addEventListener("click", () =>
-          setTimePreset("default")
-        );
-      presetWeekBtn &&
-        presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
 
       // Set initial active preset button based on daysAhead
       // First, clear all active states to ensure only one is active
@@ -6554,125 +6505,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         });
 
       // ZIP input handlers are set up earlier (around line 4125)
-
-      // Buttons
-      els.useLocationBtn &&
-        els.useLocationBtn.addEventListener("click", () => {
-          useLocation();
-          // Stats will be updated when location is set via primeWeatherForCoords
-        });
-
-      // Favorites toggle
-      favoritesToggle &&
-        favoritesToggle.addEventListener("click", () => {
-          if (favoritesList) {
-            const isVisible =
-              favoritesList.style.display !== "none" &&
-              favoritesList.style.display !== "";
-            favoritesList.style.display = isVisible ? "none" : "block";
-            if (!isVisible) favoritesList.classList.add("show");
-            else favoritesList.classList.remove("show");
-          }
-        });
-
-      // Initialize favorites UI
-      updateFavoritesUI();
-
-      // Clear highlight button
-      clearHighlightBtn &&
-        clearHighlightBtn.addEventListener("click", () => {
-          clearHighlight();
-
-          // If we don't have location yet, request it now
-          if (!lastCoords) {
-            const savedZip = storageCacheGet(ZIP_KEY);
-            if (savedZip && zipEls.input) {
-              getCoordsForZip(savedZip)
-                .then(({ latitude, longitude, place }) =>
-                  primeWeatherForCoords(
-                    latitude,
-                    longitude,
-                    `ZIP ${savedZip} (${place})`
-                  )
-                )
-                .then(() => {
-                  hideError();
-                  updateChartTitle();
-                })
-                .catch(() => useLocation());
-            } else {
-              useLocation();
-            }
-          }
-        });
-
-      // Copy summary button
-      copySummaryBtn &&
-        copySummaryBtn.addEventListener("click", async () => {
-          if (!summaryTextEl || !summaryTextEl.textContent) return;
-          const summaryText = summaryTextEl.textContent.trim();
-          if (
-            !summaryText ||
-            summaryText === "Generating summary..." ||
-            summaryText === "Unable to generate summary at this time."
-          )
-            return;
-
-          const success = await copyToClipboard(summaryText);
-          if (success) {
-            showNotification("Summary copied to clipboard!", "success");
-          } else {
-            showNotification(
-              "Failed to copy summary. Please select and copy manually.",
-              "error",
-              5000
-            );
-          }
-        });
-
-      // Export buttons
-
-      // Expired selection modal buttons
-      keepCustomBtn &&
-        keepCustomBtn.addEventListener("click", handleKeepCustomSettings);
-      useDefaultsBtn &&
-        useDefaultsBtn.addEventListener("click", handleUseDefaults);
-
-      // Close modal on ESC key
-      document.addEventListener("keydown", (e) => {
-        if (
-          e.key === "Escape" &&
-          expiredModalEl &&
-          expiredModalEl.style.display !== "none"
-        ) {
-          hideExpiredSelectionModal();
-        }
-      });
-
-      // Close modal on overlay click
-      expiredModalEl &&
-        expiredModalEl.addEventListener("click", (e) => {
-          if (e.target === expiredModalEl) {
-            hideExpiredSelectionModal();
-          }
-        });
-
-      // Keyboard shortcuts
-      function showShortcutsModal() {
-        if (shortcutsModalEl) {
-          shortcutsModalEl.style.display = "flex";
-          if (closeShortcutsBtn) closeShortcutsBtn.focus();
-        }
-      }
-
-      function hideShortcutsModal() {
-        if (shortcutsModalEl) {
-          shortcutsModalEl.style.display = "none";
-        }
-      }
-
-      closeShortcutsBtn &&
-        closeShortcutsBtn.addEventListener("click", hideShortcutsModal);
 
       shortcutsModalEl &&
         shortcutsModalEl.addEventListener("click", (e) => {
@@ -6746,7 +6578,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           }
         }
 
-        // Escape - Close modals
+        // Escape - Close modals, or clear the selection
         if (e.key === "Escape") {
           if (shortcutsModalEl && shortcutsModalEl.style.display !== "none") {
             hideShortcutsModal();
@@ -6755,6 +6587,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
             expiredModalEl.style.display !== "none"
           ) {
             hideExpiredSelectionModal();
+          } else if (selectionRange) {
+            clearHighlight();
           }
         }
       });
