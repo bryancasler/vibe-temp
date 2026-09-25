@@ -1888,8 +1888,17 @@
         }
       }
       if (!entry) return null;
-      const age = Date.now() - entry.fetchedAt;
+      let age = Date.now() - entry.fetchedAt;
       if (age < 0 || age >= FORECAST_MAX_AGE_MS) return null;
+      // A copy from before the place's midnight starts a day early: it can
+      // stand in while a fresh one loads, but it never counts as fresh.
+      const zone = PlaceTime.isValidZone(entry.data.timezone)
+        ? entry.data.timezone
+        : browserZone;
+      const firstDay = entry.data.daily?.time?.[0];
+      if (firstDay * 1000 < PlaceTime.startOfDay(new Date(), zone)) {
+        age = Math.max(age, FORECAST_FRESH_MS);
+      }
       return { data: entry.data, age };
     }
 
@@ -1989,8 +1998,16 @@
       return (await getForecast(lat, lon, options)).hourly;
     }
     function sunTimesFrom(daily, daysAheadParam = daysAhead) {
-      const rises = daily?.sunrise?.map((t) => new Date(t * 1000)) ?? [];
-      const sets = daily?.sunset?.map((t) => new Date(t * 1000)) ?? [];
+      // From today on, at the place (an older copy starts a day early)
+      const today = PlaceTime.startOfDay(new Date(), placeZone) / 1000;
+      const from = Math.max(
+        0,
+        (daily?.time ?? []).findIndex((t) => t >= today)
+      );
+      const rises =
+        daily?.sunrise?.slice(from).map((t) => new Date(t * 1000)) ?? [];
+      const sets =
+        daily?.sunset?.slice(from).map((t) => new Date(t * 1000)) ?? [];
       // Return arrays of all sunrise/sunset times for the visible range
       return {
         sunrises: rises.slice(0, daysAheadParam + 1), // +1 to include today
