@@ -2002,6 +2002,16 @@
         sunsetTomorrow: sets[1] ?? null,
       };
     }
+    // The hourly forecast for the place on screen, for redraws after a
+    // setting changes: null when another place was chosen while it loaded,
+    // so a late answer never draws over the new place.
+    async function hourlyForShownPlace() {
+      const seq = primeSeq;
+      const { latitude, longitude } = lastCoords;
+      const hourly = await getHourlyWeather(latitude, longitude);
+      return seq === primeSeq ? hourly : null;
+    }
+
     async function getDailySun(lat, lon, daysAheadParam = daysAhead, options) {
       return sunTimesFrom(
         (await getForecast(lat, lon, options)).daily,
@@ -4610,6 +4620,8 @@
       nextUpdateAt = new Date(Date.now() + ms);
       els.nextUpdated && (els.nextUpdated.textContent = fmtHMS(nextUpdateAt));
       updateAdvStats();
+      // One chain of polls: a new schedule replaces any pending one.
+      clearTimeout(pollTimer);
       pollTimer = setTimeout(runUpdateCycle, ms);
     }
     async function runUpdateCycle({ force = false } = {}) {
@@ -4634,9 +4646,12 @@
         const wantHourly = !!els.updateHourlyToggle?.checked;
         // Refetch unless the copy is under a minute old (or always, for
         // Update Now).
+        const seq = primeSeq;
         const data = await getForecast(latitude, longitude, {
           maxAgeMs: force ? 0 : 60 * 1000,
         });
+        // Another place was chosen while this loaded: leave it be.
+        if (seq !== primeSeq) return;
         const cur = data.current;
         const hourlyMaybe = wantHourly ? data.hourly : null;
 
@@ -5096,8 +5111,9 @@
                 compute(); // Change events fire less frequently, no debounce needed
               }
               if ((id === "reflect" || id === "reflectCustom") && lastCoords) {
-                getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+                hourlyForShownPlace()
                   .then(async (hourly) => {
+                    if (!hourly) return; // another place was chosen meanwhile
                     const ds = buildTimelineDataset(hourly);
                     timelineState = ds;
                     window.timelineState = timelineState;
@@ -5205,8 +5221,9 @@
 
         // Update chart if we have data
         if (lastCoords) {
-          getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+          hourlyForShownPlace()
             .then(async (hourly) => {
+              if (!hourly) return; // another place was chosen meanwhile
               // Skip getDailySun if we already have enough sun data
               const sunDaysAhead = preset === "tomorrow" ? 2 : daysAhead;
               const needsSunData =
@@ -5396,8 +5413,9 @@
         if (rerender) {
           compute();
           if (lastCoords) {
-            getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+            hourlyForShownPlace()
               .then(async (hourly) => {
+                if (!hourly) return; // another place was chosen meanwhile
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
@@ -5490,6 +5508,7 @@
             storageCacheSet(DAYS_AHEAD_KEY, String(daysAhead));
             updateChartTitle();
             if (lastCoords) {
+              const seq = primeSeq;
               Promise.all([
                 getHourlyWeather(lastCoords.latitude, lastCoords.longitude),
                 getDailySun(
@@ -5499,6 +5518,7 @@
                 ),
               ])
                 .then(async ([hourly, dailySun]) => {
+                  if (seq !== primeSeq) return; // another place was chosen
                   sunTimes = dailySun;
                   const ds = buildTimelineDataset(hourly);
                   timelineState = ds;
@@ -5644,8 +5664,9 @@
           debouncedChartUpdate("none", 300);
           if (!vibeChart && lastCoords) {
             // Fallback: recreate if chart doesn't exist
-            getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+            hourlyForShownPlace()
               .then(async (hourly) => {
+                if (!hourly) return; // another place was chosen meanwhile
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
@@ -5748,8 +5769,9 @@
         calibrationUpdateTimeout = setTimeout(() => {
           // Recalculate and update chart if data exists
           if (lastCoords) {
-            getHourlyWeather(lastCoords.latitude, lastCoords.longitude)
+            hourlyForShownPlace()
               .then(async (hourly) => {
+                if (!hourly) return; // another place was chosen meanwhile
                 const ds = buildTimelineDataset(hourly);
                 timelineState = ds;
                 window.timelineState = timelineState;
