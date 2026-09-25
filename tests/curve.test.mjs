@@ -77,3 +77,10 @@ test("two lines that meet share a slope, so the upper never dips under the lower
   C.shareSlopesWhereEqual(sun, a, shade, b);
   for (let x = 0; x <= 3; x += 0.05) assert.ok(C.valueAt(sun, a, x) >= C.valueAt(shade, b, x) - 1e-9, `x ${x}`);
 });
+
+test("the forward reader reads the same curve as valueAt", () => {
+  const pts = sunSeries().slice(0, 2000);
+  const s = C.slopes(pts);
+  const read = C.reader(pts, s, 0.7);
+  for (let x = 0; x < 1990; x += 0.37) assert.ok(Math.abs(read(x) - C.valueAt(pts, s, x, 0.7)) < 1e-12, `x ${x}`);
+});

@@ -85,7 +85,28 @@
     return hermite(pts[i].x, pts[i].y, m0, pts[i + 1].x, pts[i + 1].y, m1, x);
   }
 
-  const MonotoneCurve = { innerSlope, ownSlope, slopes, shareSlopesWhereEqual, segmentSlopes, hermite, valueAt };
+  // valueAt for x read in increasing order, as the paw scan reads every
+  // minute of a week: it walks forward from the last segment it found.
+  function reader(pts, s, smoothing = 1) {
+    const n = pts.length;
+    let i = 0;
+    let seg = -1;
+    let m0 = 0;
+    let m1 = 0;
+    return (x) => {
+      if (n === 0 || x < pts[0].x || x > pts[n - 1].x) return null;
+      if (pts[i].x > x) i = 0;
+      while (i < n - 1 && pts[i + 1].x <= x) i++;
+      if (pts[i].x === x || i === n - 1) return pts[i].y;
+      if (seg !== i) {
+        [m0, m1] = segmentSlopes(pts, s, i, smoothing);
+        seg = i;
+      }
+      return hermite(pts[i].x, pts[i].y, m0, pts[i + 1].x, pts[i + 1].y, m1, x);
+    };
+  }
+
+  const MonotoneCurve = { innerSlope, ownSlope, slopes, shareSlopesWhereEqual, segmentSlopes, hermite, valueAt, reader };
   root.MonotoneCurve = MonotoneCurve;
   if (typeof module === "object" && module.exports) module.exports = MonotoneCurve;
 })(typeof window !== "undefined" ? window : globalThis);
