@@ -1366,6 +1366,18 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
 .favorite-delete:hover {
   background: rgba(239, 68, 68, 0.2);
 }
+.favorite-offer {
+  position: relative;
+  margin-top: 8px;
+}
+.favorite-save-btn {
+  margin-left: 8px;
+  padding: 4px 8px;
+  background: var(--good);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
 .btn--sm {
   padding: 6px 10px;
   font-size: 13px;

@@ -5173,32 +5173,35 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
       favoritesList.innerHTML = "";
 
       favorites.forEach((fav) => {
+        const lat = Number(fav.lat);
+        const lon = Number(fav.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
         const item = document.createElement("div");
         item.className = "favorite-item";
-        item.innerHTML = `
-            <button class="favorite-name" data-lat="${fav.lat}" data-lon="${fav.lon}">${fav.name}</button>
-            <button class="favorite-delete" data-id="${fav.id}" title="Delete">×</button>
-          `;
-        favoritesList.appendChild(item);
-      });
 
-      // Add event listeners
-      favoritesList.querySelectorAll(".favorite-name").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const lat = parseFloat(btn.dataset.lat);
-          const lon = parseFloat(btn.dataset.lon);
-          primeWeatherForCoords(lat, lon, btn.textContent);
+        const nameBtn = document.createElement("button");
+        nameBtn.type = "button";
+        nameBtn.className = "favorite-name";
+        nameBtn.textContent = String(fav.name ?? "");
+        nameBtn.addEventListener("click", () => {
+          primeWeatherForCoords(lat, lon, nameBtn.textContent);
           if (favoritesToggle) favoritesToggle.textContent = "⭐ Favorites";
         });
-      });
 
-      favoritesList.querySelectorAll(".favorite-delete").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "favorite-delete";
+        deleteBtn.title = "Delete";
+        deleteBtn.textContent = "×";
+        deleteBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           if (confirm("Delete this favorite?")) {
-            deleteFavorite(parseInt(btn.dataset.id));
+            deleteFavorite(fav.id);
           }
         });
+
+        item.append(nameBtn, deleteBtn);
+        favoritesList.appendChild(item);
       });
     }
 
@@ -5212,27 +5215,27 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
       if (exists) return;
 
       // Show a subtle notification with save option
+      const name = currentPlaceName;
+      const { latitude, longitude } = lastCoords;
       const notification = document.createElement("div");
-      notification.className = "notification success";
-      notification.style.position = "relative";
-      notification.style.marginTop = "8px";
-      notification.innerHTML = `
-          <span>Save "${currentPlaceName}" to favorites?</span>
-          <button style="margin-left: 8px; padding: 4px 8px; background: var(--good); border: none; border-radius: 4px; cursor: pointer;" onclick="this.parentElement.remove(); window.saveCurrentFavorite('${currentPlaceName}', ${lastCoords.latitude}, ${lastCoords.longitude})">Save</button>
-        `;
+      notification.className = "notification success favorite-offer";
+      const text = document.createElement("span");
+      text.textContent = `Save "${name}" to favorites?`;
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "favorite-save-btn";
+      saveBtn.textContent = "Save";
+      saveBtn.addEventListener("click", () => {
+        notification.remove();
+        saveFavorite(name, latitude, longitude);
+      });
+      notification.append(text, saveBtn);
       if (statusEl && statusEl.parentElement) {
         statusEl.parentElement.appendChild(notification);
         setTimeout(() => notification.remove(), 10000);
       }
     }
 
-    // Expose save function globally for inline onclick
-    window.saveCurrentFavorite = (name, lat, lon) => {
-      saveFavorite(name, lat, lon);
-      document.querySelectorAll(".notification").forEach((n) => {
-        if (n.textContent.includes("Save")) n.remove();
-      });
-    };
     // Geolocation - precise location (requires permission)
     function useLocation() {
       statusEl && (statusEl.textContent = "Getting precise location…");
