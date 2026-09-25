@@ -1595,39 +1595,6 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         throw new Error("ZIP_LOOKUP_FAILED");
       }
     }
-    async function getPlaceName(lat, lon) {
-      try {
-        const apiUrl = new URL(
-          "https://geocoding-api.open-meteo.com/v1/reverse"
-        );
-        apiUrl.search = new URLSearchParams({
-          latitude: lat,
-          longitude: lon,
-          language: "en",
-          format: "json",
-        });
-
-        // Use CORS proxy for development (works in Simple Browser)
-        // The proxy wraps the request to avoid CORS issues
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(
-          apiUrl.toString()
-        )}`;
-
-        const r = await fetch(proxyUrl);
-        if (!r.ok) throw new Error("reverse geocode failed");
-        const j = await r.json();
-        const p = j?.results?.[0];
-        if (!p) return "";
-        const city = p.name || "";
-        const admin = p.admin1 || p.admin2 || p.country || "";
-        return admin && admin !== city ? `${city}, ${admin}` : city;
-      } catch (e) {
-        // Silently fail - location name is optional
-        console.debug("Could not fetch location name:", e);
-        return "";
-      }
-    }
-
     function isDaylightNow() {
       if (currentIsDay === 0 || currentIsDay === 1) return !!currentIsDay;
       const now = new Date();
@@ -2482,7 +2449,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
               await primeWeatherForCoords(
                 latitude,
                 longitude,
-                `ZIP ${zip5} (${place})`
+                `ZIP ${zip5} (${place})`,
+                place
               );
               // hideError() is called in primeWeatherForCoords on success, but ensure it's hidden here too
               hideError();
@@ -5007,7 +4975,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
     async function primeWeatherForCoords(
       latitude,
       longitude,
-      sourceLabel = ""
+      sourceLabel = "",
+      placeName = ""
     ) {
       statusEl &&
         (statusEl.textContent = sourceLabel
@@ -5024,7 +4993,9 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         sunTimes = dailySun;
         lastCoords = { latitude, longitude };
 
-        currentPlaceName = await getPlaceName(latitude, longitude);
+        // The place comes from the ZIP lookup (or a saved favorite); a GPS
+        // fix has none, since there is no reverse geocoding.
+        currentPlaceName = placeName;
         updateChartTitle();
         updateAdvStats();
 
@@ -5184,7 +5155,12 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
         nameBtn.className = "favorite-name";
         nameBtn.textContent = String(fav.name ?? "");
         nameBtn.addEventListener("click", () => {
-          primeWeatherForCoords(lat, lon, nameBtn.textContent);
+          primeWeatherForCoords(
+            lat,
+            lon,
+            nameBtn.textContent,
+            nameBtn.textContent
+          );
           if (favoritesToggle) favoritesToggle.textContent = "⭐ Favorites";
         });
 
@@ -5720,7 +5696,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
                 primeWeatherForCoords(
                   latitude,
                   longitude,
-                  `ZIP ${zipVal} (${place})`
+                  `ZIP ${zipVal} (${place})`,
+                  place
                 )
               )
               .then(() => hideError()) // Ensure error is hidden after successful weather fetch
@@ -6181,7 +6158,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           await primeWeatherForCoords(
             latitude,
             longitude,
-            `ZIP ${zip5} (${place})`
+            `ZIP ${zip5} (${place})`,
+            place
           );
           hideError();
 
@@ -6391,7 +6369,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
                   primeWeatherForCoords(
                     latitude,
                     longitude,
-                    `ZIP ${savedZip} (${place})`
+                    `ZIP ${savedZip} (${place})`,
+                    place
                   )
                 )
                 .then(() => {
@@ -6647,7 +6626,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
                   primeWeatherForCoords(
                     latitude,
                     longitude,
-                    `ZIP ${zip5} (${place})`
+                    `ZIP ${zip5} (${place})`,
+                    place
                   )
                 )
                 .catch(() => {});
@@ -6685,7 +6665,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
                     primeWeatherForCoords(
                       latitude,
                       longitude,
-                      `ZIP ${zip5} (${place})`
+                      `ZIP ${zip5} (${place})`,
+                      place
                     )
                   )
                   .catch(() => {});
@@ -6734,7 +6715,8 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
                 primeWeatherForCoords(
                   latitude,
                   longitude,
-                  `ZIP ${savedZip} (${place})`
+                  `ZIP ${savedZip} (${place})`,
+                  place
                 )
               )
               .then(() => {
