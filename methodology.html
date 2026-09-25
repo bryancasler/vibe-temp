@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>How Dogs mode works</title>
+    <meta
+      name="description"
+      content="How Vibe Temp's Dogs mode works: the rule behind the paw, the walk ratings and the six dog cards, whose number each line is, how strong each source is, and what was left out."
+    />
+    <!--
+      Static on purpose: everything below reads with JavaScript off.
+      page-theme.js only picks light or dark before the page paints.
+      The sources list is written out from sources.js.
+    -->
+    <script src="page-theme.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="methodology.css" />
+  </head>
+  <body class="method-page">
+    <main class="method">
+      <p class="back"><a href="./"><span aria-hidden="true">&larr;</span> Back to Vibe Temp</a></p>
+
+      <header class="method-head">
+        <h1>How Dogs mode works</h1>
+        <p class="lede">
+          Dogs mode is an optional layer on Vibe Temp for people walking a golden retriever. It is off
+          until you turn it on, and your browser remembers the choice. When it is on, the chart gets a paw
+          for the best time to get a golden out on the grass, a walk rating for every hour, and six cards for
+          heat, sunny pavement, storms, air quality, salt and cold.
+        </p>
+        <p class="lede">
+          Most of it is ported from <a href="https://www.dcgoldens.org/weather">DC Goldens' Dog Weather</a>.
+          This page is every rule behind it: the number that sets off each line, whose number it is, how much
+          weight its source can bear, and what was left out on purpose. The short version: there is no heat
+          index or pavement temperature for dogs with evidence behind it, and the one air quality scale for
+          pets is the EPA's, adapted. Where a scale exists for people, Dogs mode uses it and says so. Where a
+          line is someone's own choice, it is marked <span class="grade grade-ours">Ours</span>.
+        </p>
+      </header>
+
+      <aside class="disclaimer" aria-label="Disclaimer">
+        <p>This is guidance, not veterinary advice. Every golden is different, and the thresholds behind these are thinner than you would hope: there is no published heat index for dogs, and nobody has measured what temperature burns a paw. When in doubt, ask your vet, and watch your dog rather than the number.</p>
+      </aside>
+
+      <nav class="toc" aria-label="On this page">
+        <h2 class="toc-title">On this page</h2>
+        <ol>
+          <li><a href="#sun-and-shade">Sun and shade</a></li>
+          <li><a href="#best-times">Two best times</a>: <a href="#touch-grass">touch grass</a> and <a href="#paw-to-grass">paw to grass</a></li>
+          <li><a href="#walk-ratings">Walk ratings</a></li>
+          <li><a href="#cards">The six dog cards</a></li>
+          <li><a href="#left-out">What was left out, and why</a></li>
+          <li><a href="#location">Where you are</a></li>
+          <li><a href="#sources">Sources</a></li>
+          <li><a href="#credits">Credits and data</a></li>
+        </ol>
+      </nav>
+
+      <!-- ───────────── Sun and shade ───────────── -->
+      <section id="sun-and-shade" aria-labelledby="sun-and-shade-title">
+        <h2 id="sun-and-shade-title">Sun and shade</h2>
+        <p>
+          The two lines on the chart, In the sun and In the shade, show how warm it is likely to feel to a
+          person standing in full sun, and to the same person in shade. They are Bryan Casler's own estimate
+          for Vibe Temp, not a published formula. He set its numbers by hand until they matched how it
+          actually feels outside. They are there with Dogs mode on or off.
+        </p>
+        <p>
+          In the shade starts with the air temperature, adds 1°F for every 15 points of humidity above 40%
+          (and takes 1°F off for every 15 points below it), and takes 0.7°F off for every mile an hour of wind.
+          In the sun adds up to 8°F on top of that, depending on how much sun gets through, plus 1.2°F for
+          heat bouncing back off the ground whenever any does. How much sun gets through comes from the
+          forecast: the UV index against what it would be under a clear sky, dimmed by how much of the sky
+          counts as cloud. At night, and under a sky that lets no sun through, the two lines are the same.
+        </p>
+        <div class="m-formula" role="group" aria-label="The formulas">
+          <code>In the shade = T + (RH - 40) / 15 - 0.7 × W</code>
+          <code>In the sun   = In the shade + 8 × S + 4 × R, when S is above 0</code>
+          <code>S = (UV / clear-sky UV) × (1 - (C / 100)^0.7), kept between 0 and 1, and 0 at night</code>
+          <code>C = 100 × (1 - (direct sunlight / all sunlight) / 0.85), kept between 0 and 100</code>
+        </div>
+        <p>
+          T is the air temperature in °F, RH the relative humidity in %, W the wind speed in mph, R the
+          ground's reflectivity (0.3 for concrete, so 4 × 0.3 = 1.2°F), and C the share of the sky that
+          counts as cloud. Night is each hour's own is_day flag from the forecast. Without a clear-sky UV
+          reading, S uses the UV index over 10. These are the default settings; Vibe Temp's calibration
+          settings can change them, and the lines follow.
+        </p>
+        <p>
+          C comes from how much of the sunlight arrives as a direct beam, rather than the forecast's cloud
+          percentage. So thin high cloud with the sun plainly out still counts as sun, and the low sun just
+          after sunrise and before sunset counts for less. A daylight hour that reads no sunlight at all
+          counts as full cloud, so the two lines meet. Only when the forecast has no sunlight reading does C
+          go back to the forecast's cloud cover. The 0.85 is a first guess from DC's clear middays in 2025.
+        </p>
+        <p>
+          It describes a person, not a dog: nobody has measured how a golden's coat changes what the sun
+          feels like, so Dogs mode doesn't turn it into a dog's number. The paw-to-grass time applies a range
+          chosen for a golden to the sun line, and says so. It is not a pavement temperature, and it is not
+          the wind chill. And it does not decide the walk ratings: those come from the National Weather
+          Service's heat index, the air quality, storms, rain, sunny pavement, the air temperature and DC's
+          Extreme Cold Alert level, as described below. On a hot, humid afternoon the heat index can read
+          higher than even the sun line; they are different scales. The National Weather Service says full
+          sun can add up to 15°F to the heat index; the sun line sits at most 9.2°F above the shade line at
+          these settings.
+        </p>
+        <table class="rules">
+          <caption class="sr-only">The numbers in the sun and shade estimate</caption>
+          <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Humidity</th><td>+1°F for every 15 points above 40% (and 1°F off for every 15 below)</td><td><span class="grade grade-ours">Ours</span></td></tr>
+            <tr><th scope="row">Wind</th><td>0.7°F off for every mile an hour</td><td><span class="grade grade-ours">Ours</span></td></tr>
+            <tr><th scope="row">Full sun</th><td>up to +8°F, by how much sun gets through</td><td><span class="grade grade-ours">Ours</span></td></tr>
+            <tr><th scope="row">Off the ground</th><td>+1.2°F whenever any sun gets through (4 × 0.3, concrete)</td><td><span class="grade grade-ours">Ours</span></td></tr>
+            <tr><th scope="row">A clear sky's direct beam</th><td>85% of all sunlight</td><td><span class="grade grade-ours">Ours</span>, a first guess</td></tr>
+            <tr><th scope="row">The walk ratings</th><td>never use these two lines</td><td>the heat index, AQI, storms, rain, pavement, air temperature and DC's Extreme Cold Alert level decide them</td></tr>
+            <tr><th scope="row">The paw-to-grass time</th><td>reads the sun line, only between hours rated Good for a walk</td><td>DC Goldens' pick</td></tr>
+            <tr><th scope="row">The touch-grass time</th><td>reads the sun line by Vibe Temp's rule for people</td><td>Vibe Temp's</td></tr>
+          </tbody>
+        </table>
+        <ul class="src-links" aria-label="Sources">
+          <li><a href="#source-vibe-temp">Vibe Temp (ours)</a> <span class="grade grade-ours">Ours</span></li>
+          <li><a href="#source-nws-heat-index-sun">NWS on sun and the heat index</a> <span class="grade grade-strong">Strong</span></li>
+        </ul>
+      </section>
+
+      <!-- ───────────── Two best times ───────────── -->
+      <section id="best-times" aria-labelledby="best-times-title">
+        <h2 id="best-times-title">Two best times</h2>
+        <p>
+          The chart can mark two times to get out on the grass, because the best time is different for a
+          person and for a golden: a leaf for people, always, and a paw for Goldens, when Dogs mode is on.
+        </p>
+
+        <article id="touch-grass" class="panel" aria-labelledby="touch-grass-title">
+          <h3 id="touch-grass-title"><span aria-hidden="true">🍃 </span>Touch grass: Vibe Temp's rule for people</h3>
+          <p>
+            The leaf marks the best time for a person to get outside, by the rule Bryan wrote for Vibe Temp.
+            It reads the In the sun line at points 15 minutes apart, and looks only at daylight points from
+            65 to 75°F (18 to 24°C when the page shows Celsius). Daylight goes by each hour's is_day flag from
+            the forecast. Each point scores 100, less 10 for every degree it sits from the middle of the range
+            (70°F, or 21°C), and a point from 10am to 4:45pm scores 20 more. The best score on each day wins,
+            and a tie keeps the earlier time.
+          </p>
+          <p>
+            Where the sun line sits within 5% of the shade line, the rule reads the shade value, as it always
+            has, so its picks stay where they were. No walk rule applies to it, with Dogs mode on or off: it is
+            for people.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">The touch-grass rule</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Where it can sit</th><td>a point every 15 minutes, in daylight by each hour's is_day flag</td><td><span class="grade grade-ours">Ours</span> (Vibe Temp's)</td></tr>
+              <tr><th scope="row">The line it reads</th><td>In the sun, or the shade value where the two are within 5%</td><td><span class="grade grade-ours">Ours</span> (Vibe Temp's)</td></tr>
+              <tr><th scope="row">The range</th><td>65 to 75°F, or 18 to 24°C in Celsius, both ends included</td><td><span class="grade grade-ours">Ours</span> (Vibe Temp's)</td></tr>
+              <tr><th scope="row">The score</th><td>100, less 10 for every degree from 70°F (21°C), plus 20 from 10am to 4:45pm</td><td><span class="grade grade-ours">Ours</span> (Vibe Temp's)</td></tr>
+              <tr><th scope="row">How many</th><td>the best on each day; a tie keeps the earlier time</td><td><span class="grade grade-ours">Ours</span> (Vibe Temp's)</td></tr>
+              <tr><th scope="row">The walk rules</th><td>play no part: it is for people</td><td><span class="grade grade-ours">Ours</span> (Vibe Temp's)</td></tr>
+            </tbody>
+          </table>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-vibe-temp">Vibe Temp (ours)</a> <span class="grade grade-ours">Ours</span></li>
+          </ul>
+        </article>
+
+        <article id="paw-to-grass" class="panel" aria-labelledby="paw-to-grass-title">
+          <h3 id="paw-to-grass-title"><span aria-hidden="true">🐾 </span>Paw to grass: DC Goldens' pick for a golden</h3>
+          <p>
+            The paw marks one time: the best time for a golden to get out on the grass. It sits on the chart's
+            In the sun line, at the minute the line comes closest to 57°F (14°C), in daylight (from that day's
+            sunrise to its sunset), from now on, and where the walk ratings call the hours on either side of it
+            Good for a walk. The forecast gives one reading an hour, so a minute between two of them is read off
+            the curve the chart draws through them: an estimate from the curve, no more exact than the two hours
+            it joins. Anything from 45 to 64°F (7 to 18°C) can hold it, judged in whole degrees Fahrenheit
+            whichever units the page shows, and a tie goes to the earlier minute. The 24-hour view has one paw,
+            in the next 24 hours; the week view puts one on each day that has a time that fits. When nothing
+            fits, there is no paw.
+          </p>
+          <p>
+            The range is DC Goldens' choice, from <a href="https://www.dcgoldens.org/weather">dcgoldens.org</a>.
+            No study sets one, and the researchers closest to the question say advice on safe temperatures for
+            exercising dogs is missing. What the evidence does say points cooler than a person. A resting dog
+            holds its temperature without effort from about 68 to 86°F (20 to 30°C), and a walk adds heat it
+            mostly has to pant away. At UK canicross races where the air averaged 48°F (9°C), at least one
+            running dog per race finished with an ear temperature above 105°F (40.6°C). And goldens had 2.67
+            times the odds of heat-related illness of Labradors. So DC Goldens aimed 13°F below the 70°F that
+            Vibe Temp aims for a person, stopped the range at 64°F, and let it reach further on the cool side
+            than the warm side, because the evidence of harm for goldens is on the warm side.
+          </p>
+          <p>
+            It scores the In the sun line, the warmer of the two, because a golden on open grass is usually in
+            the sun. The UK study of dogs seen for heat-related illness read each day's weather at shaded
+            weather stations, which its authors say likely understate what a dog meets; the canicross
+            temperature above was measured on the course, out of the shade. Both lines estimate how it feels to
+            a person; nobody has measured how a golden's coat takes the sun. The paw is a pleasant time for a
+            walk, not a safe temperature and not a veterinary threshold: dogs in these studies overheated on
+            mild days too.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">The paw-to-grass rule</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Where it can sit</th><td>any minute from now on in daylight, sunrise to sunset, between two hours rated Good for a walk</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+              <tr><th scope="row">The line it reads</th><td>In the sun, to the minute, as the chart draws it between the hourly forecasts; in whole °F, whichever units the page shows</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+              <tr><th scope="row">The range</th><td>45°F (7°C) to 64°F (18°C)</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+              <tr><th scope="row">The aim</th><td>57°F (14°C); a tie goes to the earlier minute</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+              <tr><th scope="row">How many</th><td>one in the next 24 hours; in the week view, one on each day that has a time that fits; or none</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+            </tbody>
+          </table>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-vibe-temp">Vibe Temp (ours)</a> <span class="grade grade-ours">Ours</span></li>
+            <li><a href="#source-hall-2024-thesis">Hall 2024 (thesis)</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-purdue-va-16-w">Purdue VA-16-W</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-carter-hall-2018">Carter and Hall 2018</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-hall-2020-sci-rep">Hall et al. 2020, Scientific Reports</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-hall-2022-vet-sci">Hall et al. 2022, Veterinary Sciences</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ───────────── Walk ratings ───────────── -->
+      <section id="walk-ratings" aria-labelledby="walk-ratings-title">
+        <h2 id="walk-ratings-title">Walk ratings</h2>
+        <p>
+          With Dogs mode on, a strip under the chart rates every hour, day and night, for a walk. The weather
+          decides, not the clock. Each hour gets one of seven names, in three levels. Skips beat cautions, and
+          cautions beat good; within the skips, too hot comes before too cold, then storms or air.
+        </p>
+        <table class="rules walk">
+          <caption class="sr-only">The seven walk ratings and what sets each off</caption>
+          <thead><tr><th scope="col">Rating</th><th scope="col">When</th><th scope="col">Whose</th></tr></thead>
+          <tbody>
+            <tr class="lvl-good"><th scope="row"><span class="lvl">Good</span>Good for a walk</th><td>none of the lines below</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+            <tr class="lvl-care"><th scope="row"><span class="lvl">Caution</span>Getting warm, be cautious</th><td>heat index 80 to 94°F, or sunny pavement: daylight, UV index 3 or more, and air 80°F or warmer</td><td>NWS Caution and Extreme Caution bands; the pavement line is <span class="grade grade-ours">Ours</span></td></tr>
+            <tr class="lvl-care"><th scope="row"><span class="lvl">Caution</span>Getting cold, be cautious</th><td>air below 32°F</td><td>D.C. Code § 8-1801(13)</td></tr>
+            <tr class="lvl-care"><th scope="row"><span class="lvl">Caution</span>Rain, storms or poor air, be cautious</th><td>a 50% chance of rain or more, thunderstorms the National Weather Service calls possible, or AQI 101 to 150</td><td>NWS words and EPA bands; the 50% rain line is <span class="grade grade-ours">Ours</span></td></tr>
+            <tr class="lvl-skip"><th scope="row"><span class="lvl">Skip</span>Too hot for Goldens</th><td>heat index 95°F or more</td><td>at DC's Heat Alert level</td></tr>
+            <tr class="lvl-skip"><th scope="row"><span class="lvl">Skip</span>Too cold for Goldens</th><td>a wind chill of 15°F or below, or 20°F or below with at least a 50% chance of precipitation</td><td>at DC's Extreme Cold Alert level</td></tr>
+            <tr class="lvl-skip"><th scope="row"><span class="lvl">Skip</span>Storms or unhealthy air, keep it short</th><td>thunderstorms the National Weather Service calls likely, or AQI 151 or more</td><td>NWS words and EPA bands</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Every value is judged on the whole number the page prints, so a band always agrees with the number
+          beside it: a heat index of 94.7 prints as 95°F, and 95°F is at DC's Heat Alert level. The best walk
+          times are the two longest stretches of the best level left today.
+        </p>
+
+        <div class="panel">
+          <h3>Walk ratings are DC Goldens' own combination</h3>
+          <p>
+            Every hour is rated by the weather alone, day and night; the clock plays no part. Which lines make
+            a skip, which make a caution, and the 50% rain line are DC Goldens' choices, and so is borrowing DC's
+            heat and cold alert levels, which are set for people, for a golden. The others borrow the sources
+            below. Why not skip when storms are only possible: in DC Goldens' check at Reagan National, 55% of
+            the flagged 3-hour blocks stayed dry a day ahead, and skipping them would blank the afternoon on
+            about one summer day in three. A likely hour is skipped.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-dc-heat-plan-2026">DC Heat Plan 2026</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-winter-plan-fy26">DC Winter Plan FY26</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-heat-index-categories">NWS heat index bands</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-epa-aqi">EPA AirNow</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-chestovich-2022">Chestovich et al. 2022</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-code-8-1801">D.C. Code § 8-1801</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-pfm-spec">NWS forecast wording</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>The heat index</h3>
+          <p>
+            Dogs mode computes the heat index from the air temperature and humidity exactly as the National
+            Weather Service's Weather Prediction Center publishes it: first the simple formula; if that comes
+            to 80°F or more, the Rothfusz regression instead, with the Weather Service's adjustments for very
+            dry air (humidity under 13% at 80 to 112°F) and very damp air (over 85% at 80 to 87°F). It is a
+            scale made for people, in shade and light wind; no veterinary body publishes one for dogs.
+            Open-Meteo's own "apparent temperature" is a different formula, so it is not used.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-nws-heat-index-equation">NWS heat index equation</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-heat-index-categories">NWS heat index bands</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-heat-index-sun">NWS on sun and the heat index</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>The wind chill, never printed</h3>
+          <p>
+            Dogs mode works out the National Weather Service's 2001 wind chill in one place only: to tell when
+            an hour reaches DC's Extreme Cold Alert level, which the District writes in wind chill for people.
+            It is only defined at 50°F or colder with wind above 3 mph; outside that it is the air temperature.
+            It decides Too cold for Goldens and nothing else, and the page never shows it. Why, under
+            <a href="#left-out">What was left out</a>.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-nws-wind-chill">NWS wind chill chart</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-winter-plan-fy26">DC Winter Plan FY26</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ───────────── Cards ───────────── -->
+      <section id="cards" aria-labelledby="cards-title">
+        <h2 id="cards-title">The six dog cards</h2>
+        <p>
+          With Dogs mode on, a card shows only when its line is crossed, and each one names its sources, which
+          link to the list below.
+        </p>
+
+        <article id="card-heat" class="panel">
+          <h3><span aria-hidden="true">🌡️ </span>Heat</h3>
+          <p>
+            The heat index, worked out as above, at the day's highest. It is a scale made for people, in shade;
+            full sun can add up to 15°F. The dog evidence comes after it: goldens have 2.67 times the odds of
+            heat-related illness that Labradors do, and most dog heatstroke follows exercise, usually an
+            ordinary walk. On the UK's human heat-health alert days in 2022, emergency vets saw five times as
+            many dogs with heatstroke a day as on other summer days; that is the UK's alert, and DC's Heat Alert
+            level stands in for it here. The early signs are changes in breathing and lethargy, such as not
+            wanting to go on.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">Heat card lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Shows</th><td>heat index 80°F or more</td><td><span class="grade grade-ours">Ours</span>, at the NWS Caution line</td></tr>
+              <tr><th scope="row">Names DC's Heat Alert level</th><td>heat index 95°F or more</td><td>DC Heat Plan</td></tr>
+              <tr><th scope="row">Names DC's Extreme Heat Alert level</th><td>heat index 105°F or more</td><td>DC Heat Plan</td></tr>
+              <tr><th scope="row">The NWS bands</th><td>Caution 80°F, Extreme Caution 90°F, Danger 103°F, Extreme Danger 125°F</td><td>National Weather Service</td></tr>
+            </tbody>
+          </table>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-nws-heat-index-equation">NWS heat index equation</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-heat-index-categories">NWS heat index bands</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-heat-index-sun">NWS on sun and the heat index</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-heat-plan-2026">DC Heat Plan 2026</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-beard-2024">Beard et al. 2024 (RVC)</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-hall-2020-sci-rep">Hall et al. 2020, Scientific Reports</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-hall-2020-animals">Hall et al. 2020, Animals</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-vetcompass-early-signs-2021">RVC VetCompass 2021</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </article>
+
+        <article id="card-pavement" class="panel">
+          <h3><span aria-hidden="true">☀️ </span>Sunny pavement</h3>
+          <p>
+            Marks the daylight hours when pavement is likely sitting in hot sun, so grass and shade are the
+            cooler way through. Sunlit surfaces have been measured 36 to 56°F hotter than the same material in
+            shade at the same moment. The card never prints a pavement temperature, because nobody has measured
+            what temperature burns a paw. The back-of-hand test is a fine habit; the published advice says 5,
+            7 or 10 seconds, and none of those counts was tested.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">Sunny pavement card lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Flags an hour</th><td>daylight, UV index 3 or more, and air 80°F or warmer</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+            </tbody>
+          </table>
+          <p class="note">
+            <strong>The sunny-pavement hours are DC Goldens' line.</strong> No study sets it. It marks the
+            hours when the combination researchers measured, direct sun on a hot day, is plausible, and it never
+            produces a pavement temperature.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-chestovich-2022">Chestovich et al. 2022</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-wsu-hand-test-2017">Washington State University</a> <span class="grade grade-folklore">Folklore</span></li>
+            <li><a href="#source-akc-hand-test">American Kennel Club</a> <span class="grade grade-folklore">Folklore</span></li>
+            <li><a href="#source-dogs-trust-hand-test">Dogs Trust</a> <span class="grade grade-folklore">Folklore</span></li>
+          </ul>
+        </article>
+
+        <article id="card-storms" class="panel">
+          <h3><span aria-hidden="true">⛈️ </span>Thunderstorms</h3>
+          <p>
+            Lead time, not a forecast of harm. Almost a third of dogs are sensitive to noise, and the things
+            that help (a quiet spot, an earlier walk, a plan from your vet) all need warning. The storm line
+            comes from the National Weather Service's own forecast for your area, looking 48 hours ahead, in
+            the Weather Service's words: possible when it gives a chance of thunderstorms (30 to 50%), likely
+            when it says likely (60% or more). A slight chance never shows. It covers the US only.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">Thunderstorm card lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Shows</th><td>a chance of thunderstorms or more in the National Weather Service forecast (30% and up)</td><td>National Weather Service</td></tr>
+              <tr><th scope="row">Says likely</th><td>when the Weather Service says thunderstorms are likely (60% and up)</td><td>National Weather Service</td></tr>
+              <tr><th scope="row">How far ahead</th><td>the next 48 hours</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+              <tr><th scope="row">For a walk</th><td>be cautious when storms are possible; keep it short when they're likely</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+            </tbody>
+          </table>
+          <p class="note">
+            <strong>Why storms come from the National Weather Service.</strong> The forecast model behind the
+            rest of the chart files DC's storm days under heavy showers: from January 2024 to September 2026 it
+            never forecast an hour of thunder there, while Reagan National Airport recorded thunder on 119 days.
+            So the storm line reads the National Weather Service's own forecast instead. Over May to September
+            of 2025 and 2026, its Baltimore/Washington office gave at least a chance of thunderstorms a day
+            ahead on 63 of the 69 days thunder was heard at the airport. It also gave a chance on about 40 days
+            that stayed quiet there, which is what a 30 to 50% chance looks like, so the card says possible, not
+            coming. The comparison is DC Goldens', and small: one airport, two summers and nothing from the
+            colder months, scored against the Weather Service's archived forecasts for that airport.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-nws-api">National Weather Service forecast</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-nws-pfm-spec">NWS forecast wording</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-salonen-2020">Salonen et al. 2020</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-iem-archive">Iowa Environmental Mesonet</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-open-meteo-forecast-docs">Open-Meteo forecast docs</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </article>
+
+        <article id="card-air" class="panel">
+          <h3><span aria-hidden="true">💨 </span>Air quality</h3>
+          <p>
+            The EPA's air quality index, labelled as the scale made for people that it is. At Good and Moderate
+            the card shows the reading and nothing more. From Unhealthy for Sensitive Groups up, it adds
+            Colorado State University's advice for pets, paraphrased and credited, and keeps their word:
+            adapted. At Unhealthy for Sensitive Groups, that is less time outside for every dog, and bathroom
+            breaks only for sensitive dogs (puppies, seniors, overweight dogs, and dogs with allergies or heart
+            or lung trouble); at Unhealthy, limiting time outside and walking rather than running; above that,
+            keeping dogs inside as much as you can. Mornings are usually better on ozone days.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">Air quality card lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">The bands</th><td>Good 0, Moderate 51, Unhealthy for Sensitive Groups 101, Unhealthy 151, Very Unhealthy 201, Hazardous 301</td><td>EPA</td></tr>
+              <tr><th scope="row">Advice for dogs at each band</th><td>from 101</td><td>Colorado State University (adapted)</td></tr>
+              <tr><th scope="row">Be cautious, then keep it short</th><td>from 101, then from 151</td><td><span class="grade grade-ours">Ours</span> (DC Goldens'), at the EPA's lines</td></tr>
+            </tbody>
+          </table>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-epa-aqi">EPA AirNow</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-csu-pet-aqi-2026">Colorado State University 2026</a> <span class="grade grade-moderate">Moderate</span></li>
+          </ul>
+        </article>
+
+        <article id="card-salt" class="panel">
+          <h3><span aria-hidden="true">🧂 </span>Winter salt</h3>
+          <p>
+            A condition, not a temperature: salt goes down ahead of forecast snow and ice and stays down after,
+            whatever the thermometer says. When there has been or will be snow or ice, the card says salt is
+            probably down and suggests wiping or rinsing paws after the walk, before your golden licks them.
+            Ice melt irritates paw pads and can poison a dog who eats enough of it.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">Winter salt card lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Shows</th><td>snow, snow showers, snow grains, freezing drizzle or freezing rain in the forecast (weather codes 56, 57, 66, 67, 71, 73, 75, 77, 85, 86), or any snowfall</td><td>the forecast itself</td></tr>
+              <tr><th scope="row">The window</th><td>the past 48 hours or the next 24</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+            </tbody>
+          </table>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-merck-salt-toxicosis">Merck Veterinary Manual</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-aspca-ice-melt">ASPCA Animal Poison Control</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </article>
+
+        <article id="card-cold" class="panel">
+          <h3><span aria-hidden="true">❄️ </span>Below freezing</h3>
+          <p>
+            DC law, not a vet chart. Below 32°F is "extreme weather" in the D.C. Code, when a dog can't be left
+            outside for more than 15 minutes without a person or proper shelter unless its age, condition and
+            type let it handle the cold. That rule is about dogs left out, not walks. On a walk, salt and ice
+            are the usual winter hazards, and puppies, seniors and sick dogs keep warm less well. When some of
+            its hours reach DC's Extreme Cold Alert level, a line made for people, the card says they are too
+            cold for Goldens, as the walk ratings do.
+          </p>
+          <table class="rules">
+            <caption class="sr-only">Below freezing card lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Where it falls</th><th scope="col">Whose</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Shows</th><td>air temperature below 32°F</td><td>D.C. Code § 8-1801(13)</td></tr>
+              <tr><th scope="row">Hours it reads</th><td>every hour, day and night, as the walk ratings do</td><td><span class="grade grade-ours">Ours</span> (DC Goldens')</td></tr>
+              <tr><th scope="row">Says too cold for Goldens</th><td>when any of those hours reaches DC's Extreme Cold Alert level (a wind chill of 15°F or below, or 20°F or below with at least a 50% chance of rain or snow)</td><td>DC's Winter Plan</td></tr>
+            </tbody>
+          </table>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-dc-code-8-1801">D.C. Code § 8-1801</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-code-8-1808">D.C. Code § 8-1808</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-purdue-va-16-w">Purdue VA-16-W</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-winter-plan-fy26">DC Winter Plan FY26</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ───────────── Left out ───────────── -->
+      <section id="left-out" aria-labelledby="left-out-title">
+        <h2 id="left-out-title">What was left out, and why</h2>
+        <p>Each of these is easy to find elsewhere. None of them holds up for dogs.</p>
+
+        <div class="panel">
+          <h3>No pavement temperature</h3>
+          <p>
+            The pavement tables that circulate trace back to a 1970 report on three people burned on Phoenix
+            asphalt: a study of people, not paws. Nobody has measured what surface temperature burns a dog's
+            paw, so Dogs mode shows where the sun is instead of a number. The back-of-hand test is a fine
+            habit; the published advice says 5, 7 or 10 seconds, and none of those counts was tested.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-berens-1970">Berens 1970</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-chestovich-2022">Chestovich et al. 2022</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-wsu-hand-test-2017">Washington State University</a> <span class="grade grade-folklore">Folklore</span></li>
+            <li><a href="#source-akc-hand-test">American Kennel Club</a> <span class="grade grade-folklore">Folklore</span></li>
+            <li><a href="#source-dogs-trust-hand-test">Dogs Trust</a> <span class="grade grade-folklore">Folklore</span></li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>No ground temperature</h3>
+          <p>
+            Open-Meteo offers a ground-surface temperature. It is a model of a whole patch of the city, grass
+            and trees and roofs as well as roads, not a reading of the asphalt your golden walks on, and no one
+            has set a line for it. A bare number would invite a question nobody can answer, so it is left out.
+          </p>
+        </div>
+
+        <div class="panel">
+          <h3>No pollen count</h3>
+          <p>
+            Open-Meteo only has pollen for Europe, and the one study built to test pollen counts against itching
+            in allergic dogs found no link. A golden walks with its nose in the grass; the count comes from a
+            trap on a roof.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-open-meteo-air-quality-docs">Open-Meteo air quality docs</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-widorn-2024">Widorn et al. 2024</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>No wind chill for dogs</h3>
+          <p>
+            The wind chill index models wind at the height of an adult's face and is built on a human face. A
+            golden's double coat is exactly what it leaves out, so Dogs mode shows the air temperature and DC's
+            legal line instead. It works the wind chill out in one place only: to tell when the forecast reaches
+            DC's Extreme Cold Alert level, which the District writes in wind chill for people. Too cold for
+            Goldens reads that level, and the number is never printed. Borrowing a line set for people for a
+            golden is DC Goldens' choice, as it is for heat. Wind does take some warmth off the In the shade
+            estimate, which is Vibe Temp's own line, not the wind chill.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-nws-wind-chill">NWS wind chill chart</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-code-8-1801">D.C. Code § 8-1801</a> <span class="grade grade-strong">Strong</span></li>
+            <li><a href="#source-dc-winter-plan-fy26">DC Winter Plan FY26</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3>No "too hot to walk" temperature</h3>
+          <p>
+            A chart saying to take care above about 20°C and not to walk a dog above 25°C is shared widely. DC
+            Goldens could not trace it to any study. Most dog heatstroke follows exercise, usually an ordinary
+            walk, so what a golden is doing matters alongside the thermometer, and one number can't carry that.
+            Dogs mode shows the heat index, names it as a scale made for people, and puts the dog evidence
+            beside it.
+          </p>
+          <ul class="src-links" aria-label="Sources">
+            <li><a href="#source-hall-2020-animals">Hall et al. 2020, Animals</a> <span class="grade grade-strong">Strong</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ───────────── Location ───────────── -->
+      <section id="location" aria-labelledby="location-title">
+        <h2 id="location-title">Where you are</h2>
+        <p>
+          Vibe Temp works anywhere Open-Meteo has a forecast, and so does Dogs mode. But the levels it names are
+          Washington, DC's: the Heat Alert at a heat index of 95°F and the Extreme Heat Alert at 105°F, the
+          Extreme Cold Alert, and the D.C. Code's below-32°F line with its 15 minutes. Those are DC's levels,
+          used as a reference wherever you are. Reaching one says the forecast is at that level; only DC can
+          issue an alert, and only in DC. Nothing here means your local law limits a walk, and DC's doesn't
+          either.
+        </p>
+        <p>
+          Thunderstorms come from the US National Weather Service, which forecasts only for the US. Outside
+          the US there is no storm line, so no storm line there doesn't mean no storms. Inside the US, if the
+          Weather Service's forecast doesn't load, the same holds: <a href="https://www.weather.gov/">weather.gov</a>
+          has it in the meantime.
+        </p>
+      </section>
+
+      <!-- ───────────── Sources ───────────── -->
+      <section id="sources" aria-labelledby="sources-title">
+        <h2 id="sources-title">Sources</h2>
+        <p>
+          Every source a line in Dogs mode rests on, with how much it can bear. The grading is DC Goldens',
+          kept here as they gave it.
+        </p>
+        <dl class="grade-key">
+          <div><dt><span class="grade grade-strong">Strong</span></dt><dd>measured data or black-letter law</dd></div>
+          <div><dt><span class="grade grade-moderate">Moderate</span></dt><dd>a single site, a news write-up of work not yet peer reviewed, or an extrapolation</dd></div>
+          <div><dt><span class="grade grade-folklore">Folklore</span></dt><dd>advice that circulates with no study behind it</dd></div>
+          <div><dt><span class="grade grade-ours">Ours</span></dt><dd>Vibe Temp's or DC Goldens' own work, tuned by hand and not peer reviewed</dd></div>
+        </dl>
+        <ol class="source-list">
+          <li id="source-nws-heat-index-equation" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2022</span></p>
+            <p class="source-title"><a href="https://www.wpc.ncep.noaa.gov/html/heatindex_equation.shtml">The Heat Index Equation</a></p>
+            <p class="source-pub">NOAA Weather Prediction Center</p>
+            <p class="source-note">The formula we compute the heat index with, from air temperature and humidity. It is a scale for people, in shade.</p>
+          </li>
+          <li id="source-nws-heat-index-categories" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://www.weather.gov/ama/heatindex">Heat Index</a></p>
+            <p class="source-pub">National Weather Service, Amarillo</p>
+            <p class="source-note">The Caution, Extreme Caution, Danger and Extreme Danger bands for people. An older NWS brochure starts Danger at 105°F instead of 103°F.</p>
+          </li>
+          <li id="source-nws-heat-index-sun" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://www.weather.gov/safety/heat-index">What is the heat index?</a></p>
+            <p class="source-pub">National Weather Service</p>
+            <p class="source-note">The heat index assumes shade and light wind; full sun can add up to 15°F.</p>
+          </li>
+          <li id="source-dc-heat-plan-2026" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://ready.dc.gov/documents/9a3d906caafa4204a0eafb27070cbdf5/about">2026 District of Columbia Heat Plan</a></p>
+            <p class="source-pub">DC Department of Human Services, HSEMA and the Interagency Council on Homelessness</p>
+            <p class="source-note">DC's Heat Alert starts at a forecast heat index of 95°F and its Extreme Heat Alert at 105°F. We say when a forecast reaches that level; only DC can issue an alert.</p>
+          </li>
+          <li id="source-beard-2024" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2024</span></p>
+            <p class="source-title"><a href="https://www.rvc.ac.uk/research/research-centres-and-facilities/veterinary-epidemiology-economics-and-public-health/news/new-research-from-the-rvc-suggests-human-heat-health-alerts-could-help-prevent-heatstroke-in-dogs">Epidemiology of heat-related illness in dogs under UK emergency veterinary care in 2022</a></p>
+            <p class="source-pub">Beard, Hall, Bradbury, Carter, Gilbert and O'Neill, Veterinary Record (RVC VetCompass)</p>
+            <p class="source-note">Five times as many dog heatstroke cases a day during the UK's human heat-health alerts. Measured against UK alerts, not DC's.</p>
+          </li>
+          <li id="source-hall-2020-sci-rep" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2020</span></p>
+            <p class="source-title"><a href="https://www.nature.com/articles/s41598-020-66015-8">Incidence and risk factors for heat-related illness (heatstroke) in UK dogs under primary veterinary care in 2016</a></p>
+            <p class="source-pub">Hall, Carter and O'Neill, Scientific Reports</p>
+            <p class="source-note">Golden retrievers had 2.67 times the odds of heat-related illness of Labradors (905,543 dogs); the authors suggest the thicker coat may be the tipping factor.</p>
+          </li>
+          <li id="source-hall-2020-animals" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2020</span></p>
+            <p class="source-title"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7459873/">Dogs Don't Die Just in Hot Cars: Exertional Heat-Related Illness (Heatstroke) Is a Greater Threat to UK Dogs</a></p>
+            <p class="source-pub">Hall, Carter and O'Neill, Animals</p>
+            <p class="source-note">Exercise was the most common trigger of heat-related illness in UK dogs (74.2% of events), and 67.5% of exercise cases with a known activity followed a walk. Goldens were not a significant breed in its models, so we cite it for walks, not for goldens.</p>
+          </li>
+          <li id="source-vetcompass-early-signs-2021" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2021</span></p>
+            <p class="source-title"><a href="https://www.rvc.ac.uk/vetcompass/news/recognising-early-signs-of-heatstroke-in-dogs-can-save-lives">Recognising early signs of heatstroke in dogs can save lives</a></p>
+            <p class="source-pub">Royal Veterinary College VetCompass, reporting Hall et al., Scientific Reports</p>
+            <p class="source-note">The early signs are breathing changes and lethargy, such as not wanting to exercise; 98% of dogs seen at that stage survived.</p>
+          </li>
+          <li id="source-chestovich-2022" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2022</span></p>
+            <p class="source-title"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10211493/">Temperature Profiles of Sunlight-Exposed Surfaces in a Desert Climate: Determining the Risk for Pavement Burns</a></p>
+            <p class="source-pub">Chestovich, Saroukhanoff, Moujaes, Flores, Carroll and Saquib, Journal of Burn Care &amp; Research</p>
+            <p class="source-note">Sunlit surfaces ran 36 to 56°F hotter than the same material in shade, measured at the same moment on a 120°F day, and sun plus heat, not air temperature alone, is what makes a surface dangerous. Measured in Las Vegas; the absolute numbers do not transfer to DC.</p>
+          </li>
+          <li id="source-wsu-hand-test-2017" class="source">
+            <p class="source-meta"><span class="grade grade-folklore">Folklore</span> <span class="source-year">2017</span></p>
+            <p class="source-title"><a href="https://archive.news.wsu.edu/press-release/2017/07/06/protect-pets-feet-from-heat/">Protect your pet's feet from heat, burns</a></p>
+            <p class="source-pub">Washington State University College of Veterinary Medicine</p>
+            <p class="source-note">The back-of-hand test at seven seconds. No study behind the count.</p>
+          </li>
+          <li id="source-akc-hand-test" class="source">
+            <p class="source-meta"><span class="grade grade-folklore">Folklore</span> <span class="source-year">2021</span></p>
+            <p class="source-title"><a href="https://www.akc.org/expert-advice/health/dog-paws-hot-pavement/">How to Protect Dog Paws From Hot Pavement</a></p>
+            <p class="source-pub">American Kennel Club</p>
+            <p class="source-note">The same test at ten seconds. No study behind the count.</p>
+          </li>
+          <li id="source-dogs-trust-hand-test" class="source">
+            <p class="source-meta"><span class="grade grade-folklore">Folklore</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://www.dogstrust.org.uk/dog-advice/life-with-your-dog/seasonal/hot-weather">Caring for your dog during hot weather</a></p>
+            <p class="source-pub">Dogs Trust</p>
+            <p class="source-note">The same test at five seconds. No study behind the count.</p>
+          </li>
+          <li id="source-berens-1970" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">1970</span></p>
+            <p class="source-title"><a href="https://pubmed.ncbi.nlm.nih.gov/5536473/">Thermal contact burns from streets and highways</a></p>
+            <p class="source-pub">Berens, JAMA</p>
+            <p class="source-note">Where the popular pavement tables trace back to: a report on three people burned on Phoenix asphalt, about people rather than paws. Abstract and metadata verified; the full text is paywalled, so we do not claim what its inner pages hold.</p>
+          </li>
+          <li id="source-hall-2022-vet-sci" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2022</span></p>
+            <p class="source-title"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9144152/">Risk Factors for Severe and Fatal Heat-Related Illness in UK Dogs: A VetCompass Study</a></p>
+            <p class="source-pub">Hall, Carter, Chico, Bradbury, Gentle, Barfield and O'Neill, Veterinary Sciences</p>
+            <p class="source-note">On the days UK dogs were seen for heat-related illness, the day's highest wet bulb globe temperature ranged from 3.3 to 23.1°C, a median of 16.9°C: dogs overheat on mild days. That is a heat-stress index read at shaded weather stations, which the authors say likely understate what a dog meets, not an air temperature. Read 2026-09-24.</p>
+          </li>
+          <li id="source-carter-hall-2018" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2018</span></p>
+            <p class="source-title"><a href="https://pubmed.ncbi.nlm.nih.gov/29496012/">Investigating factors affecting the body temperature of dogs competing in cross country (canicross) races in the UK</a></p>
+            <p class="source-pub">Carter and Hall, Journal of Thermal Biology</p>
+            <p class="source-note">108 dogs over 10 winter race days: at every race at least one dog finished with an ear temperature above 40.6°C (105°F). Hard running in harness, not a walk. Read 2026-09-24.</p>
+          </li>
+          <li id="source-hall-2024-thesis" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2024</span></p>
+            <p class="source-title"><a href="https://irep.ntu.ac.uk/id/eprint/52075/">Hot Dogs: Advancing the Epidemiology and Clinical Definition of Heat-Related Illness in UK Dogs</a></p>
+            <p class="source-pub">Emily J. Hall, PhD thesis, Nottingham Trent University</p>
+            <p class="source-note">Says advice on safe temperatures for exercising with dogs is lacking (p. 100), and puts the air at those canicross races at 8.8°C (48°F) on average. Coat colour and length made no significant difference once each dog was counted once. Read 2026-09-24.</p>
+          </li>
+          <li id="source-salonen-2020" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2020</span></p>
+            <p class="source-title"><a href="https://www.nature.com/articles/s41598-020-59837-z">Prevalence, comorbidity, and breed differences in canine anxiety in 13,700 Finnish pet dogs</a></p>
+            <p class="source-pub">Salonen et al., Scientific Reports</p>
+            <p class="source-note">Noise sensitivity affects 32% of dogs and grows with age, fear of thunder especially.</p>
+          </li>
+          <li id="source-nws-api" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://www.weather.gov/documentation/services-web-api">API Web Service</a></p>
+            <p class="source-pub">National Weather Service</p>
+            <p class="source-note">Where the thunderstorm forecast comes from: the gridded forecast each Weather Service office keeps for its area, Baltimore/Washington for DC. Free and public domain. Read 2026-09-24.</p>
+          </li>
+          <li id="source-nws-pfm-spec" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2020</span></p>
+            <p class="source-title"><a href="https://www.weather.gov/media/notification/dir/PFM_Specifications.pdf">Point Forecast Matrices Product Specifications</a></p>
+            <p class="source-pub">National Weather Service</p>
+            <p class="source-note">What the Weather Service's forecast words mean: slight chance 20% or less, chance 30 to 50%, likely 60 to 70%, and 80 to 100% with no qualifier (Table 4). Read 2026-09-24.</p>
+          </li>
+          <li id="source-iem-archive" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://mesonet.agron.iastate.edu/">Iowa Environmental Mesonet</a></p>
+            <p class="source-pub">Iowa State University, Department of Agronomy</p>
+            <p class="source-note">Keeps the history DC Goldens' storm comparison used: the Weather Service's archived point forecasts for Reagan National, from its Baltimore/Washington office, and the airport's hourly reports of thunder. The archive is theirs; the comparison is DC Goldens'. Read 2026-09-24.</p>
+          </li>
+          <li id="source-open-meteo-forecast-docs" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://open-meteo.com/en/docs">Weather Forecast API documentation</a></p>
+            <p class="source-pub">Open-Meteo</p>
+            <p class="source-note">The forecast's weather codes: 95 and 97 are thunderstorms, and 96 and 99 (with hail) come only from models with a hail forecast, such as DWD ICON or UKMO. Read 2026-09-24.</p>
+          </li>
+          <li id="source-epa-aqi" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://www.airnow.gov/aqi/aqi-basics/">AQI Basics</a></p>
+            <p class="source-pub">US EPA AirNow</p>
+            <p class="source-note">The six AQI categories, from Good to Hazardous. A scale for people.</p>
+          </li>
+          <li id="source-csu-pet-aqi-2026" class="source">
+            <p class="source-meta"><span class="grade grade-moderate">Moderate</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://cvmbs.source.colostate.edu/do-you-know-how-poor-air-quality-affects-pets-learn-through-this-adapted-index/">Do you know how poor air quality affects pets? Learn through this adapted index</a></p>
+            <p class="source-pub">Colorado State University College of Veterinary Medicine and Biomedical Sciences</p>
+            <p class="source-note">Dr. Colleen Duncan and colleagues adapted the EPA scale for pets, with advice for each band. A news story, not a peer-reviewed paper; paraphrased here, and their chart is theirs.</p>
+          </li>
+          <li id="source-merck-salt-toxicosis" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2022</span></p>
+            <p class="source-title"><a href="https://www.merckvetmanual.com/toxicology/salt-toxicosis/salt-toxicosis-in-animals">Salt Toxicosis in Animals</a></p>
+            <p class="source-pub">Merck Veterinary Manual</p>
+            <p class="source-note">In dogs the lethal dose of salt is about 4 g/kg, and signs can appear after 2 to 3 g/kg.</p>
+          </li>
+          <li id="source-aspca-ice-melt" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2000</span></p>
+            <p class="source-title"><a href="https://www.aspcapro.org/sites/default/files/u-toxbrief_0200.pdf">Ice melts are health hazards (Toxicology Brief)</a></p>
+            <p class="source-pub">Hautekeete, ASPCA Animal Poison Control Center, in Veterinary Medicine</p>
+            <p class="source-note">A dog that walked through ice melt should be bathed and watched for skin irritation; 4 g/kg of sodium chloride can be lethal.</p>
+          </li>
+          <li id="source-dc-code-8-1801" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://code.dccouncil.gov/us/dc/council/code/sections/8-1801">D.C. Code § 8-1801, Definitions</a></p>
+            <p class="source-pub">Council of the District of Columbia</p>
+            <p class="source-note">Section (13): extreme weather means below 32°F or above 90°F. Air temperature; no wind chill.</p>
+          </li>
+          <li id="source-dc-code-8-1808" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://code.dccouncil.gov/us/dc/council/code/sections/8-1808">D.C. Code § 8-1808, Prohibited conduct</a></p>
+            <p class="source-pub">Council of the District of Columbia</p>
+            <p class="source-note">Section (c)(1): no leaving an animal outdoors without a person or adequate shelter for more than 15 minutes in extreme weather, unless its age, condition and type let it withstand it. It does not limit walks.</p>
+          </li>
+          <li id="source-purdue-va-16-w" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2016</span></p>
+            <p class="source-title"><a href="https://www.extension.purdue.edu/extmedia/va/va-16-w.pdf">Temperature Requirements for Dogs (VA-16-W)</a></p>
+            <p class="source-pub">Jordan, Bauer, Stella and Croney, Purdue University Center for Animal Welfare Science</p>
+            <p class="source-note">Cold tolerance varies widely by coat: the lower critical temperature is below 0°C (32°F) for a husky and 15°C (59°F) for some short-haired dogs. It also gives, from the National Research Council, the range where a dog keeps its temperature without spending effort on it: 20 to 30°C (68 to 86°F). Housing numbers for dogs at rest, not on a walk.</p>
+          </li>
+          <li id="source-nws-wind-chill" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://www.weather.gov/safety/cold-wind-chill-chart">Wind Chill Chart</a></p>
+            <p class="source-pub">National Weather Service</p>
+            <p class="source-note">The wind chill index works at the height of an adult's face and is based on a human face model.</p>
+          </li>
+          <li id="source-dc-winter-plan-fy26" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2025</span></p>
+            <p class="source-title"><a href="https://ich.dc.gov/page/winter-plan">District of Columbia Winter Plan, FY26</a></p>
+            <p class="source-pub">DC Interagency Council on Homelessness, with HSEMA</p>
+            <p class="source-note">DC's Extreme Cold Alert (once the Cold Weather Emergency) is called when the NWS forecasts a wind chill of 15°F or below, or 16 to 20°F with at least a 50% chance of rain, snow, freezing rain or sleet (§2.2). Its Cold Alert starts at a wind chill of 32°F, or 40°F with at least a 50% chance of precipitation (§2.1). Alerts for people; only DC can call one. Read 2026-09-24.</p>
+          </li>
+          <li id="source-vibe-temp" class="source">
+            <p class="source-meta"><span class="grade grade-ours">Ours</span> <span class="source-year">2025</span></p>
+            <p class="source-title"><a href="https://github.com/bryancasler/vibe-temp">Vibe Temp</a></p>
+            <p class="source-pub">Bryan Casler</p>
+            <p class="source-note">Bryan's own model of how warm it feels to a person in the sun and in the shade, tuned by hand against how DC feels, with public code, and the touch-grass rule that picks the best time for a person to be outside. Not a published formula and not peer reviewed. It reads cloud from the direct-beam share of sunlight, a change first made for DC Goldens' Dog Weather.</p>
+          </li>
+          <li id="source-widorn-2024" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2024</span></p>
+            <p class="source-title"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11656670/">A prospective study evaluating the correlation between local weather conditions, pollen counts and pruritus of dogs with atopic dermatitis</a></p>
+            <p class="source-pub">Widorn, Zabolotski and Mueller, Veterinary Dermatology</p>
+            <p class="source-note">Found no correlation between pollen counts and itch in allergic dogs, and questions whether rooftop pollen traps reflect a dog's exposure at ground level.</p>
+          </li>
+          <li id="source-open-meteo-air-quality-docs" class="source">
+            <p class="source-meta"><span class="grade grade-strong">Strong</span> <span class="source-year">2026</span></p>
+            <p class="source-title"><a href="https://open-meteo.com/en/docs/air-quality-api">Air Quality API documentation</a></p>
+            <p class="source-pub">Open-Meteo</p>
+            <p class="source-note">Pollen is only available for Europe; for DC every pollen value comes back empty (checked live).</p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ───────────── Credits ───────────── -->
+      <section id="credits" aria-labelledby="credits-title">
+        <h2 id="credits-title">Credits and data</h2>
+        <p>
+          The forecast is Open-Meteo's. Air quality comes from the Copernicus Atmosphere Monitoring Service
+          through Open-Meteo. Thunderstorms come from the National Weather Service's own forecast for your
+          area; the Weather Service's data is public domain.
+        </p>
+        <ul class="credits">
+          <li class="panel" data-credit="open-meteo">
+            <h3>The forecast</h3>
+            <p>
+              <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a>, licensed
+              <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>
+              (<a href="https://open-meteo.com/en/licence">Open-Meteo's licence page</a>). Vibe Temp changes it:
+              it converts the units, works out its own In the sun and In the shade estimate from it, and applies
+              its own rules for the walk ratings, the dog cards and the two best times. The dog guidance in Dogs
+              mode is Vibe Temp's own reading of Open-Meteo's forecast, not Open-Meteo's.
+            </p>
+          </li>
+          <li class="panel" data-credit="cams">
+            <h3>Air quality</h3>
+            <p>
+              Contains modified <a href="https://atmosphere.copernicus.eu/">Copernicus Atmosphere Monitoring Service</a> information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the Copernicus information or data it contains.
+              It reaches Vibe Temp through Open-Meteo, which turns it into the US AQI, and Dogs mode sorts that
+              into the EPA's categories and the walk ratings. Used under the
+              <a href="https://apps.ecmwf.int/datasets/licences/copernicus/">Licence to Use Copernicus Products</a>.
+            </p>
+          </li>
+          <li class="panel" data-credit="nws">
+            <h3>Thunderstorms</h3>
+            <p>
+              <a href="https://www.weather.gov/">Thunderstorm forecast by the National Weather Service</a>, from
+              the gridded forecast kept by the Weather Service office for each place. Its data is public domain,
+              so nothing requires this credit; it is given anyway.
+            </p>
+          </li>
+          <li class="panel" data-credit="air-scale">
+            <h3>The air quality scale and the advice for pets</h3>
+            <p>
+              The categories are the EPA's <a href="https://www.airnow.gov/aqi/aqi-basics/">AirNow AQI Basics</a>,
+              a scale made for people. The advice for dogs from Unhealthy for Sensitive Groups up is
+              <a href="https://cvmbs.source.colostate.edu/do-you-know-how-poor-air-quality-affects-pets-learn-through-this-adapted-index/">Colorado State University's 2026 adapted index</a>,
+              paraphrased; their chart is theirs.
+            </p>
+          </li>
+          <li class="panel" data-credit="dc-goldens">
+            <h3>Dogs mode</h3>
+            <p>
+              Ported from <a href="https://www.dcgoldens.org/weather">DC Goldens' Dog Weather</a>, which Bryan
+              also runs: the paw-to-grass band, the walk ratings, the six cards, their sources and the grading
+              are theirs. Their own <a href="https://www.dcgoldens.org/weather/methodology">methodology page</a>
+              covers the DC version.
+            </p>
+          </li>
+          <li class="panel" data-credit="vibe-temp">
+            <h3>In the sun, In the shade, and touch grass</h3>
+            <p>
+              Bryan Casler's own model and rule, from <a href="https://github.com/bryancasler/vibe-temp">Vibe Temp</a>,
+              whose code is public. How they work is under <a href="#sun-and-shade">Sun and shade</a> and
+              <a href="#touch-grass">Touch grass</a>.
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <p class="back back-end"><a href="./"><span aria-hidden="true">&larr;</span> Back to Vibe Temp</a></p>
+    </main>
+  </body>
+</html>
