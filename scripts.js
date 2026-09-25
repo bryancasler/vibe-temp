@@ -458,23 +458,28 @@
     let iceIconsEnabled = storageCacheGet(ICE_ICONS_KEY, "true") !== "false";
     let windIconsEnabled = storageCacheGet(WIND_ICONS_KEY, "true") !== "false";
 
-    // Calibration defaults
-    const defaultCalibration = {
+    // Calibration defaults. Frozen: the sliders edit a copy, so Reset always
+    // has Bryan's numbers to go back to.
+    const defaultCalibration = Object.freeze({
       humidityCoeff: 1 / 15, // 0.0667
       humidityBaseline: 40,
       windCoeff: 0.7,
       solarCoeff: 8,
       reflectCoeff: 4,
       cloudExp: 0.7,
-    };
+    });
 
-    // Load calibration from localStorage or use defaults
-    let calibration = defaultCalibration;
+    // Load calibration from localStorage or use defaults. Only finite
+    // numbers for known keys are taken from storage.
+    let calibration = { ...defaultCalibration };
     try {
       const saved = storageCacheGet(CALIBRATION_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        calibration = { ...defaultCalibration, ...parsed };
+        for (const key of Object.keys(defaultCalibration)) {
+          const v = parsed && parsed[key];
+          if (typeof v === "number" && Number.isFinite(v)) calibration[key] = v;
+        }
       }
     } catch (e) {
       console.warn("Failed to load calibration:", e);
@@ -5878,23 +5883,16 @@
       }
       // Debounce calibration updates
       let calibrationUpdateTimeout = null;
-      function updateCalibration() {
-        if (calibHumidityCoeff)
-          calibration.humidityCoeff = parseFloat(calibHumidityCoeff.value);
-        if (calibHumidityBaseline)
-          calibration.humidityBaseline = parseFloat(
-            calibHumidityBaseline.value
-          );
-        if (calibWindCoeff)
-          calibration.windCoeff = parseFloat(calibWindCoeff.value);
-        if (calibSolarCoeff)
-          calibration.solarCoeff = parseFloat(calibSolarCoeff.value);
-        if (calibReflectCoeff)
-          calibration.reflectCoeff = parseFloat(calibReflectCoeff.value);
-        if (calibCloudExp)
-          calibration.cloudExp = parseFloat(calibCloudExp.value);
+      // A slider writes only its own coefficient: reading all six would snap
+      // the humidity default 1/15 to the slider's 0.067 step.
+      function updateCalibration(key, value, { save = true } = {}) {
+        if (key && Number.isFinite(value)) calibration[key] = value;
 
-        storageCacheSet(CALIBRATION_KEY, JSON.stringify(calibration));
+        if (save) {
+          try {
+            storageCacheSet(CALIBRATION_KEY, JSON.stringify(calibration));
+          } catch (e) {}
+        }
 
         // Debounce recalculation
         if (calibrationUpdateTimeout) clearTimeout(calibrationUpdateTimeout);
@@ -5929,7 +5927,7 @@
             calibHumidityCoeffVal.textContent = parseFloat(
               calibHumidityCoeff.value
             ).toFixed(4);
-          updateCalibration();
+          updateCalibration("humidityCoeff", parseFloat(calibHumidityCoeff.value));
         });
       calibHumidityBaseline &&
         calibHumidityBaseline.addEventListener("input", () => {
@@ -5937,7 +5935,7 @@
             calibHumidityBaselineVal.textContent = parseFloat(
               calibHumidityBaseline.value
             );
-          updateCalibration();
+          updateCalibration("humidityBaseline", parseFloat(calibHumidityBaseline.value));
         });
       calibWindCoeff &&
         calibWindCoeff.addEventListener("input", () => {
@@ -5945,13 +5943,13 @@
             calibWindCoeffVal.textContent = parseFloat(
               calibWindCoeff.value
             ).toFixed(1);
-          updateCalibration();
+          updateCalibration("windCoeff", parseFloat(calibWindCoeff.value));
         });
       calibSolarCoeff &&
         calibSolarCoeff.addEventListener("input", () => {
           if (calibSolarCoeffVal)
             calibSolarCoeffVal.textContent = parseFloat(calibSolarCoeff.value);
-          updateCalibration();
+          updateCalibration("solarCoeff", parseFloat(calibSolarCoeff.value));
         });
       calibReflectCoeff &&
         calibReflectCoeff.addEventListener("input", () => {
@@ -5959,7 +5957,7 @@
             calibReflectCoeffVal.textContent = parseFloat(
               calibReflectCoeff.value
             );
-          updateCalibration();
+          updateCalibration("reflectCoeff", parseFloat(calibReflectCoeff.value));
         });
       calibCloudExp &&
         calibCloudExp.addEventListener("input", () => {
@@ -5967,7 +5965,7 @@
             calibCloudExpVal.textContent = parseFloat(
               calibCloudExp.value
             ).toFixed(1);
-          updateCalibration();
+          updateCalibration("cloudExp", parseFloat(calibCloudExp.value));
         });
 
       resetCalibrationBtn &&
@@ -6005,7 +6003,11 @@
             if (calibCloudExpVal)
               calibCloudExpVal.textContent = calibration.cloudExp.toFixed(1);
           }
-          updateCalibration();
+          // Back to the defaults, and forget the saved ones.
+          try {
+            storageCacheRemove(CALIBRATION_KEY);
+          } catch (e) {}
+          updateCalibration(null, NaN, { save: false });
         });
 
       // ZIP input handler - submit on Enter or blur
