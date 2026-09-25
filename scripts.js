@@ -6150,10 +6150,11 @@
           if (currentValue.length === 5 && /^\d{5}$/.test(currentValue)) {
             // Clear any existing timeout
             if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
-            // Submit after user stops typing (500ms debounce)
+            // The field holds 5 characters, so 5 digits is a whole ZIP:
+            // submit almost at once (the short wait absorbs a paste).
             zipSubmitTimeout = setTimeout(() => {
               handleZipSubmit();
-            }, 500);
+            }, 50);
           } else {
             // Clear timeout if not 5 digits
             if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
