@@ -1771,8 +1771,10 @@
       els.solarVal && (els.solarVal.textContent = solar.toFixed(1));
     }
 
-    function autoSolarFromCloudCover(cloudCoverPct) {
-      const solar = clamp(1 - cloudCoverPct / 100, 0.2, 1);
+    // Without a UV reading: a rough exposure from cloud cover alone, and
+    // none at night.
+    function autoSolarFromCloudCover(cloudCoverPct, isDay) {
+      const solar = isDay ? clamp(1 - cloudCoverPct / 100, 0.2, 1) : 0;
       setAutoSolar(solar);
       return solar;
     }
@@ -1802,7 +1804,13 @@
           })
         );
       } else if (typeof cur.cloud_cover === "number") {
-        autoSolarFromCloudCover(cur.cloud_cover);
+        const isDay =
+          cur.is_day === 1 || cur.is_day === true
+            ? true
+            : cur.is_day === 0 || cur.is_day === false
+            ? false
+            : isDaylightNow();
+        autoSolarFromCloudCover(cur.cloud_cover, isDay);
       }
     }
 
