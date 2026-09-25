@@ -94,8 +94,14 @@
       }
     };
     (function migrateStorage() {
+      // The old theme key is not carried over: it was saved on every load,
+      // so it can't tell a choice from the browser's preference at the
+      // first visit. Pages follow the browser again until the toggle is used.
+      // The old caches are dropped.
+      for (const old of ["vibeTheme", "vibeZipCache.v1", "vibeForecastCache.v1"]) {
+        storeRemove(old);
+      }
       const legacy = {
-        vibeTheme: "theme",
         vibeTemp_advConfigExpanded: "advExpanded",
         vibeUnit: "unit",
         vibeZip: "zip",
