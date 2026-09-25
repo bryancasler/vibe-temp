@@ -4739,6 +4739,7 @@
 
     // Prime weather
     let primeSeq = 0; // the latest place asked for wins
+    let drawnSeq = 0; // the request whose forecast is on screen
 
     // Draws a forecast for a place: cards, chart, summaries, status.
     async function applyForecast(
@@ -4746,6 +4747,7 @@
       { latitude, longitude, sourceLabel, placeName, seq }
     ) {
       if (seq !== primeSeq) return; // a newer place was chosen meanwhile
+      drawnSeq = seq;
       placeZone = PlaceTime.isValidZone(data.timezone)
         ? data.timezone
         : browserZone;
@@ -4814,8 +4816,6 @@
         offerToSaveFavorite();
       }
 
-      // Check for notification conditions
-      checkNotificationConditions();
     }
 
     // Prime weather: draw from a copy we already hold (instant on reload),
@@ -4851,13 +4851,17 @@
       } catch (e) {
         log(e);
         if (drawn || seq !== primeSeq) return; // keep showing what we have
+        if (lastCoords && statusEl) {
+          // The place on screen stays; say that the new one didn't load.
+          statusEl.textContent = sourceLabel
+            ? `Couldn't get weather for ${sourceLabel}.`
+            : "Couldn't get weather for that place.";
+        }
 
         // Delay showing error to allow time for localStorage/cookies to be read
         setTimeout(() => {
-          // Check if error was already resolved (e.g., by saved ZIP or another location method)
-          if (lastCoords) {
-            return; // Location was successfully determined, don't show error
-          }
+          // A newer place was chosen since, or this place loaded after all
+          if (seq !== primeSeq || drawnSeq === seq) return;
 
           let errorTitle = "Weather Fetch Failed";
           let errorDetails = "Could not retrieve weather data.";
