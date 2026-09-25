@@ -739,8 +739,8 @@
       };
     }
 
-    // Generate AI summary using free public API
-    async function generateWeatherSummary(weatherData, touchGrassTime = null) {
+    // Summary of how a stretch of time will feel (based on vibe temps)
+    function generateWeatherSummary(weatherData, touchGrassTime = null) {
       if (
         !weatherData ||
         !weatherData.dataPoints ||
@@ -748,181 +748,6 @@
       ) {
         return "No weather data available for this time range.";
       }
-
-      const { stats, duration, startTime, endTime, dataPoints } = weatherData;
-      const start = new Date(startTime);
-      const end = new Date(endTime);
-
-      // Get vibe descriptions for key points
-      const vibeDescriptions = [];
-      const samplePoints = [
-        dataPoints[0], // First point
-        dataPoints[Math.floor(dataPoints.length / 2)], // Middle point
-        dataPoints[dataPoints.length - 1], // Last point
-      ].filter(Boolean);
-
-      samplePoints.forEach((point) => {
-        if (point.description) {
-          vibeDescriptions.push(point.description);
-        }
-      });
-
-      // Calculate representative temperature for the prompt
-      const repTemp = stats.avgRepresentative || stats.avgShade;
-      const maxRep = Math.max(stats.maxSun, stats.maxShade);
-      const minRep = stats.minShade;
-
-      // Format the prompt focusing on vibe temperatures
-      const prompt = `Summarize how the weather will feel for a ${duration.toFixed(
-        1
-      )}-hour period from ${start.toLocaleString()} to ${end.toLocaleString()}.
-
-Vibe temperature data (how it actually feels):
-- Representative vibe: ${repTemp.toFixed(
-        1
-      )}${unitSuffix()} (typical feel during this period)
-- Shade vibe: ${stats.avgShade.toFixed(
-        1
-      )}${unitSuffix()} (range: ${stats.minShade.toFixed(
-        1
-      )}-${stats.maxShade.toFixed(1)}${unitSuffix()})
-- Sun vibe: ${stats.avgSun.toFixed(
-        1
-      )}${unitSuffix()} (range: ${stats.minSun.toFixed(
-        1
-      )}-${stats.maxSun.toFixed(1)}${unitSuffix()})
-- Overall range: ${minRep.toFixed(1)}${unitSuffix()} to ${maxRep.toFixed(
-        1
-      )}${unitSuffix()}
-- Daytime hours: ${stats.dayHours}, Nighttime hours: ${stats.nightHours}
-${
-  vibeDescriptions.length > 0
-    ? `- Sample descriptions: ${vibeDescriptions.slice(0, 3).join(", ")}`
-    : ""
-}${
-        touchGrassTime
-          ? `\n- TOUCH GRASS TIME: The ideal "Touch Grass" time (perfect temperature for outdoor activities) is at ${fmtHM(
-              new Date(touchGrassTime.time)
-            )} when it will feel like ${formatTemp(
-              touchGrassTime.temp
-            )}${unitSuffix()}. This is the best time to be outside during this period.`
-          : ""
-      }
-
-Provide a brief, conversational summary (3-4 sentences) describing:
-1. How it will FEEL during this time period based on the vibe temperatures${
-        touchGrassTime
-          ? `. Include the Touch Grass time information from the data above.`
-          : ""
-      }
-2. Clothing recommendations (what to wear for comfort)
-3. Activity suggestions (what activities are suitable - e.g., hiking, staying indoors, outdoor sports)${
-        touchGrassTime
-          ? `. Include the Touch Grass time information from the data above.`
-          : ""
-      }
-
-Use the representative vibe as the primary temperature reference. Focus on comfort, what to wear, and suitable activities. Ignore actual air temperature - only use the vibe temperatures which represent how it actually feels.${
-        touchGrassTime
-          ? ` 
-
-CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information. You must mention: "The ideal Touch Grass time is at ${fmtHM(
-              new Date(touchGrassTime.time)
-            )} when it will feel like ${formatTemp(
-              touchGrassTime.temp
-            )}${unitSuffix()}" or similar wording. This is a required element of the summary.`
-          : ""
-      }`;
-
-      try {
-        // Use Hugging Face Inference API with a free model
-        // Try using a smaller, faster model that's more likely to be available
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-        const response = await fetch(
-          "https://api-inference.huggingface.co/models/google/flan-t5-base",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              inputs: prompt,
-              parameters: {
-                max_length: 200,
-                temperature: 0.7,
-              },
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          // If model is loading, wait a bit and try fallback
-          if (response.status === 503) {
-            throw new Error("Model is loading, using fallback");
-          }
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        // Handle different response formats
-        let summary = "";
-        if (Array.isArray(result) && result[0]?.generated_text) {
-          summary = result[0].generated_text.trim();
-        } else if (result.generated_text) {
-          summary = result.generated_text.trim();
-        } else if (typeof result === "string") {
-          summary = result.trim();
-        } else if (Array.isArray(result) && result[0]?.summary_text) {
-          summary = result[0].summary_text.trim();
-        } else {
-          // Fallback: generate a simple summary
-          return generateFallbackSummary(weatherData, touchGrassTime);
-        }
-
-        // Clean up the summary (remove prompt if included)
-        summary = summary.replace(prompt, "").trim();
-        // Remove any leading/trailing quotes or formatting
-        summary = summary.replace(/^["']|["']$/g, "").trim();
-        if (summary.length === 0 || summary.length < 20) {
-          return generateFallbackSummary(weatherData, touchGrassTime);
-        }
-
-        // If touch grass time exists, ensure it's mentioned in the summary
-        if (touchGrassTime) {
-          const touchGrassTimeStr = fmtHM(new Date(touchGrassTime.time));
-          const touchGrassTempStr = `${formatTemp(
-            touchGrassTime.temp
-          )}${unitSuffix()}`;
-          // Check if the summary mentions the touch grass time (check for time or temperature)
-          const mentionsTime =
-            summary.toLowerCase().includes(touchGrassTimeStr.toLowerCase()) ||
-            summary.includes(touchGrassTimeStr.replace(/:/g, "")) ||
-            summary.toLowerCase().includes("touch grass");
-          const mentionsTemp = summary.includes(touchGrassTempStr);
-
-          // If not mentioned, append it to the summary
-          if (!mentionsTime || !mentionsTemp) {
-            const touchGrassInfo = ` The ideal "Touch Grass" time (perfect temperature for outdoor activities) is at ${touchGrassTimeStr} when it will feel like ${touchGrassTempStr}.`;
-            summary = summary + touchGrassInfo;
-          }
-        }
-
-        return summary;
-      } catch (error) {
-        console.warn("AI summary generation failed:", error);
-        // Fallback to a simple generated summary
-        return generateFallbackSummary(weatherData, touchGrassTime);
-      }
-    }
-
-    // Generate fallback summary without AI (based on vibe temps)
-    function generateFallbackSummary(weatherData, touchGrassTime = null) {
       const { stats, duration, startTime, endTime, dataPoints } = weatherData;
       const start = new Date(startTime);
       const end = new Date(endTime);
@@ -1267,7 +1092,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           }
         }
 
-        const summary = await generateWeatherSummary(
+        const summary = generateWeatherSummary(
           weatherData,
           touchGrassTime
         );
@@ -1445,7 +1270,7 @@ CRITICAL REQUIREMENT: The summary MUST include the Touch Grass time information.
           }
         }
 
-        const summary = await generateWeatherSummary(
+        const summary = generateWeatherSummary(
           weatherData,
           touchGrassTime
         );
