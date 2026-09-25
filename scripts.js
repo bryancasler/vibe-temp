@@ -1979,13 +1979,15 @@
       if (!entry) return null;
       let age = Date.now() - entry.fetchedAt;
       if (age < 0 || age >= FORECAST_MAX_AGE_MS) return null;
-      // A copy from before the place's midnight starts a day early: it can
-      // stand in while a fresh one loads, but it never counts as fresh.
+      // A copy fetched before the place's midnight is yesterday's forecast:
+      // it can stand in while a fresh one loads, but it never counts as fresh.
       const zone = PlaceTime.isValidZone(entry.data.timezone)
         ? entry.data.timezone
         : browserZone;
-      const firstDay = entry.data.daily?.time?.[0];
-      if (firstDay * 1000 < PlaceTime.startOfDay(new Date(), zone)) {
+      if (
+        PlaceTime.dayKey(entry.fetchedAt, zone) !==
+        PlaceTime.dayKey(Date.now(), zone)
+      ) {
         age = Math.max(age, FORECAST_FRESH_MS);
       }
       return { data: entry.data, age };
@@ -2009,7 +2011,7 @@
         current:
           "temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day",
         hourly:
-          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,precipitation,precipitation_probability,weathercode",
+          "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,precipitation,precipitation_probability,weathercode,snowfall",
         daily: "sunrise,sunset",
         temperature_unit: "fahrenheit",
         wind_speed_unit: "mph",
@@ -2018,6 +2020,8 @@
         // offset for the whole range, and new Date() would read them in the
         // viewer's zone.
         timeformat: "unixtime",
+        // Two days back: Dogs mode's salt note looks 48 hours back.
+        past_days: 2,
         forecast_days: 7,
       });
       let r;
