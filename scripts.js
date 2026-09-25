@@ -1682,7 +1682,8 @@
       const Traw = parseFloat(els.temp?.value ?? "NaN");
       const RH = parseFloat(els.humidity?.value ?? "NaN");
       const Wind = parseFloat(els.wind?.value ?? "NaN");
-      const Solar = parseFloat(els.solar?.value ?? "NaN");
+      const Solar =
+        solarExact !== null ? solarExact : parseFloat(els.solar?.value ?? "NaN");
       if ([Traw, RH, Wind].some((v) => Number.isNaN(v))) {
         statusEl &&
           (statusEl.textContent =
@@ -1760,11 +1761,49 @@
       statusEl && (statusEl.textContent = "Computed from current inputs.");
     }
 
-    function autoSolarFromCloudCover(cloudCoverPct) {
-      const solar = clamp(1 - cloudCoverPct / 100, 0.2, 1);
+    // The card's solar exposure, exact. The Solar slider only shows it
+    // (its 0.1 step would round, say, 0.04 to 0 and drop the 1.2°F surface
+    // term); once someone moves the slider by hand, its value is used.
+    let solarExact = null;
+    function setAutoSolar(solar) {
+      solarExact = solar;
       els.solar && (els.solar.value = solar.toFixed(1));
       els.solarVal && (els.solarVal.textContent = solar.toFixed(1));
+    }
+
+    function autoSolarFromCloudCover(cloudCoverPct) {
+      const solar = clamp(1 - cloudCoverPct / 100, 0.2, 1);
+      setAutoSolar(solar);
       return solar;
+    }
+
+    // Current conditions from the forecast into the card's inputs.
+    function applyCurrentConditions(cur) {
+      if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
+
+      const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
+      if (tempF != null)
+        els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
+      els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
+      els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
+
+      if (
+        typeof cur.uv_index === "number" &&
+        (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
+      ) {
+        setAutoSolar(
+          solarFromUVandCloud({
+            uv_index: cur.uv_index,
+            uv_index_clear_sky: cur.uv_index_clear_sky,
+            cloud_cover: cur.cloud_cover ?? 0,
+            shortwave_radiation: cur.shortwave_radiation,
+            direct_radiation: cur.direct_radiation,
+            is_day: cur.is_day,
+          })
+        );
+      } else if (typeof cur.cloud_cover === "number") {
+        autoSolarFromCloudCover(cur.cloud_cover);
+      }
     }
 
     // Forecast: one Open-Meteo request per place for current conditions,
@@ -4743,32 +4782,7 @@
         const cur = data.current;
         const hourlyMaybe = wantHourly ? data.hourly : null;
 
-        if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
-
-        const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
-        if (tempF != null)
-          els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
-        els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
-        els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
-
-        if (
-          typeof cur.uv_index === "number" &&
-          (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
-        ) {
-          const solar = solarFromUVandCloud({
-            uv_index: cur.uv_index,
-            uv_index_clear_sky: cur.uv_index_clear_sky,
-            cloud_cover: cur.cloud_cover ?? 0,
-            shortwave_radiation: cur.shortwave_radiation,
-            direct_radiation: cur.direct_radiation,
-            is_day: cur.is_day,
-          });
-          els.solar.value = solar.toFixed(1);
-          els.solarVal.textContent = solar.toFixed(1);
-        } else if (typeof cur.cloud_cover === "number") {
-          autoSolarFromCloudCover(cur.cloud_cover);
-        }
-
+        applyCurrentConditions(cur);
         compute();
         updateChartTitle();
 
@@ -4858,31 +4872,7 @@
       updateChartTitle();
       updateAdvStats();
 
-      const tempF = cur.temperature_2m ?? cur.apparent_temperature ?? null;
-      if (tempF != null)
-        els.temp.value = (unit === "F" ? tempF : fToC(tempF)).toFixed(1);
-      els.humidity.value = (cur.relative_humidity_2m ?? "").toFixed(0);
-      els.wind.value = (cur.wind_speed_10m ?? "").toFixed(1);
-      if (typeof cur.is_day === "number") currentIsDay = cur.is_day;
-
-      if (
-        typeof cur.uv_index === "number" &&
-        (typeof cur.is_day === "number" || typeof cur.is_day === "boolean")
-      ) {
-        const solar = solarFromUVandCloud({
-          uv_index: cur.uv_index,
-          uv_index_clear_sky: cur.uv_index_clear_sky,
-          cloud_cover: cur.cloud_cover ?? 0,
-          shortwave_radiation: cur.shortwave_radiation,
-          direct_radiation: cur.direct_radiation,
-          is_day: cur.is_day,
-        });
-        els.solar.value = solar.toFixed(1);
-        els.solarVal.textContent = solar.toFixed(1);
-      } else if (typeof cur.cloud_cover === "number") {
-        autoSolarFromCloudCover(cur.cloud_cover);
-      }
-
+      applyCurrentConditions(cur);
       compute();
       updateChartTitle();
 
@@ -5531,6 +5521,7 @@
 
       els.solar &&
         els.solar.addEventListener("input", () => {
+          solarExact = null; // set by hand from now on
           els.solarVal &&
             (els.solarVal.textContent = parseFloat(els.solar.value).toFixed(1));
         });

@@ -144,9 +144,9 @@ export function forecastResponse(url, { nowUnix, zone = "America/New_York", scen
       const v0 = value(n, a);
       const v1 = value(n, a + 3600);
       current[n] =
-        n === "is_day" || n === "weathercode" || n === "weather_code"
+        n === "is_day" || n === "weathercode" || n === "weather_code" || v0 === null || v1 === null
           ? v0
-          : Math.round((v0 + (v1 - v0) * f) * 10) / 10;
+          : Math.round((v0 + (v1 - v0) * f) * 100) / 100;
     });
     body.current = current;
   }
