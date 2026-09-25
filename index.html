@@ -6,6 +6,15 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
+    <!--
+      GitHub Pages sends no security headers, so the policy is set here. A
+      meta policy can't set frame-ancestors. style-src allows inline styles
+      for the style attributes below and the chart's own drawing.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://api.zippopotam.us; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <link rel="stylesheet" href="styles.css" />
     <script src="model.js"></script>
     <script src="time.js"></script>
