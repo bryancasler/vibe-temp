@@ -4239,6 +4239,9 @@
       vibeChart._isDayByHour = isDayByHour;
       vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
       vibeChart._touchGrassTimes = touchGrassTimes; // Store Touch Grass times for plugin
+      // The constructor's first draw ran before these existed (animation is
+      // off, so it draws at once): draw again with them.
+      vibeChart.update("none");
 
       // Hide skeleton immediately after chart is created
       hideChartLoading();
