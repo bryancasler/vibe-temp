@@ -4046,94 +4046,8 @@
                 },
               },
             },
-            tooltip: {
-              enabled: true,
-              callbacks: {
-                // Title: Format as "Fri, 6pm" (weekday abbreviation, comma, lowercase time)
-                title: function (context) {
-                  if (context.length > 0) {
-                    const dataIndex = context[0].dataIndex;
-                    const rawTime = this.chart._rawLabels[dataIndex];
-                    if (rawTime) {
-                      const d = new Date(rawTime);
-                      // Format: "Fri, 6pm"
-                      return (
-                        d.toLocaleDateString(
-                          "en-US",
-                          inZone({ weekday: "short" })
-                        ) +
-                        ", " +
-                        d
-                          .toLocaleTimeString(
-                            "en-US",
-                            inZone({ hour: "numeric", hour12: true })
-                          )
-                          .toLowerCase()
-                          .replace(" ", "")
-                      );
-                    }
-                  }
-                  return "";
-                },
-                // Label: Show weather description for Shade Vibe dataset only
-                label: function (context) {
-                  // Only show tooltip for the "Shade Vibe" dataset
-                  if (context.dataset.label !== "Shade Vibe") {
-                    return null;
-                  }
-
-                  const dataIndex = context.dataIndex;
-                  const chart = this.chart;
-                  const localTimelineState = window.timelineState;
-
-                  // Ensure all required data is available
-                  if (
-                    !chart._rawLabels ||
-                    !localTimelineState ||
-                    !localTimelineState.shadeVals ||
-                    !localTimelineState.sunVals ||
-                    !localTimelineState.solarByHour
-                  ) {
-                    return "Data not available.";
-                  }
-
-                  const shadeF = localTimelineState.shadeVals[dataIndex];
-                  const sunF = localTimelineState.sunVals[dataIndex];
-                  const solar = localTimelineState.solarByHour[dataIndex];
-                  const currentTime = new Date(chart._rawLabels[dataIndex]);
-                  const isDay =
-                    localTimelineState.isDayByHour &&
-                    localTimelineState.isDayByHour[dataIndex] === 1;
-                  const touchGrassTimes = chart._touchGrassTimes || [];
-
-                  // Generate description using combinedVibeDescriptor
-                  let description = combinedVibeDescriptor(
-                    shadeF,
-                    sunF,
-                    solar,
-                    isDay,
-                    currentTime
-                  );
-
-                  // Check if within 2 hours of a Touch Grass time
-                  const isTouchGrassTime = touchGrassTimes.some(
-                    (tg) =>
-                      Math.abs(
-                        new Date(tg.time).getTime() - currentTime.getTime()
-                      ) <=
-                      2 * 60 * 60 * 1000
-                  );
-
-                  // Prefix with Touch Grass indicator if applicable
-                  if (isTouchGrassTime) {
-                    description = `🍃 Touch Grass - ${description}`;
-                  }
-
-                  // Return a single line. Chart.js will handle the color swatch.
-                  return description;
-                },
-              },
-            },
+            // The readout (renderReadout) replaces Chart.js's tooltip.
+            tooltip: { enabled: false },
           },
         },
         plugins: [
@@ -4169,329 +4083,418 @@
       // Update card visibility based on current time
       updateCardVisibility();
 
-      // Track mouse position for red dot indicator
-      els.chartCanvas.addEventListener("mousemove", (e) => {
-        if (!vibeChart || !timelineState) return;
-        const rect = els.chartCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+      // Pointer, keyboard and the readout are wired once (below); refresh an
+      // open readout for the new data.
+      wireChartPointer();
+      refreshReadout();
+    }
 
-        // Get the data index from the x position
-        const xScale = vibeChart.scales.x;
-        if (!xScale) return;
 
-        const dataIndex = xScale.getValueForPixel(x);
-        const roundedIndex = Math.round(dataIndex);
+    // ── The chart's readout: pointer, keyboard, and the details box ──
+    // Hover with a mouse, or tap, to see a point's details (the card below
+    // follows too); the arrow keys move through the points. A sideways drag
+    // selects a time range, which is shared as before (Bryan, 2026-09-25).
+    const readoutEl = $("#chartReadout");
+    const readoutLiveEl = $("#chartReadoutLive");
+    let readoutIndex = null; // the point the readout shows
+    let readoutPinned = false; // opened by a tap or the keyboard
 
-        if (
-          Number.isFinite(roundedIndex) &&
-          roundedIndex >= 0 &&
-          roundedIndex < timelineState.labels.length
-        ) {
-          // Get the pixel position of this data point (snap to nearest point)
-          const pixelX = xScale.getPixelForValue(roundedIndex);
-          vibeChart._hoverX = pixelX;
-          vibeChart._hoverIndex = roundedIndex;
-          // Update temperature cards to show the hovered time's data
-          paintSimulatedIndex(roundedIndex);
-          vibeChart.draw();
-        } else {
-          vibeChart._hoverX = null;
-          vibeChart._hoverIndex = null;
-          vibeChart.draw();
-        }
-      });
+    // "2pm", "2:15pm" in the place's zone
+    function fmtClock(d) {
+      const { hour, minute } = zp(d);
+      const h12 = hour % 12 || 12;
+      const mm = minute ? `:${String(minute).padStart(2, "0")}` : "";
+      return `${h12}${mm}${hour < 12 ? "am" : "pm"}`;
+    }
 
-      // Clear hover indicator when mouse leaves chart
-      els.chartCanvas.addEventListener("mouseleave", () => {
-        if (vibeChart) {
-          vibeChart._hoverX = null;
-          vibeChart._hoverIndex = null;
-          vibeChart.draw();
-        }
-      });
+    // "Now (10:20am)", "3pm today", "7am tomorrow", "11pm yesterday", "10am Saturday"
+    function whenWords(t, stepMs) {
+      const now = new Date();
+      if (t <= now && now < t.getTime() + stepMs) return `Now (${fmtClock(now)})`;
+      const days = PlaceTime.daysBetween(now, t, placeZone);
+      const day =
+        days === 0
+          ? "today"
+          : days === 1
+          ? "tomorrow"
+          : days === -1
+          ? "yesterday"
+          : t.toLocaleDateString("en-US", inZone({ weekday: "long" }));
+      return `${fmtClock(t)} ${day}`;
+    }
 
-      // Pointer interactions: hover + tap/drag simulation + drag selection
-      els.chartCanvas.style.touchAction = "none";
-      let isPointerDown = false;
-      let isSelecting = false;
-      let selectionStartX = null;
-      let selectionStartTime = null;
-      let touchStartTime = null;
-      let hasMoved = false;
-      let clickStartX = null;
-      let clickStartTime = null;
+    // An event is named on the points within an hour of it, judged at the
+    // minute it prints (a 7:00:04pm sunset prints "7pm").
+    const HOUR_MS = 3600000;
+    const nearEvent = (t, eventTime) => {
+      const printed = Math.floor(new Date(eventTime).getTime() / 60000) * 60000;
+      return Math.abs(t.getTime() - printed) < HOUR_MS;
+    };
 
-      function updateFromClientX(clientX, clientY) {
-        if (!vibeChart || !timelineState) return;
-        const rect = els.chartCanvas.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY !== undefined ? clientY - rect.top : 0;
-
-        // Check if hovering near Touch Grass markers
-        const touchGrassPositions = vibeChart._touchGrassPositions || [];
-        for (const touchGrassPos of touchGrassPositions) {
-          const dx = x - touchGrassPos.x;
-          const dy = y - touchGrassPos.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < 20) {
-            // Show Touch Grass info in temp section
-            const timeStr = fmtHM(touchGrassPos.time);
-            const tempStr = `${formatUserTemp(touchGrassPos.temp)}${unitSuffix()}`;
-
-            if (els.combinedLabel) {
-              els.combinedLabel.innerHTML = `🍃 Touch Grass - ${timeStr} - ${tempStr}`;
-            }
-            if (els.combinedTemp) {
-              els.combinedTemp.innerHTML = tempStr;
-            }
-            if (els.combinedTempWrapper) {
-              els.combinedTempWrapper.style.display = "flex";
-            }
-            if (els.sunTempWrapper) {
-              els.sunTempWrapper.style.display = "none";
-            }
-            if (els.shadeTempWrapper) {
-              els.shadeTempWrapper.style.display = "none";
-            }
-            const cardTemps = els.sunTempWrapper?.parentElement;
-            if (cardTemps) {
-              cardTemps.classList.add("sun-hidden");
-            }
-            return;
-          }
-        }
-
-        // Always use the x position to determine index, not which line is closer
-        // This ensures consistent behavior regardless of which line is hovered
-        // Use the stored hover index if available (from mousemove), otherwise calculate from x position
-        let idx = null;
-        if (
-          vibeChart._hoverIndex !== null &&
-          vibeChart._hoverIndex !== undefined
-        ) {
-          // Use the index already calculated by mousemove handler
-          idx = vibeChart._hoverIndex;
-        } else {
-          // Fallback: calculate from x position
-          const xScale = vibeChart.scales.x;
-          if (!xScale) return;
-          const idxFloat = xScale.getValueForPixel(x);
-          idx = Math.round(idxFloat);
-        }
-
-        if (
-          Number.isFinite(idx) &&
-          idx >= 0 &&
-          idx < timelineState.labels.length
-        ) {
-          simActive = true;
-          paintSimulatedIndex(idx);
+    // Everything the readout says about point i, as words.
+    function readoutFor(i) {
+      const s = timelineState;
+      if (!s || i == null || i < 0 || i >= s.labels.length) return null;
+      const t = s.labels[i];
+      const stepMs =
+        s.labels.length > 1 ? s.labels[1].getTime() - s.labels[0].getTime() : HOUR_MS;
+      const temp = (f) =>
+        Number.isFinite(f) ? `${formatTemp(f)}${unitSuffix()}` : null;
+      const isDay = s.isDayByHour[i] === 1;
+      const airF = s.airTempByHour?.[i];
+      const rh = s.humidityByHour?.[i];
+      const wind = s.windByHour?.[i];
+      const pop = s.popByHour?.[i];
+      const hi = VibeWeather.heatIndexOrNull(airF, rh);
+      const facts = [
+        ["Air", temp(airF)],
+        [
+          "Heat index",
+          hi !== null && hi >= VibeWeather.HEAT_INDEX_CAUTION_F ? temp(hi) : null,
+        ],
+        ["Humidity", Number.isFinite(rh) ? `${Math.round(rh)}%` : null],
+        ["Wind", Number.isFinite(wind) ? `${Math.round(wind)} mph` : null],
+        ["Rain", Number.isFinite(pop) ? `${Math.round(pop)}%` : null],
+      ].filter(([, v]) => v);
+      const marks = [];
+      for (const [kind, list] of [
+        ["Sunrise", sunTimes.sunrises || []],
+        ["Sunset", sunTimes.sunsets || []],
+      ]) {
+        for (const e of list) {
+          if (e && nearEvent(t, e)) marks.push({ kind: "sun", text: `${kind} ${fmtClock(new Date(e))}` });
         }
       }
-
-      function getTimeFromClientX(clientX) {
-        if (!vibeChart || !timelineState) return null;
-        const rect = els.chartCanvas.getBoundingClientRect();
-        const x = clientX - rect.left;
-        return pixelToTime(x, timelineState.labels, vibeChart.scales);
+      for (const tg of (vibeChart && vibeChart._touchGrassTimes) || []) {
+        if (nearEvent(t, tg.time))
+          marks.push({ kind: "leaf", text: `Touch grass: ${fmtClock(new Date(tg.time))}` });
       }
+      return {
+        when: whenWords(t, stepMs),
+        sun: temp(s.sunVals[i]),
+        shade: temp(s.shadeVals[i]),
+        words: combinedVibeDescriptor(
+          s.shadeVals[i],
+          s.sunVals[i],
+          s.solarByHour[i],
+          isDay,
+          t
+        ),
+        facts,
+        sky: VibeWeather.conditionLabel(s.weathercodeByHour?.[i], isDay),
+        marks,
+      };
+    }
 
-      els.chartCanvas.addEventListener("pointerdown", (e) => {
-        // Check if shift key is held for selection mode
-        if (e.shiftKey || e.ctrlKey || e.metaKey) {
-          isSelecting = true;
-          isSelectingActive = true; // Mark that selection is in progress
-          selectionStartX = e.clientX;
-          selectionStartTime = getTimeFromClientX(e.clientX);
-          try {
-            els.chartCanvas.setPointerCapture(e.pointerId);
-          } catch {}
-          e.preventDefault();
+    function readoutSentence(r) {
+      return [
+        `${r.when}.`,
+        r.sun === r.shade
+          ? `In the sun or the shade, ${r.shade}.`
+          : `In the sun ${r.sun}, in the shade ${r.shade}.`,
+        r.facts.length
+          ? `${r.facts.map(([k, v], n) => `${n ? k.toLowerCase() : k} ${v}`).join(", ")}.`
+          : "",
+        r.sky ? `${r.sky}.` : "",
+        ...r.marks.map((m) => `${m.text}.`),
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function renderReadout(i, { speak = false } = {}) {
+      if (!readoutEl || !vibeChart) return;
+      const r = readoutFor(i);
+      if (!r) return hideReadout();
+      readoutIndex = i;
+      const nodes = [el("p", "readout-when", r.when)];
+      if (r.sun === r.shade) {
+        const one = el("p", "readout-one");
+        one.append(el("span", "readout-label", "In the sun or the shade "), el("strong", "", r.shade));
+        nodes.push(one);
+      } else {
+        const chips = el("div", "readout-chips");
+        for (const [kind, label, value, color] of [
+          ["sun", "In the sun", r.sun, chartColors.sun.start],
+          ["shade", "In the shade", r.shade, chartColors.shade.start],
+        ]) {
+          // The line's own colour (set in Advanced), for the border and,
+          // on the dark theme, the number.
+          const chip = el("div", `readout-chip readout-chip--${kind}`);
+          chip.style.setProperty("--chip-color", color);
+          chip.append(
+            el("span", "readout-label", label),
+            el("strong", "readout-chip-value", value)
+          );
+          chips.append(chip);
+        }
+        nodes.push(chips);
+      }
+      if (r.words) nodes.push(el("p", "readout-words", r.words));
+      if (r.facts.length)
+        nodes.push(el("p", "readout-facts", r.facts.map(([k, v]) => `${k} ${v}`).join(" · ")));
+      if (r.sky) nodes.push(el("p", "readout-facts", r.sky));
+      for (const m of r.marks) {
+        nodes.push(
+          el("p", `readout-mark readout-mark--${m.kind}`, `${m.kind === "leaf" ? "\u{1F343}" : "\u{2600}\u{FE0F}"} ${m.text}`)
+        );
+      }
+      readoutEl.replaceChildren(...nodes);
+      readoutEl.hidden = false;
+
+      // Across: centred on the point, kept inside the chart box.
+      const box = readoutEl.parentElement.getBoundingClientRect();
+      const x = vibeChart.scales.x.getPixelForValue(i);
+      const w = readoutEl.offsetWidth;
+      readoutEl.style.left = `${Math.max(0, Math.min(box.width - w, x - w / 2))}px`;
+      // Up and down: above the chart, or below it when the top of the
+      // screen is too close.
+      readoutEl.classList.toggle("chart-readout--below", box.top < readoutEl.offsetHeight + 16);
+
+      if (speak && readoutLiveEl) readoutLiveEl.textContent = readoutSentence(r);
+    }
+
+    function hideReadout() {
+      readoutIndex = null;
+      readoutPinned = false;
+      if (readoutEl) readoutEl.hidden = true;
+      if (readoutLiveEl) readoutLiveEl.textContent = "";
+      if (vibeChart) {
+        vibeChart._hoverX = null;
+        vibeChart._hoverIndex = null;
+        vibeChart.draw();
+      }
+      if (simActive) paintRealtimeCards();
+      simActive = false;
+    }
+
+    // After the data changes, an open readout shows the new numbers.
+    function refreshReadout() {
+      if (readoutIndex === null || !timelineState) return;
+      if (readoutIndex >= timelineState.labels.length) return hideReadout();
+      renderReadout(readoutIndex);
+    }
+
+    // Point i under the guide line, in the card, and in the readout.
+    function showPoint(i, options) {
+      if (!vibeChart || !timelineState) return;
+      vibeChart._hoverX = vibeChart.scales.x.getPixelForValue(i);
+      vibeChart._hoverIndex = i;
+      simActive = true;
+      paintSimulatedIndex(i);
+      vibeChart.draw();
+      renderReadout(i, options);
+    }
+
+    function pointIndexAt(clientX) {
+      if (!vibeChart || !timelineState) return null;
+      const rect = els.chartCanvas.getBoundingClientRect();
+      const { left, right } = vibeChart.chartArea;
+      const x = Math.min(right, Math.max(left, clientX - rect.left));
+      const i = Math.round(vibeChart.scales.x.getValueForPixel(x));
+      return Number.isFinite(i)
+        ? Math.min(timelineState.labels.length - 1, Math.max(0, i))
+        : null;
+    }
+
+    function timeAtClientX(clientX) {
+      if (!vibeChart || !timelineState) return null;
+      const rect = els.chartCanvas.getBoundingClientRect();
+      return pixelToTime(clientX - rect.left, timelineState.labels, vibeChart.scales);
+    }
+
+    // Near a touch-grass leaf, the card names it (as it always has).
+    function paintLeafCardIfNear(clientX, clientY) {
+      const rect = els.chartCanvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      for (const pos of vibeChart._touchGrassPositions || []) {
+        if (Math.hypot(x - pos.x, y - pos.y) >= 20) continue;
+        const tempStr = `${formatUserTemp(pos.temp)}${unitSuffix()}`;
+        if (els.combinedLabel)
+          els.combinedLabel.textContent = `\u{1F343} Touch Grass - ${fmtHM(pos.time)} - ${tempStr}`;
+        if (els.combinedTemp) els.combinedTemp.textContent = tempStr;
+        if (els.combinedTempWrapper) els.combinedTempWrapper.style.display = "flex";
+        if (els.sunTempWrapper) els.sunTempWrapper.style.display = "none";
+        if (els.shadeTempWrapper) els.shadeTempWrapper.style.display = "none";
+        els.sunTempWrapper?.parentElement?.classList.add("sun-hidden");
+        return;
+      }
+    }
+
+    // A finished drag: select the range and share it.
+    function finishSelection(startTime, endTime) {
+      const from = startTime < endTime ? startTime : endTime;
+      const to = startTime < endTime ? endTime : startTime;
+      // Only create selection if it's meaningful (at least 5 minutes)
+      if (to - from < 5 * 60 * 1000) {
+        clearHighlight();
+        return;
+      }
+      selectionRange = { startTime: from, endTime: to };
+      isSelectingActive = false; // Selection is now finalized
+      updateCardVisibility(); // Now hide the cards
+      vibeChart.update("none");
+
+      // Copy URL to clipboard and update browser URL
+      const url = generateShareURL(from, to);
+      const urlObj = new URL(url);
+      history.pushState({}, "", urlObj.pathname + urlObj.search);
+      copyToClipboard(url).then((success) => {
+        if (success) {
+          showNotification(
+            "Link copied to clipboard! Share this URL to show this time range.",
+            "success"
+          );
         } else {
-          // Track click position for potential 3-hour selection
-          clickStartX = e.clientX;
-          clickStartTime = Date.now();
-          isPointerDown = true;
-          hasMoved = false;
-          try {
-            els.chartCanvas.setPointerCapture(e.pointerId);
-          } catch {}
-          updateFromClientX(e.clientX, e.clientY);
+          showNotification("Failed to copy to clipboard. URL: " + url, "error", 5000);
         }
       });
 
-      els.chartCanvas.addEventListener("pointermove", (e) => {
-        if (isSelecting && selectionStartTime) {
-          hasMoved = true;
-          // Prevent scrolling on mobile during selection
-          if (e.pointerType === "touch") {
-            e.preventDefault();
-          }
-          const currentTime = getTimeFromClientX(e.clientX);
-          if (currentTime && selectionStartTime) {
-            const startTime =
-              currentTime < selectionStartTime
-                ? currentTime
-                : selectionStartTime;
-            const endTime =
-              currentTime > selectionStartTime
-                ? currentTime
-                : selectionStartTime;
-            selectionRange = { startTime, endTime };
-            // Don't call updateCardVisibility() here - keep cards visible during selection
-            vibeChart.update("none");
-          }
-        } else {
-          // Track if pointer moved (to distinguish click from drag)
-          if (isPointerDown && clickStartX !== null) {
-            const moveDistance = Math.abs(e.clientX - clickStartX);
-            if (moveDistance > 5) {
-              hasMoved = true;
-            }
-          }
-          const isMouse = e.pointerType === "mouse";
-          if (isMouse || isPointerDown) updateFromClientX(e.clientX, e.clientY);
-        }
+      // Generate weather summary
+      updateWeatherSummary();
+    }
+
+    let chartPointerWired = false;
+    function wireChartPointer() {
+      if (chartPointerWired || !els.chartCanvas) return;
+      chartPointerWired = true;
+      const canvas = els.chartCanvas;
+      // Vertical swipes scroll the page and two fingers zoom; a tap or a
+      // sideways drag reaches the chart.
+      canvas.style.touchAction = "pan-y pinch-zoom";
+      let drag = null; // { x, id, startTime, selecting, previous }
+
+      canvas.addEventListener("pointerdown", (e) => {
+        if (!vibeChart || !timelineState || e.button > 0) return;
+        drag = {
+          x: e.clientX,
+          id: e.pointerId,
+          startTime: timeAtClientX(e.clientX),
+          selecting: false,
+          previous: selectionRange,
+        };
       });
 
-      function endPointer(e) {
-        if (isSelecting && selectionStartTime) {
-          const isTouch = e.pointerType === "touch";
-          const endTime = getTimeFromClientX(e.clientX);
-
-          // For touch, check if it was a tap (not a drag) - if so, don't create selection
-          if (isTouch && !hasMoved && Date.now() - touchStartTime < 300) {
-            // It was a tap, not a drag - just show the value at that point
-            isSelecting = false;
-            selectionStartX = null;
-            selectionStartTime = null;
-            isPointerDown = false;
+      canvas.addEventListener("pointermove", (e) => {
+        if (!vibeChart || !timelineState) return;
+        if (drag && drag.id === e.pointerId) {
+          if (!drag.selecting && drag.startTime && Math.abs(e.clientX - drag.x) > 5) {
+            drag.selecting = true;
+            isSelectingActive = true;
             try {
-              els.chartCanvas.releasePointerCapture(e.pointerId);
+              canvas.setPointerCapture(e.pointerId);
             } catch {}
-            return;
+            hideReadout();
           }
-
-          if (endTime && selectionStartTime) {
-            const startTime =
-              endTime < selectionStartTime ? endTime : selectionStartTime;
-            const finalEndTime =
-              endTime > selectionStartTime ? endTime : selectionStartTime;
-
-            // Only create selection if it's meaningful (at least 5 minutes)
-            const duration = Math.abs(finalEndTime - startTime);
-            if (duration >= 5 * 60 * 1000) {
-              selectionRange = { startTime, endTime: finalEndTime };
-              isSelectingActive = false; // Selection is now finalized
-              updateCardVisibility(); // Now hide the cards
+          if (drag.selecting) {
+            const now = timeAtClientX(e.clientX);
+            if (now) {
+              selectionRange = {
+                startTime: now < drag.startTime ? now : drag.startTime,
+                endTime: now < drag.startTime ? drag.startTime : now,
+              };
               vibeChart.update("none");
-
-              // Copy URL to clipboard and update browser URL
-              const url = generateShareURL(startTime, finalEndTime);
-
-              // Update browser URL without page refresh
-              const urlObj = new URL(url);
-              history.pushState({}, "", urlObj.pathname + urlObj.search);
-
-              (async () => {
-                const success = await copyToClipboard(url);
-                if (success) {
-                  showNotification(
-                    "Link copied to clipboard! Share this URL to show this time range.",
-                    "success"
-                  );
-                } else {
-                  showNotification(
-                    "Failed to copy to clipboard. URL: " + url,
-                    "error",
-                    5000
-                  );
-                }
-              })();
-
-              // Generate weather summary
-              updateWeatherSummary();
-            } else {
-              // Selection too short, clear it
-              clearHighlight();
             }
           }
-          isSelecting = false;
-          isSelectingActive = false; // Selection is complete (either finalized or cancelled)
-          selectionStartX = null;
-          selectionStartTime = null;
-          hasMoved = false;
-          touchStartTime = null;
-          try {
-            els.chartCanvas.releasePointerCapture(e.pointerId);
-          } catch {}
-        } else if (isPointerDown && !hasMoved && clickStartX !== null) {
-          // This was a click (not a drag) - create 3-hour selection
-          const clickedTime = getTimeFromClientX(e.clientX);
-          if (clickedTime) {
-            // Round to nearest hour
-            const clickedHour = hourKey(clickedTime);
-
-            // Create selection: clicked hour - 1 hour, clicked hour, clicked hour + 1 hour
-            const startTime = new Date(clickedHour - 3600000);
-            const endTime = new Date(clickedHour + 3600000);
-
-            selectionRange = { startTime, endTime };
-            isSelectingActive = false;
-            updateCardVisibility();
-            vibeChart.update("none");
-
-            // Copy URL to clipboard and update browser URL
-            const url = generateShareURL(startTime, endTime);
-            const urlObj = new URL(url);
-            history.pushState({}, "", urlObj.pathname + urlObj.search);
-
-            (async () => {
-              const success = await copyToClipboard(url);
-              if (success) {
-                showNotification(
-                  "Link copied to clipboard! Share this URL to show this time range.",
-                  "success"
-                );
-              } else {
-                showNotification(
-                  "Failed to copy to clipboard. URL: " + url,
-                  "error",
-                  5000
-                );
-              }
-            })();
-
-            // Generate weather summary
-            updateWeatherSummary();
+          return;
+        }
+        if (e.pointerType === "mouse" && !readoutPinned) {
+          const i = pointIndexAt(e.clientX);
+          if (i !== null) {
+            showPoint(i);
+            paintLeafCardIfNear(e.clientX, e.clientY);
           }
-          isPointerDown = false;
-          clickStartX = null;
-          clickStartTime = null;
-          try {
-            els.chartCanvas.releasePointerCapture(e.pointerId);
-          } catch {}
-        } else {
-          isPointerDown = false;
-          clickStartX = null;
-          clickStartTime = null;
-          try {
-            els.chartCanvas.releasePointerCapture(e.pointerId);
-          } catch {}
         }
-      }
+      });
 
-      els.chartCanvas.addEventListener("pointerup", endPointer);
-      els.chartCanvas.addEventListener("pointercancel", endPointer);
-      els.chartCanvas.addEventListener("pointerleave", (e) => {
-        if (isSelecting) {
-          endPointer(e);
-        } else {
-          if (simActive) paintRealtimeCards();
-          simActive = false;
+      canvas.addEventListener("pointerup", (e) => {
+        if (!drag || drag.id !== e.pointerId) return;
+        const d = drag;
+        drag = null;
+        try {
+          canvas.releasePointerCapture(e.pointerId);
+        } catch {}
+        if (d.selecting) {
+          isSelectingActive = false;
+          const end = timeAtClientX(e.clientX);
+          if (end) finishSelection(d.startTime, end);
+          return;
         }
+        // A tap or a click: show that point, and keep it open after a
+        // finger lifts.
+        const i = pointIndexAt(e.clientX);
+        if (i === null) return;
+        showPoint(i);
+        paintLeafCardIfNear(e.clientX, e.clientY);
+        readoutPinned = e.pointerType !== "mouse";
+      });
+
+      // The browser took the gesture (a scroll): drop an unfinished drag.
+      canvas.addEventListener("pointercancel", () => {
+        if (drag && drag.selecting) {
+          selectionRange = drag.previous;
+          isSelectingActive = false;
+          vibeChart && vibeChart.update("none");
+        }
+        drag = null;
+      });
+
+      canvas.addEventListener("pointerleave", (e) => {
+        if (e.pointerType === "mouse" && !drag && !readoutPinned) hideReadout();
+      });
+
+      // A tap anywhere else closes a readout a tap opened.
+      document.addEventListener("pointerdown", (e) => {
+        if (readoutPinned && e.target !== canvas && document.activeElement !== canvas)
+          hideReadout();
+      });
+
+      // Keys: an hour with the arrows (15 minutes with Shift), a day with
+      // Page Up and Page Down, Home and End for the ends, Escape to close.
+      canvas.addEventListener("keydown", (e) => {
+        if (!vibeChart || !timelineState) return;
+        const n = timelineState.labels.length;
+        const stepMs =
+          n > 1 ? timelineState.labels[1].getTime() - timelineState.labels[0].getTime() : HOUR_MS;
+        const perHour = Math.max(1, Math.round(HOUR_MS / stepMs));
+        const start = readoutIndex ?? Math.max(0, vibeChart._nowIdx ?? 0);
+        const step = (k) => (readoutIndex === null ? start : Math.min(n - 1, Math.max(0, start + k)));
+        let next = null;
+        if (e.key === "ArrowRight") next = step(e.shiftKey ? 1 : perHour);
+        else if (e.key === "ArrowLeft") next = step(e.shiftKey ? -1 : -perHour);
+        else if (e.key === "PageDown") next = step(24 * perHour);
+        else if (e.key === "PageUp") next = step(-24 * perHour);
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = n - 1;
+        else if (e.key === "Escape" && readoutIndex !== null) {
+          e.preventDefault();
+          e.stopPropagation(); // don't also clear the selection
+          hideReadout();
+          return;
+        }
+        if (next === null) return;
+        e.preventDefault();
+        showPoint(next, { speak: true });
+        readoutPinned = true;
+      });
+
+      canvas.addEventListener("focus", () => {
+        // Only keyboard focus opens it at now; a click or a tap focuses too.
+        if (!canvas.matches(":focus-visible") || !timelineState) return;
+        const i = Math.max(0, vibeChart?._nowIdx ?? 0);
+        showPoint(i, { speak: true });
+        readoutPinned = true;
+      });
+      canvas.addEventListener("blur", () => {
+        if (readoutPinned) hideReadout();
       });
     }
 

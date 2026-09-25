@@ -10,6 +10,7 @@
     <script src="model.js"></script>
     <script src="time.js"></script>
     <script src="curve.js"></script>
+    <script src="weather.js"></script>
     <script src="scripts.js"></script>
   </head>
   <body>
@@ -178,7 +179,20 @@
               The forecast didn't load. Try again above, or enter a ZIP code.
             </p>
           </div>
-          <canvas id="vibeChart" style="display: none"></canvas>
+          <canvas
+            id="vibeChart"
+            style="display: none"
+            tabindex="0"
+            role="group"
+            aria-label="Sun and shade forecast chart"
+            aria-describedby="chartKeysHint"
+          ></canvas>
+          <div id="chartReadout" class="chart-readout" hidden aria-hidden="true"></div>
+          <p id="chartReadoutLive" class="sr-only" aria-live="polite"></p>
+          <span id="chartKeysHint" hidden>
+            Arrow keys move an hour, Shift and an arrow 15 minutes, Page Up and
+            Page Down a day, Home and End to either end. Escape closes.
+          </span>
         </div>
       </section>
 
@@ -711,9 +725,8 @@ Cloud = 100
       <section class="tip-section">
         <div class="tip-content">
           <small
-            >💡 Tip:
-            <span class="desktop-only">Hold Shift (or Ctrl/Cmd) and </span>drag
-            on the graph to select a time range and share it</small
+            >💡 Tip: point at or tap the graph for details, or drag across it
+            to select a time range and share it</small
           >
         </div>
       </section>
@@ -811,6 +824,10 @@ Cloud = 100
           <div class="shortcut-item">
             <kbd>Esc</kbd>
             <span>Close modals/clear selection</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>←</kbd> <kbd>→</kbd>
+            <span>On the chart: move an hour (Page Up/Down a day)</span>
           </div>
         </div>
         <div class="modal-buttons">
