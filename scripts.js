@@ -2616,6 +2616,35 @@
       }
     }
 
+    // Move the chart's x range from one window to another over ZOOM_MS,
+    // easing in and out, then call done. Straight there when reduced motion
+    // is asked for. A new move stops the one under way.
+    const ZOOM_MS = 450;
+    let zoomFrame = null;
+    function animateWindow(from, to, done) {
+      if (zoomFrame) cancelAnimationFrame(zoomFrame);
+      zoomFrame = null;
+      hideReadout();
+      const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduce || !vibeChart) return done();
+      const t0 = performance.now();
+      const ease = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+      const frame = (now) => {
+        if (!vibeChart) return;
+        const u = Math.min(1, (now - t0) / ZOOM_MS);
+        const k = ease(u);
+        vibeChart.options.scales.x.min = Math.round(from[0] + (to[0] - from[0]) * k);
+        vibeChart.options.scales.x.max = Math.round(from[1] + (to[1] - from[1]) * k);
+        vibeChart.update("none");
+        if (u < 1) zoomFrame = requestAnimationFrame(frame);
+        else {
+          zoomFrame = null;
+          done();
+        }
+      };
+      zoomFrame = requestAnimationFrame(frame);
+    }
+
     // Update chart data directly without recreating the chart
     function updateChartData(
       labels,
@@ -6147,6 +6176,8 @@
 
       // Time preset functions
       function setTimePreset(preset) {
+        // Where the chart's window is now, to animate from
+        const fromWindow = vibeChart && vibeChart.scales.x ? [vibeChart.scales.x.min, vibeChart.scales.x.max] : null;
         // Reset date offset when preset is selected
         dateOffset = 0;
 
@@ -6230,6 +6261,20 @@
           if (chartTitleEl) chartTitleEl.textContent = "24-Hour Forecast";
         } else {
           updateChartTitle();
+        }
+
+        // 24 hours and Week draw the same week: the switch only moves the
+        // window, so it zooms there instead of redrawing (Bryan, 2026-09-26)
+        if (vibeChart && timelineState && fromWindow && (preset === "default" || preset === "week")) {
+          const to = viewWindow();
+          animateWindow(fromWindow, [to.min, to.max], async () => {
+            applyWindow();
+            if (dogsOn) renderDogs();
+            await updateRemainderOfDaySummary();
+            if (selectionRange) updateWeatherSummary();
+            allPresetBtns.forEach((btn) => btn && btn.classList.remove("loading"));
+          });
+          return;
         }
 
         // Update chart if we have data
