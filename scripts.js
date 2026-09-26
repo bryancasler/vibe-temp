@@ -4757,21 +4757,66 @@
 
       // A sideways scroll (a trackpad, or Shift and a wheel) slides the 24
       // hours. Not passive, so the page and the browser's back swipe leave it be;
-      // an up-and-down scroll is left to the page.
+      // an up-and-down scroll is left to the page. A trackpad's sideways swipe
+      // carries events that lean up or down: for WHEEL_HOLD_MS after a sideways
+      // one, every event is read sideways and kept from the page, so it holds
+      // still while the chart slides (Bryan, 2026-09-26).
+      const WHEEL_HOLD_MS = 250;
+      let heldUntil = 0;
       canvas.addEventListener(
         "wheel",
         (e) => {
           if (!vibeChart || !canSlide()) return;
           const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-          const d = sideways ? e.deltaX : e.shiftKey ? e.deltaY : 0;
-          if (!d) return;
+          const held = e.timeStamp < heldUntil;
+          const d = sideways || held ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+          if (sideways || e.shiftKey) heldUntil = e.timeStamp + WHEEL_HOLD_MS;
+          if (!d && !held) return;
           e.preventDefault();
+          if (!d) return;
           hideReadout();
           const area = vibeChart.chartArea;
           slideBy(e.deltaMode === 1 ? d * 16 : e.deltaMode === 2 ? d * (area.right - area.left) : d);
         },
         { passive: false }
       );
+
+      // A finger that sets off sideways holds the page still until it lifts:
+      // slid or highlighted, the chart takes the whole gesture, even as it
+      // drifts up or down. The first TOUCH_LOCK_PX of movement decides; a
+      // gesture that sets off up or down, or two fingers pinching, is left to
+      // the page (Bryan, 2026-09-26).
+      const TOUCH_LOCK_PX = 6;
+      let touchFrom = null; // { x, y } of a one-finger touch
+      let touchWay = null; // "side" or "down" once settled
+      canvas.addEventListener(
+        "touchstart",
+        (e) => {
+          touchFrom = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+          touchWay = null;
+        },
+        { passive: true }
+      );
+      canvas.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!touchFrom || e.touches.length !== 1) return;
+          if (!touchWay) {
+            const dx = Math.abs(e.touches[0].clientX - touchFrom.x);
+            const dy = Math.abs(e.touches[0].clientY - touchFrom.y);
+            if (Math.max(dx, dy) < TOUCH_LOCK_PX) return;
+            touchWay = dx > dy ? "side" : "down";
+          }
+          if (touchWay === "side" && e.cancelable) e.preventDefault();
+        },
+        { passive: false }
+      );
+      const touchDone = () => {
+        touchFrom = null;
+        touchWay = null;
+      };
+      canvas.addEventListener("touchend", touchDone);
+      canvas.addEventListener("touchcancel", touchDone);
 
       // A tap anywhere else closes a readout a tap opened.
       document.addEventListener("pointerdown", (e) => {

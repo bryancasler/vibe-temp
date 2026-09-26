@@ -35,11 +35,22 @@ const win = (page) =>
   await page.waitForTimeout(100);
   const [s2] = await win(page);
   expect("a sideways scroll slides it on", s2 > s1, `${s1} -> ${s2}`);
+  await page.waitForTimeout(300); // past the 250ms a sideways scroll holds the page
   const y0 = await page.evaluate(() => scrollY);
   await page.mouse.wheel(0, 200);
   await page.waitForTimeout(200);
   const [s3] = await win(page);
   expect("an up-and-down scroll moves the page, not the chart", s3 === s2 && (await page.evaluate(() => scrollY)) > y0);
+  // A trackpad swipe whose events lean up now and then: the page holds still while the chart slides.
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForTimeout(400);
+  const bw = await page.locator("#vibeChart").boundingBox();
+  await page.mouse.move(bw.x + bw.width / 2, bw.y + bw.height * 0.45);
+  const [m0] = await win(page);
+  for (const [dx, dy] of [[30, 2], [20, 25], [30, 5], [10, 30], [25, 4]]) await page.mouse.wheel(dx, dy);
+  await page.waitForTimeout(100);
+  const [m1] = await win(page);
+  expect("a sideways trackpad swipe that leans up or down keeps the page still", m1 > m0 && (await page.evaluate(() => scrollY)) === 0, `${m0}->${m1} scroll ${await page.evaluate(() => scrollY)}`);
   await page.evaluate(() => scrollTo(0, 0));
   await page.waitForTimeout(100);
   const b2 = await page.locator("#vibeChart").boundingBox();
@@ -53,7 +64,7 @@ const win = (page) =>
   await page.waitForTimeout(200);
   const [s4] = await win(page);
   const search = await page.evaluate(() => location.search);
-  expect("double-click and drag highlights and shares, without sliding", s4 === s2 && /start=/.test(search) && /end=/.test(search), search);
+  expect("double-click and drag highlights and shares, without sliding", s4 === m1 && /start=/.test(search) && /end=/.test(search), search);
   await page.locator("#vibeChart").focus();
   await page.keyboard.press("End");
   await page.waitForTimeout(100);
@@ -94,6 +105,33 @@ const win = (page) =>
   expect("a swipe slides the 24 hours", s > 40, `${s}`);
   await page.touchscreen.tap(b.x + b.width * 0.5, y);
   expect("a tap still opens the readout", await page.locator("#chartReadout").isVisible());
+  // A swipe that sets off sideways but drifts up holds the page still; one that sets off up scrolls it.
+  await page.touchscreen.tap(5, 5);
+  const sy = () => page.evaluate(() => Math.round(scrollY));
+  const swipe = async (x0, dx, dy) => {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(x0) });
+    for (let i = 1; i <= 12; i++)
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 + (dx * i) / 12, y: y + (dy * i) / 12 }] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await page.waitForTimeout(300);
+  };
+  // Chromium settles a swipe's direction itself, so also count the moves the chart kept from the page: that
+  // is what holds iOS Safari's page still.
+  await page.evaluate(() => {
+    window.__held = 0;
+    document.addEventListener("touchmove", (e) => e.defaultPrevented && window.__held++, { passive: true });
+  });
+  const held = () => page.evaluate(() => { const n = window.__held; window.__held = 0; return n; });
+  const [d0] = await win(page);
+  const y0 = await sy();
+  await swipe(b.x + b.width * 0.8, -160, -70);
+  const [d1] = await win(page);
+  const h1 = await held();
+  expect("a sideways swipe that drifts up slides the chart and holds the page still", d1 > d0 && (await sy()) === y0 && h1 > 0, `${d0}->${d1} scroll ${y0}->${await sy()} held ${h1}`);
+  await swipe(b.x + b.width * 0.5, 4, -200);
+  const [d2] = await win(page);
+  const h2 = await held();
+  expect("a swipe that sets off up scrolls the page and leaves the chart", d2 === d1 && (await sy()) > y0 && h2 === 0, `${d1}->${d2} scroll ${await sy()} held ${h2}`);
   expect("no errors (phone)", errors.length === 0, errors.join(" | "));
   await page.context().close();
 }
