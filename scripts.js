@@ -627,6 +627,12 @@
     const zp = (d) => PlaceTime.parts(d, placeZone);
     const inZone = (opts = {}) => ({ ...opts, timeZone: placeZone });
 
+    // The chart draws DATA_DAYS from the place's midnight today, and a view
+    // shows daysAhead of them at a time, from viewStart (a point index):
+    // the 24-hour view slides along the week by drag, sideways scroll or
+    // keys, and the Week view shows all of it (Bryan, 2026-09-26).
+    const DATA_DAYS = 7;
+    let viewStart = 0;
     let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, now } all in °F
     window.timelineState = null; // Expose timeline state for tooltip data access
     let simActive = false;
@@ -2091,6 +2097,8 @@
       return (await getForecast(lat, lon, options)).hourly;
     }
     function sunTimesFrom(daily, daysAheadParam = daysAhead) {
+      // Every day the chart draws, whatever the view shows (DATA_DAYS)
+      daysAheadParam = Math.max(daysAheadParam, DATA_DAYS);
       // From today on, at the place (an older copy starts a day early)
       const today = PlaceTime.startOfDay(new Date(), placeZone) / 1000;
       const from = Math.max(
@@ -2131,6 +2139,8 @@
 
     // Timeline
     function buildTimelineDataset(hourly, daysAheadParam = daysAhead) {
+      // The chart always draws the whole week; a view is a window on it.
+      daysAheadParam = Math.max(daysAheadParam, DATA_DAYS);
       const now = new Date();
       // From the place's midnight today, daysAheadParam days.
       const start = new Date(PlaceTime.startOfDay(now, placeZone));
@@ -2564,6 +2574,32 @@
       }
     }
 
+    // Points per day on the chart (15-minute points: 96)
+    function pointsPerDay(labels) {
+      const step = labels.length > 1 ? labels[1] - labels[0] : 3600000;
+      return Math.round(86400000 / step);
+    }
+    // The view's window on the chart, in point indexes: daysAhead days
+    // from viewStart, kept inside the week.
+    function viewWindow(labels = vibeChart?._rawLabels || []) {
+      const last = Math.max(0, labels.length - 1);
+      const len = Math.min(last, daysAhead * pointsPerDay(labels));
+      const start = Math.min(last - len, Math.max(0, Math.round(viewStart)));
+      return { min: start, max: start + len, len, last };
+    }
+    // Set the chart's x range to the view's window; redraw unless told not to.
+    function applyWindow({ draw = true } = {}) {
+      if (!vibeChart) return;
+      const w = viewWindow();
+      viewStart = w.min;
+      vibeChart.options.scales.x.min = w.min;
+      vibeChart.options.scales.x.max = w.max;
+      if (draw) {
+        vibeChart.update("none");
+        refreshReadout();
+      }
+    }
+
     // Update chart data directly without recreating the chart
     function updateChartData(
       labels,
@@ -2604,11 +2640,13 @@
       vibeChart._sunTimes = sunTimes;
       vibeChart._touchGrassTimes = touchGrassTimes;
 
-      // Update y-axis range
+      // Update y-axis range: one for the whole week, so the lines hold still
+      // while the window slides
       vibeChart.options.scales.y.suggestedMin =
         Math.min(...shadeVals, ...sunVals) - 3;
       vibeChart.options.scales.y.suggestedMax =
         Math.max(...shadeVals, ...sunVals) + 3;
+      applyWindow({ draw: false });
 
       // Update chart (this will trigger plugins)
       vibeChart.update("none");
@@ -2761,6 +2799,7 @@
           Math.min(...shadeVals, ...sunVals) - 3;
         vibeChart.options.scales.y.suggestedMax =
           Math.max(...shadeVals, ...sunVals) + 3;
+        applyWindow({ draw: false });
         vibeChart.update("none");
         // Ensure loading skeleton is hidden
         hideChartLoading();
@@ -3109,6 +3148,7 @@
         afterDatasetsDraw(chart) {
           if (!selectionRange) return;
           const { ctx, chartArea, scales } = chart;
+          const labels = chart._rawLabels || [];
 
           // Helper to get exact pixel position for a Date (same as in day/night shading)
           function getPixelForExactTime(targetTime) {
@@ -3197,28 +3237,29 @@
           const maxTextWidth = Math.max(timeMetrics.width, dayMetrics.width);
           const minSpacing = maxTextWidth * 1.5; // 1.5x text width for comfortable spacing
 
-          // Filter ticks to prevent overlap - only show hourly ticks
+          // Hourly ticks every `stride` hours of the place's clock, the
+          // fewest that keep labels apart: they stay on the same hours while
+          // the window slides.
           const visibleTicks = [];
+          const stepMs = fullLabels.length > 1 ? fullLabels[1] - fullLabels[0] : 3600000;
+          const t0 = fullLabels[0].getTime();
+          const indexOf = (d) => {
+            const i = Math.round((d.getTime() - t0) / stepMs);
+            return i >= 0 && i < fullLabels.length && fullLabels[i].getTime() === d.getTime() ? i : -1;
+          };
+          const pxPerHour = Math.abs(xScale.getPixelForValue(3600000 / stepMs) - xScale.getPixelForValue(0));
+          const stride = [1, 2, 3, 4, 6, 8, 12, 24].find((h) => h * pxPerHour >= minSpacing) || 24;
           let lastX = -Infinity;
-
-          // Find hourly positions in the full labels array
           hourlyLabels.forEach((hourlyLabel) => {
             const hourlyTime = new Date(hourlyLabel);
-            // Find the index in full labels array that matches this hour
-            const idx = fullLabels.findIndex((label) => {
-              const labelTime = new Date(label);
-              return labelTime.getTime() === hourlyTime.getTime();
-            });
-
+            if (zp(hourlyTime).hour % stride !== 0) return;
+            const idx = indexOf(hourlyTime);
             if (idx === -1) return;
-
             const x = xScale.getPixelForValue(idx);
             if (x < chartArea.left || x > chartArea.right) return;
-
-            if (x - lastX >= minSpacing || visibleTicks.length === 0) {
-              visibleTicks.push({ x, date: hourlyTime });
-              lastX = x;
-            }
+            if (x - lastX < minSpacing) return; // a short day at a clock change
+            visibleTicks.push({ x, date: hourlyTime });
+            lastX = x;
           });
 
           // Always include first and last hourly ticks if they exist
@@ -3227,18 +3268,13 @@
             const lastHourlyTime = new Date(
               hourlyLabels[hourlyLabels.length - 1]
             );
-            const firstIdx = fullLabels.findIndex((label) => {
-              const labelTime = new Date(label);
-              return labelTime.getTime() === firstHourlyTime.getTime();
-            });
-            const lastIdx = fullLabels.findIndex((label) => {
-              const labelTime = new Date(label);
-              return labelTime.getTime() === lastHourlyTime.getTime();
-            });
+            const firstIdx = indexOf(firstHourlyTime);
+            const lastIdx = indexOf(lastHourlyTime);
+            const clear = (x) => visibleTicks.every((t) => Math.abs(t.x - x) >= minSpacing);
 
             if (firstIdx !== -1) {
               const firstX = xScale.getPixelForValue(firstIdx);
-              if (firstX >= chartArea.left && firstX <= chartArea.right) {
+              if (firstX >= chartArea.left && firstX <= chartArea.right && clear(firstX)) {
                 const firstTimeStr = formatTime(firstHourlyTime);
                 const firstDayStr = formatDay(firstHourlyTime);
                 if (firstTimeStr) {
@@ -3252,7 +3288,7 @@
 
             if (lastIdx !== -1) {
               const lastX = xScale.getPixelForValue(lastIdx);
-              if (lastX >= chartArea.left && lastX <= chartArea.right) {
+              if (lastX >= chartArea.left && lastX <= chartArea.right && clear(lastX)) {
                 const lastTimeStr = formatTime(lastHourlyTime);
                 const lastDayStr = formatDay(lastHourlyTime);
                 if (lastTimeStr) {
@@ -3352,6 +3388,8 @@
           if (nowIdx === -1 || nowIdx === undefined) return;
           const { ctx, chartArea, scales } = chart;
           const x = scales.x.getPixelForValue(nowIdx);
+          // Slid past now, the line and its time are off the chart
+          if (x < chartArea.left - 1 || x > chartArea.right + 1) return;
           const timeColor =
             (els.nowTime && getComputedStyle(els.nowTime).color) || "#22c55e";
           ctx.save();
@@ -3391,6 +3429,8 @@
         afterDatasetsDraw(chart) {
           if (!sunMarkersEnabled) return; // Don't draw if disabled
           const { ctx, scales, chartArea } = chart;
+          const labels = chart._rawLabels || [];
+          const markers = chart._markers || [];
           const sunDsIndex = chart.data.datasets.findIndex(
             (d) => d.label === "Sun Vibe"
           );
@@ -3903,7 +3943,21 @@
       // Gradient plugin for smooth gradient fills
       const gradientFillPlugin = {
         id: "gradientFill",
+        // Drawn inside the plot's width only: the week runs on past both
+        // edges of a window.
         afterDatasetsDraw(chart) {
+          const { ctx, chartArea } = chart;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(chartArea.left, 0, chartArea.right - chartArea.left, chart.height);
+          ctx.clip();
+          try {
+            gradientFillPlugin.drawLines(chart);
+          } finally {
+            ctx.restore();
+          }
+        },
+        drawLines(chart) {
           const { ctx, chartArea, scales } = chart;
           const datasets = chart.data.datasets;
           const rawLabels = chart._rawLabels || [];
@@ -4178,6 +4232,7 @@
       vibeChart._isDayByHour = isDayByHour;
       vibeChart._sunTimes = sunTimes; // Store sunrise/sunset times for exact day/night detection
       vibeChart._touchGrassTimes = touchGrassTimes; // Store Touch Grass times for plugin
+      applyWindow({ draw: false });
       // The constructor's first draw ran before these existed (animation is
       // off, so it draws at once): draw again with them.
       vibeChart.update("none");
@@ -5694,6 +5749,8 @@
           : "Getting weather…");
       // Only show loading if chart doesn't exist yet
       if (!vibeChart) showChartLoading();
+      // A new place opens its 24 hours at today, not where the last one was slid to
+      if (!lastCoords || lastCoords.latitude !== latitude || lastCoords.longitude !== longitude) viewStart = 0;
       const seq = ++primeSeq;
       const place = { latitude, longitude, sourceLabel, placeName, zip, seq };
       const held = peekForecast(latitude, longitude);
