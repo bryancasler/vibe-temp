@@ -2587,11 +2587,27 @@
       const start = Math.min(last - len, Math.max(0, Math.round(viewStart)));
       return { min: start, max: start + len, len, last };
     }
+    // A shared link's highlight, to slide into view once the chart has its points
+    let revealTime = null;
+    // Slide the window so point i shows, `margin` points in from the edge it is past.
+    function revealIndex(i, margin = 2) {
+      const w = viewWindow();
+      if (i < w.min + margin) viewStart = i - margin;
+      else if (i > w.max - margin) viewStart = i - w.len + margin;
+    }
     // Set the chart's x range to the view's window; redraw unless told not to.
     function applyWindow({ draw = true } = {}) {
       if (!vibeChart) return;
+      const labels = vibeChart._rawLabels || [];
+      if (revealTime && labels.length > 1) {
+        const i = Math.round((revealTime - labels[0]) / (labels[1] - labels[0]));
+        revealTime = null;
+        if (i >= 0 && i < labels.length) revealIndex(i, pointsPerDay(labels) / 8);
+      }
       const w = viewWindow();
-      viewStart = w.min;
+      // Kept as a fraction, so a slow drag adds up; drawn at whole points.
+      // Left alone in the Week view, so the 24 hours come back where they were.
+      if (w.len < w.last) viewStart = Math.min(w.last - w.len, Math.max(0, viewStart));
       vibeChart.options.scales.x.min = w.min;
       vibeChart.options.scales.x.max = w.max;
       if (draw) {
@@ -4584,17 +4600,38 @@
       chartPointerWired = true;
       const canvas = els.chartCanvas;
       // Vertical swipes scroll the page and two fingers zoom; a tap or a
-      // sideways drag reaches the chart.
+      // sideways drag reaches the chart. A drag slides the 24-hour view
+      // along the week; a double click or double tap and a drag highlights
+      // a time range and shares it (Bryan, 2026-09-26).
       canvas.style.touchAction = "pan-y pinch-zoom";
-      let drag = null; // { x, id, startTime, selecting, previous }
+      let drag = null; // { x, last, id, startTime, double, mode, previous }
+      let lastUp = null; // { at, x }: the last lift, to spot a double press
+      const DOUBLE_MS = 350;
+      const DOUBLE_PX = 24;
+      const canSlide = () => {
+        const w = viewWindow();
+        return w.len < w.last;
+      };
+      // Slide by px of the plot's width: positive moves on to later hours.
+      const slideBy = (px) => {
+        const area = vibeChart && vibeChart.chartArea;
+        if (!area || !canSlide()) return;
+        viewStart += (px / (area.right - area.left)) * viewWindow().len;
+        applyWindow();
+      };
 
       canvas.addEventListener("pointerdown", (e) => {
         if (!vibeChart || !timelineState || e.button > 0) return;
+        const double =
+          !!lastUp && e.timeStamp - lastUp.at < DOUBLE_MS && Math.abs(e.clientX - lastUp.x) < DOUBLE_PX;
+        lastUp = null;
         drag = {
           x: e.clientX,
+          last: e.clientX,
           id: e.pointerId,
           startTime: timeAtClientX(e.clientX),
-          selecting: false,
+          double,
+          mode: null, // "select", "slide" or "still" once it moves
           previous: selectionRange,
         };
         // Capture now, so the release reaches the chart wherever it happens.
@@ -4606,7 +4643,7 @@
       // A press that ended without a release here (a context menu, a lost
       // capture) must not turn the next hover into a drag.
       const dropDrag = () => {
-        if (drag && drag.selecting) {
+        if (drag && drag.mode === "select") {
           selectionRange = drag.previous;
           isSelectingActive = false;
           vibeChart && vibeChart.update("none");
@@ -4618,12 +4655,18 @@
         if (!vibeChart || !timelineState) return;
         if (drag && e.pointerType === "mouse" && e.buttons === 0) dropDrag();
         if (drag && drag.id === e.pointerId) {
-          if (!drag.selecting && drag.startTime && Math.abs(e.clientX - drag.x) > 5) {
-            drag.selecting = true;
-            isSelectingActive = true;
+          if (!drag.mode && Math.abs(e.clientX - drag.x) > 5) {
             hideReadout();
+            if (drag.double && drag.startTime) {
+              drag.mode = "select";
+              isSelectingActive = true;
+            } else drag.mode = canSlide() ? "slide" : "still";
           }
-          if (drag.selecting) {
+          if (drag.mode === "slide") {
+            slideBy(drag.last - e.clientX);
+            drag.last = e.clientX;
+          }
+          if (drag.mode === "select") {
             const now = timeAtClientX(e.clientX);
             if (now) {
               selectionRange = {
@@ -4645,16 +4688,23 @@
       });
 
       canvas.addEventListener("pointerup", (e) => {
+        if (e.isPrimary) lastUp = drag && drag.double ? null : { at: e.timeStamp, x: e.clientX };
         if (!drag || drag.id !== e.pointerId) return;
         const d = drag;
         drag = null;
         try {
           canvas.releasePointerCapture(e.pointerId);
         } catch {}
-        if (d.selecting) {
+        if (d.mode === "select") {
           isSelectingActive = false;
           const end = timeAtClientX(e.clientX);
           if (end) finishSelection(d.startTime, end);
+          return;
+        }
+        if (d.mode) {
+          // After a slide the mouse reads where it let go; a finger reads nothing.
+          const i = e.pointerType === "mouse" ? pointIndexAt(e.clientX) : null;
+          if (i !== null) showPoint(i);
           return;
         }
         // A tap or a click: show that point, and keep it open after a
@@ -4675,6 +4725,24 @@
       canvas.addEventListener("pointerleave", (e) => {
         if (e.pointerType === "mouse" && !drag && !readoutPinned) hideReadout();
       });
+
+      // A sideways scroll (a trackpad, or Shift and a wheel) slides the 24
+      // hours. Not passive, so the page and the browser's back swipe leave it be;
+      // an up-and-down scroll is left to the page.
+      canvas.addEventListener(
+        "wheel",
+        (e) => {
+          if (!vibeChart || !canSlide()) return;
+          const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+          const d = sideways ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+          if (!d) return;
+          e.preventDefault();
+          hideReadout();
+          const area = vibeChart.chartArea;
+          slideBy(e.deltaMode === 1 ? d * 16 : e.deltaMode === 2 ? d * (area.right - area.left) : d);
+        },
+        { passive: false }
+      );
 
       // A tap anywhere else closes a readout a tap opened.
       document.addEventListener("pointerdown", (e) => {
@@ -4707,6 +4775,9 @@
         }
         if (next === null) return;
         e.preventDefault();
+        // The window follows the keys along the week
+        revealIndex(next, perHour / 2);
+        applyWindow();
         showPoint(next, { speak: true });
         readoutPinned = true;
       });
@@ -4714,6 +4785,8 @@
       canvas.addEventListener("focus", () => {
         // Only keyboard focus opens it at now; a click or a tap focuses too.
         if (!canvas.matches(":focus-visible") || !timelineState) return;
+        revealIndex(nowPointIndex());
+        applyWindow();
         showPoint(nowPointIndex(), { speak: true });
         readoutPinned = true;
       });
@@ -7336,9 +7409,11 @@
             }
             // Still show the highlight if not expired
             selectionRange = { startTime, endTime };
+            revealTime = startTime;
             updateCardVisibility();
             // Update chart if it already exists
             if (vibeChart) {
+              applyWindow({ draw: false });
               vibeChart.update("none");
             }
 
