@@ -9,6 +9,10 @@ No build step and no package.json: these run with Node 22 and Playwright.
   from recorded data, so they run with no network:
   - `node tests/browser/timing.mjs [runs]`: time from load, or ZIP entry, to
     a visible chart, cold and warm, under simulated latencies.
+  - `node tests/browser/slide.mjs`: the chart's window: drag, sideways scroll,
+    keys and swipe slide the 24 hours; double-click and drag highlights and
+    shares; a shared highlight opens in view; the Week switch zooms and comes
+    back where it was, and jumps with reduced motion.
   - `node tests/browser/screens.mjs <dir> [label] [now] [storage JSON]`:
     screenshots at 390px and 1280px, dark and light. Pass
     `'{"vibe.v1.dogs":"true"}'` to see Dogs mode.
