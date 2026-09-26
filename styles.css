@@ -1985,3 +1985,10 @@ select {
     gap: 4px;
   }
 }
+
+/* Under the heading while the default place, Washington, DC, is showing */
+.default-place-note {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}

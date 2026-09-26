@@ -731,8 +731,8 @@
       // Remove all URL params
       history.replaceState({}, "", location.pathname);
 
-      // Trigger device location if available
-      useLocation();
+      // Back to Washington, DC (the browser is only asked from the location button)
+      useDefaultPlace();
 
       // Update chart
       if (vibeChart) {
@@ -5851,6 +5851,8 @@
           : "Getting weather…");
       // Only show loading if chart doesn't exist yet
       if (!vibeChart) showChartLoading();
+      // Name the default place under the heading, so nobody takes it for theirs
+      setDefaultNote(!zip && latitude === DEFAULT_PLACE.latitude && longitude === DEFAULT_PLACE.longitude);
       // A new place opens its 24 hours at today, not where the last one was slid to
       if (!lastCoords || lastCoords.latitude !== latitude || lastCoords.longitude !== longitude) viewStart = 0;
       const seq = ++primeSeq;
@@ -6022,6 +6024,20 @@
         statusEl.parentElement.appendChild(notification);
         setTimeout(() => notification.remove(), 10000);
       }
+    }
+
+    // Washington, DC, until a ZIP code, a link or the location button says
+    // otherwise, as on DC Goldens (Bryan, 2026-09-26). The browser is only
+    // asked for the device's location when someone presses that button.
+    const DEFAULT_PLACE = { latitude: 38.9072, longitude: -77.0369, name: "Washington, DC" };
+    const defaultNoteEl = $("#defaultPlaceNote");
+    function setDefaultNote(on) {
+      if (defaultNoteEl) defaultNoteEl.hidden = !on;
+    }
+    function useDefaultPlace() {
+      return primeWeatherForCoords(DEFAULT_PLACE.latitude, DEFAULT_PLACE.longitude, DEFAULT_PLACE.name, DEFAULT_PLACE.name).catch(
+        (e) => log(e)
+      );
     }
 
     // Geolocation - precise location (requires permission)
@@ -6925,9 +6941,7 @@
           currentPlaceName = null;
           updateChartTitle();
           updateAdvStats();
-          if (navigator.geolocation) {
-            useLocation();
-          }
+          useDefaultPlace();
           return;
         }
 
@@ -7065,15 +7079,9 @@
             // Clear highlighted vibe selection
             clearHighlight();
 
-            // Get user's current location based on browser
-            // This will update chart title, stats, and weather data via primeWeatherForCoords
-            if (navigator.geolocation) {
-              useLocation();
-            } else {
-              // If geolocation not available, still update the display
-              updateChartTitle();
-              updateAdvStats();
-            }
+            // Back to Washington, DC
+            // Back to Washington, DC; this updates the title, stats and weather
+            useDefaultPlace();
             return;
           }
 
@@ -7109,14 +7117,8 @@
           // Clear highlighted vibe selection
           clearHighlight();
 
-          // Get user's current location based on browser
-          if (navigator.geolocation) {
-            useLocation();
-          } else {
-            // If geolocation not available, still update the display
-            updateChartTitle();
-            updateAdvStats();
-          }
+          // Back to Washington, DC
+          useDefaultPlace();
 
           updateZipClearButton();
         });
@@ -7176,9 +7178,9 @@
                   hideError();
                   updateChartTitle();
                 })
-                .catch(() => useLocation());
+                .catch(() => useDefaultPlace());
             } else {
-              useLocation();
+              useDefaultPlace();
             }
           }
         });
@@ -7532,10 +7534,10 @@
                 hideError(); // Ensure error is hidden after successful weather fetch
                 updateChartTitle(); // Update input display
               })
-              .catch(() => useLocation());
+              .catch(() => useDefaultPlace());
           } else {
-            // Prompt for browser location first, fall back to IP if denied
-            useLocation();
+            // Washington, DC until someone picks a place; the browser isn't asked
+            useDefaultPlace();
           }
         } else {
           // Update chart title to show location even if set from URL

@@ -52,7 +52,7 @@
                   id="zipClearBtn"
                   class="zip-clear-btn"
                   type="button"
-                  title="Clear ZIP and use browser location"
+                  title="Clear ZIP and show Washington, DC"
                   style="display: none;"
                 >
                   ✕
@@ -70,6 +70,9 @@
               </button>
             </span>
           </h1>
+          <p id="defaultPlaceNote" class="default-place-note" hidden>
+            Showing Washington, DC. Enter a ZIP code or tap 📍 for yours.
+          </p>
         </div>
 
         <div class="header-controls">
@@ -415,7 +418,7 @@
             <!-- Location -->
             <div class="adv-col">
               <h4 class="adv-h4">Location</h4>
-              <div class="adv-status" id="status">Trying to get your local weather…</div>
+              <div class="adv-status" id="status">Getting weather…</div>
 
               <hr class="adv-sep" />
 

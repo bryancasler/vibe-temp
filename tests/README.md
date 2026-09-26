@@ -13,6 +13,9 @@ No build step and no package.json: these run with Node 22 and Playwright.
     keys and swipe slide the 24 hours; double-click and drag highlights and
     shares; a shared highlight opens in view; the Week switch zooms and comes
     back where it was, and jumps with reduced motion.
+  - `node tests/browser/place.mjs`: where the chart opens: Washington, DC,
+    labelled, with no location prompt on load; the location button asks; a ZIP
+    or a link picks a place; clearing the ZIP goes back to DC.
   - `node tests/browser/screens.mjs <dir> [label] [now] [storage JSON]`:
     screenshots at 390px and 1280px, dark and light. Pass
     `'{"vibe.v1.dogs":"true"}'` to see Dogs mode.
