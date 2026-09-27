@@ -55,6 +55,13 @@ body {
   flex-wrap: wrap;
   gap: 8px;
 }
+/* The site's icon before the name, the same as the tab's. */
+.headline-logo {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
 .headline .headline-main {
   font-size: 28px;
   font-weight: 500;
@@ -1780,11 +1787,21 @@ select {
   .headline .headline-main {
     font-size: 24px;
   }
+  /* The icon, the name and the controls share one row down to 360px. */
+  .headline-logo {
+    width: 24px;
+    height: 24px;
+  }
+  .headline {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
   /* The title shares the top row with the controls; the place gets the whole
      row under them, the note beside the ZIP box and the location button. */
   .header {
     display: grid;
     grid-template-columns: 1fr auto;
+    column-gap: 8px;
     row-gap: 4px;
   }
   .headline-wrap {
@@ -1816,6 +1833,12 @@ select {
   }
   .headline {
     font-size: 24px;
+  }
+}
+
+@media (max-width: 374px) {
+  .headline .headline-main {
+    font-size: 20px;
   }
 }
 
