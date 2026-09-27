@@ -59,14 +59,29 @@ body {
   font-size: 28px;
   font-weight: 500;
 }
-.headline .zip-inline-wrapper {
+/* "Vibe Temp at", then the place on the same line, and the note under both.
+   The place row lays its two parts straight into this grid. */
+.headline-wrap {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  justify-items: start;
+  column-gap: 8px;
+}
+.place-row {
+  display: contents;
+}
+.place-row .default-place-note {
+  grid-column: 1 / -1;
+}
+.zip-inline-wrapper {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
   font-size: 28px;
 }
-.headline .gps-icon-btn {
+.zip-inline-wrapper .gps-icon-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -79,18 +94,18 @@ body {
   line-height: 1;
   color: currentColor;
 }
-.headline .gps-icon-btn .gps-icon {
+.zip-inline-wrapper .gps-icon-btn .gps-icon {
   width: 20px;
   height: 20px;
   display: block;
 }
-.headline .gps-icon-btn:hover {
+.zip-inline-wrapper .gps-icon-btn:hover {
   background: rgba(255, 255, 255, 0.1);
 }
-[data-theme="light"] .headline .gps-icon-btn:hover {
+[data-theme="light"] .zip-inline-wrapper .gps-icon-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
-.headline .gps-icon-btn:active {
+.zip-inline-wrapper .gps-icon-btn:active {
   transform: scale(0.95);
 }
 .preset-date {
@@ -847,7 +862,7 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
    screen), never over the plot, so it is never under the finger. */
 .chart-readout {
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: 0; /* set to just under the red line's dot (renderReadout) */
   z-index: 20;
   width: 15rem;
   max-width: 100%;
@@ -863,10 +878,6 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
 }
 .chart-readout[hidden] {
   display: none;
-}
-.chart-readout--below {
-  bottom: auto;
-  top: calc(100% + 8px);
 }
 .chart-readout p {
   margin: 0;
@@ -1769,10 +1780,38 @@ select {
   .headline .headline-main {
     font-size: 24px;
   }
-  .headline .zip-inline-wrapper {
-    display: block;
-    margin-left: 0;
-    margin-top: 4px;
+  /* The title shares the top row with the controls; the place gets the whole
+     row under them, the note beside the ZIP box and the location button. */
+  .header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    row-gap: 4px;
+  }
+  .headline-wrap {
+    display: contents;
+  }
+  .headline {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: center;
+  }
+  .header > .header-controls {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .place-row {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .place-row .default-place-note {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+  }
+  .zip-inline-wrapper {
     font-size: 24px;
   }
   .headline {

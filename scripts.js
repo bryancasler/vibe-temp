@@ -4443,6 +4443,9 @@
       return node;
     }
 
+    // Between the red line's dot and the card, px.
+    const READOUT_GAP = 10;
+
     function renderReadout(i, { speak = false } = {}) {
       if (!readoutEl || !vibeChart) return;
       const r = readoutFor(i);
@@ -4502,9 +4505,17 @@
       const x = vibeChart.scales.x.getPixelForValue(i);
       const w = readoutEl.offsetWidth;
       readoutEl.style.left = `${Math.max(0, Math.min(box.width - w, x - w / 2))}px`;
-      // Up and down: above the chart, or below it when the top of the
-      // screen is too close.
-      readoutEl.classList.toggle("chart-readout--below", box.top < readoutEl.offsetHeight + 16);
+      // Up and down: just under the red line's dot at the foot of the plot
+      // (Bryan, 2026-09-27), over the axis below it. Above the plot instead
+      // only when the bottom of the screen would cut it off and there is
+      // room over the plot.
+      const area = vibeChart.chartArea;
+      const canvasTop = vibeChart.canvas.getBoundingClientRect().top - box.top;
+      const h = readoutEl.offsetHeight;
+      const below = canvasTop + area.bottom + READOUT_GAP;
+      const above = canvasTop + area.top - READOUT_GAP - h;
+      const cutOff = box.top + below + h > window.innerHeight && box.top + above >= 0;
+      readoutEl.style.top = `${Math.round(cutOff ? above : below)}px`;
 
       if (speak && readoutLiveEl) readoutLiveEl.textContent = readoutSentence(r);
     }

@@ -35,6 +35,17 @@ for (const size of ["phone", "desktop"]) {
   await waitForChart(page, t0);
   expect(`${size}: opens on Washington, DC`, forecastAt(log).at(-1) === "38.91,-77.04", forecastAt(log).join(" "));
   expect(`${size}: says it is showing Washington, DC`, await note(page).isVisible() && /Showing Washington, DC/.test(await note(page).textContent()));
+  // Beside the ZIP box and the location button on a phone, under the heading on a wider screen (Bryan, 2026-09-27).
+  const at = await page.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const [zip, gps, n, h] = [r(".zip-inline-wrapper"), r("#gpsLocationBtn"), r("#defaultPlaceNote"), r(".headline")];
+    return { beside: n.left >= gps.right && n.top < zip.bottom && n.bottom > zip.top, under: n.top >= Math.max(h.bottom, zip.bottom) - 1, fits: n.right <= innerWidth };
+  });
+  expect(
+    `${size}: the DC note sits ${size === "phone" ? "beside the ZIP box and the location button" : "under the heading"}, inside the screen`,
+    (size === "phone" ? at.beside : at.under && !at.beside) && at.fits,
+    JSON.stringify(at)
+  );
   expect(`${size}: never asks for the device's location on load`, (await asked(page)) === 0, `${await asked(page)}`);
   await page.locator("#gpsLocationBtn").click();
   await page.waitForTimeout(800);

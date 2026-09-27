@@ -105,6 +105,12 @@ const win = (page) =>
   expect("a swipe slides the 24 hours", s > 40, `${s}`);
   await page.touchscreen.tap(b.x + b.width * 0.5, y);
   expect("a tap still opens the readout", await page.locator("#chartReadout").isVisible());
+  // Its top sits just under the red line's dot at the foot of the plot (Bryan, 2026-09-27).
+  const gap = await page.evaluate(() => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    return Math.round(document.getElementById("chartReadout").getBoundingClientRect().top - (ch.canvas.getBoundingClientRect().top + ch.chartArea.bottom));
+  });
+  expect("the readout opens just under the red line's dot", gap >= 6 && gap <= 14, `${gap}px`);
   // A swipe that sets off sideways but drifts up holds the page still; one that sets off up scrolls it.
   await page.touchscreen.tap(5, 5);
   const sy = () => page.evaluate(() => Math.round(scrollY));
