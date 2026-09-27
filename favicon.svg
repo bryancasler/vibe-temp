@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Vibe Temp</title>
+  <rect width="64" height="64" rx="14" fill="#121826"/>
+  <!-- Sun and shade, the two lines on the chart: the disc's left half in the sun's orange, its right in the shade's blue. -->
+  <path d="M30 12a20 20 0 0 0 0 40z" fill="#ffb86b"/>
+  <path d="M34 12a20 20 0 0 1 0 40z" fill="#6ea8fe"/>
+</svg>
