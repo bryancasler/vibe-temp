@@ -7195,6 +7195,30 @@
       // Initialize headline date
       updateHeadlineDate();
 
+      // The header icon's star twinkles now and then: a big twinkle about 2
+      // seconds after the page opens, then every 7 to 11 seconds a small one,
+      // big about one time in four (Bryan, 2026-09-27). None with reduced
+      // motion.
+      (function twinkleLogoStar() {
+        const star = document.querySelector(".headline-logo .logo-star");
+        if (!star || !window.matchMedia || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const twinkle = (big) => {
+          star.classList.remove("logo-star--small", "logo-star--big");
+          void star.getBoundingClientRect(); // restart the animation if the class was just there
+          star.classList.add(big ? "logo-star--big" : "logo-star--small");
+        };
+        star.addEventListener("animationend", () => star.classList.remove("logo-star--small", "logo-star--big"));
+        const next = () =>
+          setTimeout(() => {
+            if (!document.hidden) twinkle(Math.random() < 0.25);
+            next();
+          }, 7000 + Math.random() * 4000);
+        setTimeout(() => {
+          twinkle(true);
+          next();
+        }, 2000);
+      })();
+
       // Favorites toggle
       favoritesToggle &&
         favoritesToggle.addEventListener("click", () => {

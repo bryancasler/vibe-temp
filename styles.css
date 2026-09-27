@@ -62,31 +62,60 @@ body {
   height: 32px;
   flex: none;
 }
-/* Now and then the star twinkles: still for most of each 9 seconds, then a
-   quick flare and a quarter turn. */
+/* The star's twinkles, one at a time, set off now and then by scripts.js:
+   a small flare with a quarter turn, or a big one with a glow and a half
+   turn. */
+.headline-logo {
+  overflow: visible;
+}
 .headline-logo .logo-star {
   transform-box: fill-box;
   transform-origin: center;
-  animation: logo-twinkle 9s ease-in-out 2s infinite;
 }
-@keyframes logo-twinkle {
+.headline-logo .logo-star--small {
+  animation: logo-twinkle-small 0.9s ease-in-out;
+}
+.headline-logo .logo-star--big {
+  animation: logo-twinkle-big 1.6s ease-in-out;
+}
+@keyframes logo-twinkle-small {
   0%,
-  88%,
   100% {
     transform: scale(1) rotate(0deg);
     opacity: 1;
   }
-  91% {
+  30% {
     transform: scale(1.6) rotate(45deg);
-    opacity: 1;
   }
-  94% {
+  60% {
     transform: scale(0.7) rotate(70deg);
     opacity: 0.6;
   }
-  97% {
+  85% {
     transform: scale(1.25) rotate(90deg);
     opacity: 1;
+  }
+}
+@keyframes logo-twinkle-big {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    filter: none;
+  }
+  25% {
+    transform: scale(2.6) rotate(90deg);
+    filter: drop-shadow(0 0 3px #fff6d8) drop-shadow(0 0 6px #ffd88f);
+  }
+  45% {
+    transform: scale(1.4) rotate(135deg);
+    filter: drop-shadow(0 0 2px #fff6d8);
+  }
+  65% {
+    transform: scale(2) rotate(160deg);
+    filter: drop-shadow(0 0 3px #fff6d8) drop-shadow(0 0 5px #ffd88f);
+  }
+  85% {
+    transform: scale(0.85) rotate(180deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
