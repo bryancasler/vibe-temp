@@ -68,6 +68,11 @@ body {
 .headline-logo {
   overflow: visible;
 }
+/* On the dark page the icon sits straight on the black; the tile stays in
+   light mode, where the star needs it (Bryan, 2026-09-27). */
+:root:not([data-theme="light"]) .headline-logo .logo-tile {
+  display: none;
+}
 .headline-logo .logo-star {
   transform-box: fill-box;
   transform-origin: center;
