@@ -77,6 +77,73 @@ body {
   transform-box: fill-box;
   transform-origin: center;
 }
+/* A tap on the icon: the star shines far bigger than any twinkle, and the
+   sun's rays flare out from its centre one after another (Bryan,
+   2026-09-27). Set off by scripts.js. */
+.headline-logo {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.headline-logo .logo-star--mega {
+  animation: logo-shine 2.2s ease-in-out;
+}
+.headline-logo .logo-rays path {
+  transform-box: view-box;
+  transform-origin: 31px 32px; /* the sun's centre */
+}
+.headline-logo .logo-rays--flare path {
+  animation: logo-flare 0.9s ease-in-out both;
+}
+.headline-logo .logo-rays--flare path:nth-child(2) {
+  animation-delay: 60ms;
+}
+.headline-logo .logo-rays--flare path:nth-child(3) {
+  animation-delay: 120ms;
+}
+.headline-logo .logo-rays--flare path:nth-child(4) {
+  animation-delay: 180ms;
+}
+.headline-logo .logo-rays--flare path:nth-child(5) {
+  animation-delay: 240ms;
+}
+@keyframes logo-shine {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    filter: none;
+  }
+  30% {
+    transform: scale(4.2) rotate(200deg);
+    filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 8px #ffd88f) drop-shadow(0 0 14px #ffb86b);
+  }
+  50% {
+    transform: scale(2.4) rotate(280deg);
+    filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px #ffd88f);
+  }
+  68% {
+    transform: scale(3.4) rotate(330deg);
+    filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px #ffd88f);
+  }
+  88% {
+    transform: scale(0.9) rotate(360deg);
+    filter: none;
+  }
+}
+@keyframes logo-flare {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: none;
+  }
+  45% {
+    transform: scale(1.35);
+    filter: brightness(1.25) drop-shadow(0 0 2px #ffd88f);
+  }
+  70% {
+    transform: scale(0.95);
+    filter: none;
+  }
+}
 .headline-logo .logo-star--small {
   animation: logo-twinkle-small 0.9s ease-in-out;
 }
@@ -124,7 +191,8 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .headline-logo .logo-star {
+  .headline-logo .logo-star,
+  .headline-logo .logo-rays path {
     animation: none;
   }
 }

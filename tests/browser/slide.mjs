@@ -125,9 +125,12 @@ const settle = async (page) => {
   const y = b.y + b.height * 0.45;
   const cdp = await page.context().newCDPSession(page);
   const at = (x) => [{ x, y }];
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(b.x + b.width * 0.8) });
-  for (let i = 1; i <= 10; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(b.x + b.width * (0.8 - 0.05 * i)) });
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  // Stamped 10ms apart, so the finger's speed at the lift is the same however slowly the events arrive.
+  const t = Date.now() / 1000;
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(b.x + b.width * 0.8), timestamp: t });
+  for (let i = 1; i <= 10; i++)
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(b.x + b.width * (0.8 - 0.05 * i)), timestamp: t + i * 0.01 });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [], timestamp: t + 0.11 });
   const [s] = await win(page);
   expect("a swipe slides the 24 hours", s > 40, `${s}`);
   // Let go mid-swipe and it glides on and slows to a stop (Bryan, 2026-09-27); with reduced motion it stops where it is.
@@ -137,8 +140,11 @@ const settle = async (page) => {
   await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(b.x + b.width * 0.8) });
   for (let i = 1; i <= 6; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(b.x + b.width * (0.8 - 0.05 * i)) });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  // Once the swipe's own moves are in (500ms), a glide would still be going for well over a second.
+  await page.waitForTimeout(500);
   const [r0] = await win(page);
-  const [r1] = await settle(page);
+  await page.waitForTimeout(1500);
+  const [r1] = await win(page);
   expect("with reduced motion, no glide", r1 === r0, `${r0} -> ${r1}`);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   // Back to the start of the week (Home), so the swipes below have room.

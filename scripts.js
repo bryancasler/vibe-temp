@@ -7275,16 +7275,39 @@
       // The header icon's star twinkles now and then: a big twinkle about 2
       // seconds after the page opens, then every 7 to 11 seconds a small one,
       // big about one time in four (Bryan, 2026-09-27). None with reduced
-      // motion.
+      // motion. A tap on the icon sets off its biggest shine and flares the
+      // sun's rays, and the timed twinkles wait until that is over.
       (function twinkleLogoStar() {
-        const star = document.querySelector(".headline-logo .logo-star");
-        if (!star || !window.matchMedia || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const logo = document.querySelector(".headline-logo");
+        const star = logo && logo.querySelector(".logo-star");
+        const rays = logo && logo.querySelector(".logo-rays");
+        if (!star || !rays) return;
+        let shining = false;
+        const TWINKLES = ["logo-star--small", "logo-star--big", "logo-star--mega"];
+        star.addEventListener("animationend", (e) => {
+          if (e.target !== star) return;
+          star.classList.remove(...TWINKLES);
+          shining = false;
+        });
+        rays.addEventListener("animationend", (e) => {
+          if (e.target === rays.lastElementChild) rays.classList.remove("logo-rays--flare");
+        });
+        logo.addEventListener("click", () => {
+          star.classList.remove(...TWINKLES);
+          rays.classList.remove("logo-rays--flare");
+          void logo.getBoundingClientRect(); // restart both if a tap comes mid-shine
+          star.classList.add("logo-star--mega");
+          rays.classList.add("logo-rays--flare");
+          // With reduced motion the CSS holds both still, and nothing ends to clear this.
+          shining = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        });
+        if (!window.matchMedia || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
         const twinkle = (big) => {
-          star.classList.remove("logo-star--small", "logo-star--big");
+          if (shining) return;
+          star.classList.remove(...TWINKLES);
           void star.getBoundingClientRect(); // restart the animation if the class was just there
           star.classList.add(big ? "logo-star--big" : "logo-star--small");
         };
-        star.addEventListener("animationend", () => star.classList.remove("logo-star--small", "logo-star--big"));
         const next = () =>
           setTimeout(() => {
             if (!document.hidden) twinkle(Math.random() < 0.25);
