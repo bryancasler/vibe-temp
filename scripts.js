@@ -2605,15 +2605,34 @@
         if (i >= 0 && i < labels.length) revealIndex(i, pointsPerDay(labels) / 8);
       }
       const w = viewWindow();
-      // Kept as a fraction, so a slow drag adds up; drawn at whole points.
+      // Kept as a fraction, and drawn at it: the chart slides smoothly rather
+      // than a whole point (15 minutes) at a time (Bryan, 2026-09-27).
       // Left alone in the Week view, so the 24 hours come back where they were.
       if (w.len < w.last) viewStart = Math.min(w.last - w.len, Math.max(0, viewStart));
-      vibeChart.options.scales.x.min = w.min;
-      vibeChart.options.scales.x.max = w.max;
+      setShownWindow(w.len < w.last ? viewStart : w.min, w.len, w.last);
       if (draw) {
         vibeChart.update("none");
         refreshReadout();
       }
+    }
+
+    // Show points `start` to `start + len` of the chart, `start` a fraction if
+    // need be. Chart.js's category scale keeps its range to whole points, so
+    // it gets the whole points around the window, one more either side, and
+    // the x scale's afterBuildTicks sets its exact start and length
+    // (vibeChart._shown). What falls outside the plot is clipped or skipped.
+    function setShownWindow(start, len, last) {
+      const x = vibeChart.options.scales.x;
+      x.min = Math.max(0, Math.floor(start));
+      x.max = Math.min(last, Math.ceil(start + len));
+      vibeChart._shown = Number.isInteger(start) && Number.isInteger(len) ? null : { start, len };
+    }
+    // The window on screen, [first, last] as fractional point indexes.
+    function shownWindow() {
+      const x = vibeChart && vibeChart.scales.x;
+      if (!x) return null;
+      const v = vibeChart._shown;
+      return v ? [v.start, v.start + v.len] : [x.min, x.max];
     }
 
     // Move the chart's x range from one window to another over ZOOM_MS,
@@ -2633,8 +2652,9 @@
         if (!vibeChart) return;
         const u = Math.min(1, (now - t0) / ZOOM_MS);
         const k = ease(u);
-        vibeChart.options.scales.x.min = Math.round(from[0] + (to[0] - from[0]) * k);
-        vibeChart.options.scales.x.max = Math.round(from[1] + (to[1] - from[1]) * k);
+        const a = from[0] + (to[0] - from[0]) * k;
+        const b = from[1] + (to[1] - from[1]) * k;
+        setShownWindow(a, b - a, (vibeChart._rawLabels || []).length - 1);
         vibeChart.update("none");
         if (u < 1) zoomFrame = requestAnimationFrame(frame);
         else {
@@ -4212,6 +4232,13 @@
           },
           scales: {
             x: {
+              // A window that starts between points (setShownWindow).
+              afterBuildTicks: (scale) => {
+                const v = scale.chart._shown;
+                if (!v) return;
+                scale._startValue = v.start;
+                scale._valueRange = v.len;
+              },
               ticks: {
                 maxRotation: 0,
                 autoSkip: true,
@@ -4653,14 +4680,58 @@
         return w.len < w.last;
       };
       // Slide by px of the plot's width: positive moves on to later hours.
+      // Drawn once a frame however many moves come in (a phone can send 120 a
+      // second). Returns false at either end of the week.
+      let slideFrame = null;
       const slideBy = (px) => {
         const area = vibeChart && vibeChart.chartArea;
-        if (!area || !canSlide()) return;
-        viewStart += (px / (area.right - area.left)) * viewWindow().len;
-        applyWindow();
+        if (!area || !canSlide()) return false;
+        const w = viewWindow();
+        const was = viewStart;
+        viewStart = Math.min(w.last - w.len, Math.max(0, viewStart + (px / (area.right - area.left)) * w.len));
+        if (!slideFrame)
+          slideFrame = requestAnimationFrame(() => {
+            slideFrame = null;
+            applyWindow();
+          });
+        return viewStart !== was;
+      };
+
+      // After a finger lets go mid-swipe the chart glides on and slows to a
+      // stop, as a scrolled page does, instead of halting where the finger
+      // lifted (Bryan, 2026-09-27). Not with reduced motion; any new touch,
+      // click, scroll or key stops it.
+      const GLIDE_WINDOW_MS = 100; // the finger's speed over its last 100ms
+      const GLIDE_DECAY_MS = 325; // speed falls by e every 325ms
+      const GLIDE_MAX = 4; // px per ms
+      let glideFrame = null;
+      const stopGlide = () => {
+        if (glideFrame) cancelAnimationFrame(glideFrame);
+        glideFrame = null;
+      };
+      const glide = (samples, upAt) => {
+        stopGlide();
+        if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const recent = samples.filter((p) => upAt - p.t <= GLIDE_WINDOW_MS);
+        if (recent.length < 2) return;
+        const a = recent[0];
+        const b = recent[recent.length - 1];
+        if (b.t - a.t <= 0) return;
+        // Positive: the finger was moving left, on to later hours.
+        let v = Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, (a.x - b.x) / (b.t - a.t)));
+        let then = null;
+        const frame = (now) => {
+          const dt = then === null ? 16 : Math.min(50, now - then);
+          then = now;
+          const moved = slideBy(v * dt);
+          v *= Math.exp(-dt / GLIDE_DECAY_MS);
+          glideFrame = moved && Math.abs(v) > 0.02 ? requestAnimationFrame(frame) : null;
+        };
+        glideFrame = requestAnimationFrame(frame);
       };
 
       canvas.addEventListener("pointerdown", (e) => {
+        stopGlide();
         if (!vibeChart || !timelineState || e.button > 0) return;
         const double =
           !!lastUp && e.timeStamp - lastUp.at < DOUBLE_MS && Math.abs(e.clientX - lastUp.x) < DOUBLE_PX;
@@ -4673,6 +4744,7 @@
           double,
           mode: null, // "select", "slide" or "still" once it moves
           previous: selectionRange,
+          samples: [], // { t, x } while it slides, for the glide
         };
         // Capture now, so the release reaches the chart wherever it happens.
         try {
@@ -4705,6 +4777,8 @@
           if (drag.mode === "slide") {
             slideBy(drag.last - e.clientX);
             drag.last = e.clientX;
+            drag.samples.push({ t: e.timeStamp, x: e.clientX });
+            if (drag.samples.length > 20) drag.samples.shift();
           }
           if (drag.mode === "select") {
             const now = timeAtClientX(e.clientX);
@@ -4741,6 +4815,7 @@
           if (end) finishSelection(d.startTime, end);
           return;
         }
+        if (d.mode === "slide" && e.pointerType !== "mouse") glide(d.samples, e.timeStamp);
         if (d.mode) {
           // After a slide the mouse reads where it let go; a finger reads nothing.
           const i = e.pointerType === "mouse" ? pointIndexAt(e.clientX) : null;
@@ -4785,6 +4860,7 @@
           if (!d && !held) return;
           e.preventDefault();
           if (!d) return;
+          stopGlide();
           hideReadout();
           const area = vibeChart.chartArea;
           slideBy(e.deltaMode === 1 ? d * 16 : e.deltaMode === 2 ? d * (area.right - area.left) : d);
@@ -4838,6 +4914,7 @@
       // Keys: an hour with the arrows (15 minutes with Shift), a day with
       // Page Up and Page Down, Home and End for the ends, Escape to close.
       canvas.addEventListener("keydown", (e) => {
+        stopGlide();
         if (!vibeChart || !timelineState) return;
         const n = timelineState.labels.length;
         const stepMs =
@@ -6249,7 +6326,7 @@
       // Time preset functions
       function setTimePreset(preset) {
         // Where the chart's window is now, to animate from
-        const fromWindow = vibeChart && vibeChart.scales.x ? [vibeChart.scales.x.min, vibeChart.scales.x.max] : null;
+        const fromWindow = shownWindow();
         // Reset date offset when preset is selected
         dateOffset = 0;
 

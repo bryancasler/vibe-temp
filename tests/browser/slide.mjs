@@ -10,11 +10,29 @@ const expect = (name, ok, detail = "") => {
   if (!ok) fails.push(name);
 };
 const browser = await launch();
+// The window on screen, as point indexes: fractional mid-slide (setShownWindow), read after the next frame.
 const win = (page) =>
-  page.evaluate(() => {
-    const ch = Chart.getChart(document.getElementById("vibeChart"));
-    return [ch.scales.x.min, ch.scales.x.max];
-  });
+  page.evaluate(
+    () =>
+      new Promise((done) =>
+        requestAnimationFrame(() => {
+          const ch = Chart.getChart(document.getElementById("vibeChart"));
+          const v = ch._shown;
+          done(v ? [v.start, v.start + v.len] : [ch.scales.x.min, ch.scales.x.max]);
+        })
+      )
+  );
+// Resolves once a glide has stopped: the window holds still for 200ms.
+const settle = async (page) => {
+  let was = await win(page);
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(200);
+    const now = await win(page);
+    if (now[0] === was[0]) return now;
+    was = now;
+  }
+  return was;
+};
 
 // Desktop: mouse drag, wheel, vertical wheel, double-click-drag, keys, zoom.
 {
@@ -29,7 +47,16 @@ const win = (page) =>
   for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width * (0.8 - 0.05 * i), y);
   await page.mouse.up();
   const [s1, e1] = await win(page);
-  expect("a drag slides the window later, keeping its width", s1 > 60 && e1 - s1 === 192, `${s1}-${e1}`);
+  expect("a drag slides the window later, keeping its width", s1 > 60 && Math.abs(e1 - s1 - 192) < 1e-9, `${s1}-${e1}`);
+  const edge = await page.evaluate(() => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    return ch._shown ? ch.scales.x.getPixelForValue(ch._shown.start) - ch.chartArea.left : null;
+  });
+  expect(
+    "the window slides smoothly, drawn between points, not a whole point at a time",
+    !Number.isInteger(s1) && edge !== null && Math.abs(edge) < 0.01,
+    `${s1} edge ${edge}`
+  );
   await page.mouse.move(b.x + b.width / 2, y);
   await page.mouse.wheel(300, 0);
   await page.waitForTimeout(100);
@@ -103,6 +130,21 @@ const win = (page) =>
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   const [s] = await win(page);
   expect("a swipe slides the 24 hours", s > 40, `${s}`);
+  // Let go mid-swipe and it glides on and slows to a stop (Bryan, 2026-09-27); with reduced motion it stops where it is.
+  const [sEnd] = await settle(page);
+  expect("let go mid-swipe, the chart glides on to later hours, then stops", sEnd > s + 1, `${s} -> ${sEnd}`);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(b.x + b.width * 0.8) });
+  for (let i = 1; i <= 6; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(b.x + b.width * (0.8 - 0.05 * i)) });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  const [r0] = await win(page);
+  const [r1] = await settle(page);
+  expect("with reduced motion, no glide", r1 === r0, `${r0} -> ${r1}`);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  // Back to the start of the week (Home), so the swipes below have room.
+  await page.locator("#vibeChart").focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Escape");
   await page.touchscreen.tap(b.x + b.width * 0.5, y);
   expect("a tap still opens the readout", await page.locator("#chartReadout").isVisible());
   // Its top sits just under the red line's dot at the foot of the plot (Bryan, 2026-09-27).
@@ -128,10 +170,10 @@ const win = (page) =>
     document.addEventListener("touchmove", (e) => e.defaultPrevented && window.__held++, { passive: true });
   });
   const held = () => page.evaluate(() => { const n = window.__held; window.__held = 0; return n; });
-  const [d0] = await win(page);
+  const [d0] = await settle(page);
   const y0 = await sy();
   await swipe(b.x + b.width * 0.8, -160, -70);
-  const [d1] = await win(page);
+  const [d1] = await settle(page);
   const h1 = await held();
   expect("a sideways swipe that drifts up slides the chart and holds the page still", d1 > d0 && (await sy()) === y0 && h1 > 0, `${d0}->${d1} scroll ${y0}->${await sy()} held ${h1}`);
   await swipe(b.x + b.width * 0.5, 4, -200);
