@@ -62,6 +62,38 @@ body {
   height: 32px;
   flex: none;
 }
+/* Now and then the star twinkles: still for most of each 9 seconds, then a
+   quick flare and a quarter turn. */
+.headline-logo .logo-star {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logo-twinkle 9s ease-in-out 2s infinite;
+}
+@keyframes logo-twinkle {
+  0%,
+  88%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  91% {
+    transform: scale(1.6) rotate(45deg);
+    opacity: 1;
+  }
+  94% {
+    transform: scale(0.7) rotate(70deg);
+    opacity: 0.6;
+  }
+  97% {
+    transform: scale(1.25) rotate(90deg);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .headline-logo .logo-star {
+    animation: none;
+  }
+}
 .headline .headline-main {
   font-size: 28px;
   font-weight: 500;
