@@ -65,6 +65,15 @@ for (const size of ["phone", "desktop"]) {
   await page.locator("#chartLocation").press("Enter");
   await page.waitForTimeout(1000);
   expect("a ZIP shows its place and drops the DC note", forecastAt(log).at(-1) !== "38.91,-77.04" && !(await note(page).isVisible()), forecastAt(log).join(" "));
+  // The clear button sits at the end of the box, after the ZIP, centred up and down (Bryan, 2026-09-28);
+  // the date sits above the 24 hours / Week switch.
+  const lay = await page.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const inp = r("#chartLocation"), x = r("#zipClearBtn svg"), date = r("#headlineDate"), sw = r(".time-presets");
+    return { dy: Math.abs(x.top + x.height / 2 - (inp.top + inp.height / 2)), atEnd: x.left > inp.left + inp.width / 2 && x.right < inp.right, dateFirst: date.bottom <= sw.top };
+  });
+  expect("the clear button sits at the end of the ZIP box, centred up and down", lay.atEnd && lay.dy < 0.5, JSON.stringify(lay));
+  expect("the date sits above the 24 hours / Week switch", lay.dateFirst, JSON.stringify(lay));
   await page.locator("#zipClearBtn").click();
   await page.waitForTimeout(1000);
   // DC's forecast is still cached from the first load, so no new request: the label and the chart's own place say it.

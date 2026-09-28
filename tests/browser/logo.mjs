@@ -1,6 +1,8 @@
-// The header icon: a tap sets off the star's biggest shine and flares the
-// sun's rays; a second tap starts it again; the timed twinkles wait for it;
-// with reduced motion nothing moves. Needs the site on port 4800.
+// The header icon: its biggest shine, the star's and the sun's rays flaring,
+// runs about 2 seconds after load, on a tap and when a mouse comes over it; a
+// second tap starts it over, a mouse moving off and back does not; the timed
+// twinkles wait for it; with reduced motion nothing moves. Needs the site on
+// port 4800.
 // Usage: node tests/browser/logo.mjs
 import { launch, openApp, waitForChart } from "./harness.mjs";
 
@@ -40,10 +42,30 @@ const look = (page, ms = null) =>
 const dist = (p, q) => Math.hypot(p.cx - q.cx, p.cy - q.cy);
 
 {
-  const { page, t0, errors } = await openApp(browser, { size: "phone", scheme: "dark" });
+  const { page, t0, errors } = await openApp(browser, { size: "phone", scheme: "dark", goto: false });
+  // Note each time the icon's star or rays take a shine's class, and when (the page's clock).
+  await page.addInitScript(() => {
+    window.__shines = [];
+    new MutationObserver((ms) =>
+      ms.forEach((m) => {
+        const c = m.target.getAttribute("class") || "";
+        if (/logo-star--mega|logo-rays--flare/.test(c)) window.__shines.push([Math.round(performance.now()), c]);
+      })
+    ).observe(document, { subtree: true, attributes: true, attributeFilter: ["class"] });
+  });
+  await page.goto("http://localhost:4800/", { waitUntil: "commit" });
   await waitForChart(page, t0);
-  await page.clock.runFor(15000); // past the first timed twinkles
-  await page.waitForTimeout(1800);
+  await page.clock.runFor(2500);
+  const shines = await page.evaluate(() => window.__shines);
+  const at = (re) => shines.find(([, c]) => re.test(c));
+  const [starAt] = at(/logo-star--mega/) || [];
+  const [raysAt] = at(/logo-rays--flare/) || [];
+  expect(
+    "about 2 seconds after load the whole shine runs: the star's and the rays' flare",
+    starAt >= 1900 && starAt <= 2600 && raysAt === starAt,
+    JSON.stringify(shines)
+  );
+  await page.waitForTimeout(2600); // the load's shine over
   const rest = await look(page);
   const logo = page.locator(".headline-logo");
   // Tap, and tap again mid-shine: it starts over, one shine, not two.
@@ -76,6 +98,31 @@ const dist = (p, q) => Math.hypot(p.cx - q.cx, p.cy - q.cy);
     `${dist(rest.ray, rest.sun).toFixed(2)} -> ${dist(flare.ray, rest.sun).toFixed(2)}`
   );
   expect("no errors", errors.length === 0, errors.join(" | "));
+  await page.context().close();
+}
+
+// Desktop: a mouse coming over the icon sets it off; moving off and back mid-shine does not start it over.
+{
+  const { page, t0, errors } = await openApp(browser, { size: "desktop", scheme: "light" });
+  await waitForChart(page, t0);
+  await page.clock.runFor(3000);
+  await page.waitForTimeout(2600); // the load's shine over
+  await page.mouse.move(5, 5);
+  const before = await look(page);
+  const box = await page.locator(".headline-logo").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const over = await look(page);
+  expect(
+    "a mouse over the icon sets off the shine",
+    !/--mega/.test(before.classes[0]) && /logo-star--mega/.test(over.classes[0]) && /logo-rays--flare/.test(over.classes[1]),
+    `${before.classes[0]} -> ${over.classes.join(" | ")}`
+  );
+  await page.waitForTimeout(600);
+  await page.mouse.move(5, 5);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const back = await look(page);
+  expect("moving off and back mid-shine does not start it over", back.name === "logo-shine" && back.time > 400, `${back.name} ${back.time}`);
+  expect("no errors (desktop)", errors.length === 0, errors.join(" | "));
   await page.context().close();
 }
 

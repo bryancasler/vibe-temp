@@ -252,8 +252,8 @@ body {
 .preset-date {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 8px;
-  margin-bottom: 4px;
+  margin-top: 0;
+  margin-bottom: 8px;
   font-weight: 400;
   text-align: center;
 }
@@ -549,10 +549,10 @@ body {
   background: var(--card);
   border: 2px solid var(--border);
   border-radius: 8px;
-  padding: 6px 12px 6px 28px; /* Left padding accounts for spinner space */
+  padding: 6px 28px 6px 12px; /* Right padding keeps the clear button and the spinner clear of the ZIP */
   width: calc(
     5ch + 52px
-  ); /* 5 characters + left padding (28px) + right padding (12px) + extra space for letter-spacing */
+  ); /* 5 characters + left padding (12px) + right padding (28px) + extra space for letter-spacing */
   text-align: center;
   transition: all 0.2s ease;
   letter-spacing: 0.5px;
@@ -600,9 +600,11 @@ body {
 [data-theme="light"] .chart-location-input:disabled {
   background: #f9fafb;
 }
+/* The spinner and the clear button share the end of the box, after the
+   ZIP, centred up and down (Bryan, 2026-09-28); one shows at a time. */
 .zip-loading-spinner {
   position: absolute;
-  left: 8px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   width: 12px;
@@ -615,7 +617,7 @@ body {
 }
 .zip-clear-btn {
   position: absolute;
-  left: 8px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
   background: transparent;
@@ -624,7 +626,7 @@ body {
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -46,7 +46,7 @@
                showing by default, the note beside them on a phone (Bryan, 2026-09-27). -->
           <div class="place-row">
             <span class="zip-inline-wrapper">
-              <div style="position: relative; display: inline-block;">
+              <div style="position: relative; display: inline-flex;">
                 <input
                   type="text"
                   id="chartLocation"
@@ -68,9 +68,12 @@
                   class="zip-clear-btn"
                   type="button"
                   title="Clear ZIP and show Washington, DC"
+                  aria-label="Clear ZIP and show Washington, DC"
                   style="display: none;"
                 >
-                  ✕
+                  <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false">
+                    <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  </svg>
                 </button>
               </div>
               <button
@@ -189,6 +192,8 @@
 
       <!-- Chart -->
       <section class="chart-wrap">
+        <!-- The date first, then the switch (Bryan, 2026-09-28) -->
+        <div class="preset-date" id="headlineDate"></div>
         <div class="time-presets">
           <div class="preset-buttons-group">
             <button
@@ -209,7 +214,6 @@
             </button>
           </div>
         </div>
-        <div class="preset-date" id="headlineDate"></div>
         <div class="chart-status" id="chartStatus"></div>
         <div class="chart-box" id="chartBox">
           <div id="chartSkeleton" class="chart-skeleton">

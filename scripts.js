@@ -7272,11 +7272,12 @@
       // Initialize headline date
       updateHeadlineDate();
 
-      // The header icon's star twinkles now and then: a big twinkle about 2
-      // seconds after the page opens, then every 7 to 11 seconds a small one,
-      // big about one time in four (Bryan, 2026-09-27). None with reduced
-      // motion. A tap on the icon sets off its biggest shine and flares the
-      // sun's rays, and the timed twinkles wait until that is over.
+      // The header icon's star twinkles now and then: every 7 to 11 seconds a
+      // small twinkle, big about one time in four (Bryan, 2026-09-27). Its
+      // biggest shine, with the sun's rays flaring, runs about 2 seconds after
+      // the page opens, on a tap, and when a mouse comes over it (Bryan,
+      // 2026-09-28); the timed twinkles wait until it is over. None of it
+      // moves with reduced motion.
       (function twinkleLogoStar() {
         const logo = document.querySelector(".headline-logo");
         const star = logo && logo.querySelector(".logo-star");
@@ -7292,14 +7293,21 @@
         rays.addEventListener("animationend", (e) => {
           if (e.target === rays.lastElementChild) rays.classList.remove("logo-rays--flare");
         });
-        logo.addEventListener("click", () => {
+        const shine = () => {
           star.classList.remove(...TWINKLES);
           rays.classList.remove("logo-rays--flare");
-          void logo.getBoundingClientRect(); // restart both if a tap comes mid-shine
+          void logo.getBoundingClientRect(); // restart both if one comes mid-shine
           star.classList.add("logo-star--mega");
           rays.classList.add("logo-rays--flare");
           // With reduced motion the CSS holds both still, and nothing ends to clear this.
           shining = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        };
+        // A tap or a click starts it over; a mouse coming over it sets it off
+        // unless it is already shining. A finger's tap sends pointerenter
+        // too, so only the mouse's counts.
+        logo.addEventListener("click", shine);
+        logo.addEventListener("pointerenter", (e) => {
+          if (e.pointerType === "mouse" && !shining) shine();
         });
         if (!window.matchMedia || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
         const twinkle = (big) => {
@@ -7314,7 +7322,7 @@
             next();
           }, 7000 + Math.random() * 4000);
         setTimeout(() => {
-          twinkle(true);
+          shine();
           next();
         }, 2000);
       })();

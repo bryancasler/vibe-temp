@@ -16,9 +16,10 @@ No build step and no package.json: these run with Node 22 and Playwright.
   - `node tests/browser/place.mjs`: where the chart opens: Washington, DC,
     labelled, with no location prompt on load; the location button asks; a ZIP
     or a link picks a place; clearing the ZIP goes back to DC.
-  - `node tests/browser/logo.mjs`: a tap on the header icon sets off the star's
-    biggest shine and flares the sun's rays; a second tap starts it over; the
-    timed twinkles wait for it; with reduced motion nothing moves.
+  - `node tests/browser/logo.mjs`: the header icon's biggest shine (the star's,
+    with the sun's rays flaring) runs 2 seconds after load, on a tap and when a
+    mouse comes over it; a second tap starts it over; the timed twinkles wait
+    for it; with reduced motion nothing moves.
   - `node tests/browser/screens.mjs <dir> [label] [now] [storage JSON]`:
     screenshots at 390px and 1280px, dark and light. Pass
     `'{"vibe.v1.dogs":"true"}'` to see Dogs mode.
