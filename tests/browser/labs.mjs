@@ -91,6 +91,45 @@ const read = (page) =>
     };
   });
 
+// Hovers point i and returns the card's touch grass line, and the times the line's run could end between:
+// its last point in touch grass weather and the one after (from the chart's own data, for `line` 0 sun, 1 shade).
+const hover = async (page, i, line) => {
+  const where = await page.evaluate(([i, line]) => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    const r = ch.canvas.getBoundingClientRect();
+    const v = ch.data.datasets[line].data;
+    const day = ch._isDayByHour || [];
+    const [lo, hi] = v.every((x) => x < 45) ? [18, 24] : [65, 75];
+    const ok = (j) => day[j] && v[j] >= lo && v[j] <= hi;
+    let j = i;
+    while (j + 1 < v.length && ok(j + 1)) j++;
+    const labels = window.timelineState.labels;
+    return { x: r.left + ch.scales.x.getPixelForValue(i), y: r.top + ch.chartArea.top + 20, from: labels[j].getTime(), to: labels[Math.min(j + 1, labels.length - 1)].getTime() };
+  }, [i, line]);
+  await page.mouse.move(where.x, where.y);
+  await page.waitForTimeout(150);
+  const text = await page.evaluate(() => document.querySelector("#chartReadout .readout-mark--grass")?.textContent || null);
+  // The clock in the card, as a time on the run's day
+  const clock = (words) => {
+    const m = words && words.match(/(\d{1,2})(?::(\d\d))?(am|pm)/g);
+    return m;
+  };
+  return { text, from: where.from, to: where.to, clocks: clock(text) };
+};
+// "3pm" or "2:45pm" as minutes after midnight, and a time's minutes after midnight on the place's clock.
+const minutes = (c) => {
+  const [, h, m, ap] = c.match(/(\d{1,2})(?::(\d\d))?(am|pm)/);
+  return ((+h % 12) + (ap === "pm" ? 12 : 0)) * 60 + (+m || 0);
+};
+const placeMinutes = (ms) => {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(new Date(ms));
+  return +p.find((x) => x.type === "hour").value * 60 + +p.find((x) => x.type === "minute").value;
+};
+const within = (c, from, to) => {
+  const m = minutes(c);
+  return m >= placeMinutes(from) - 3 && m <= placeMinutes(to) + 3;
+};
+
 const open = async (path, o = {}) => {
   const { page, t0, errors } = await openApp(browser, { size: "desktop", scheme: "dark", path, storage: { "vibe.v1.dogs": "true" }, ...o });
   await waitForChart(page, t0);
@@ -112,6 +151,21 @@ const open = async (path, o = {}) => {
   expect("below the range both keep their colours", r.neither?.sun === "sun" && r.neither?.shade === "shade", JSON.stringify(r.neither));
   expect("no leaf, and no leaf time", r.leafMarks === 0 && r.leafPills === 0, `${r.leafMarks} ${r.leafPills}`);
   expect("the legend shows the green line, not the leaf", r.legendGreen && !r.legendLeaf);
+  // The hover card says until when it lasts (Bryan, 2026-09-29).
+  const hs = await hover(page, r.picks.sun, 0);
+  expect(
+    "hovering touch grass weather, the card says until when it lasts",
+    /^Touch grass weather (in the sun )?until \d/.test(hs.text || "") && hs.clocks && within(hs.clocks[0], hs.from, hs.to),
+    JSON.stringify(hs)
+  );
+  const ho = await hover(page, r.picks.shadeOnly, 1);
+  expect(
+    "where only the shade is, the card says the shade's and not the sun's",
+    /^Touch grass weather in the shade until \d/.test(ho.text || "") && !/in the sun/.test(ho.text) && within(ho.clocks[0], ho.from, ho.to),
+    JSON.stringify(ho)
+  );
+  const hn = await hover(page, r.picks.neither, 0);
+  expect("outside it, the card has no touch grass line", hn.text === null, JSON.stringify(hn));
   // Labs stays in the address: after a highlight is shared, and after the ZIP is cleared.
   const b = await page.locator("#vibeChart").boundingBox();
   const y = b.y + b.height * 0.45;
@@ -158,6 +212,8 @@ for (const path of ["", "?labs=0"]) {
     r.sun?.sun === "sun" && r.shadeOnly?.shade === "shade" && r.leafMarks > 0 && r.legendLeaf && !r.legendGreen,
     JSON.stringify(r)
   );
+  const h = await hover(page, r.picks.sun, 0);
+  expect(`${path || "without labs"}: the card has no touch grass line`, h.text === null, JSON.stringify(h));
   expect(`no errors (${path || "without labs"})`, errors.length === 0, errors.join(" | "));
   await page.context().close();
 }

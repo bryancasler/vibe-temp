@@ -75,8 +75,7 @@ const settle = async (page) => {
   await page.mouse.move(bw.x + bw.width / 2, bw.y + bw.height * 0.45);
   const [m0] = await win(page);
   for (const [dx, dy] of [[30, 2], [20, 25], [30, 5], [10, 30], [25, 4]]) await page.mouse.wheel(dx, dy);
-  await page.waitForTimeout(100);
-  const [m1] = await win(page);
+  const [m1] = await settle(page); // every scroll event in, however busy the machine
   expect("a sideways trackpad swipe that leans up or down keeps the page still", m1 > m0 && (await page.evaluate(() => scrollY)) === 0, `${m0}->${m1} scroll ${await page.evaluate(() => scrollY)}`);
   await page.evaluate(() => scrollTo(0, 0));
   await page.waitForTimeout(100);
@@ -106,12 +105,11 @@ const settle = async (page) => {
   await page.locator("#presetWeek").click();
   await page.waitForTimeout(200);
   const mid = await win(page);
-  await page.waitForTimeout(600);
-  const week = await win(page);
+  const week = await settle(page); // the zoom out over, however busy the machine
   expect("Week zooms out to the whole week", mid[1] - mid[0] > 192 && mid[1] - mid[0] < 671 && week[0] === 0 && week[1] === 671, `${mid} ${week}`);
   await page.locator("#presetDefault").click();
-  await page.waitForTimeout(800);
-  const back = await win(page);
+  await page.waitForTimeout(300);
+  const back = await settle(page); // the zoom back over, however busy the machine
   expect("back to 24 hours where they were left", back.join() === slid.join(), `${slid} ${back}`);
   expect("no errors (desktop)", errors.length === 0, errors.join(" | "));
   await page.context().close();

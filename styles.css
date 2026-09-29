@@ -2173,6 +2173,11 @@ select {
 .readout-mark--leaf {
   color: var(--leaf);
 }
+.readout-mark--grass {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 @media (max-width: 500px) {
   /* The header's row fits at 390px with the paw alone. */
   .dogs-label {

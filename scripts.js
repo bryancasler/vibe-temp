@@ -4466,9 +4466,15 @@
           if (e && nearEvent(t, e)) marks.push({ kind: "sun", text: `${kind} ${fmtClock(new Date(e))}` });
         }
       }
-      for (const tg of (vibeChart && vibeChart._touchGrassTimes) || []) {
-        if (nearEvent(t, tg.time))
-          marks.push({ kind: "leaf", text: `Touch grass: ${fmtClock(new Date(tg.time))}` });
+      if (LABS) {
+        // Labs: in touch grass weather, how long it lasts (Bryan, 2026-09-29).
+        const grass = grassWords(i, s.labels, stepMs);
+        if (grass) marks.push({ kind: "grass", text: grass });
+      } else {
+        for (const tg of (vibeChart && vibeChart._touchGrassTimes) || []) {
+          if (nearEvent(t, tg.time))
+            marks.push({ kind: "leaf", text: `Touch grass: ${fmtClock(new Date(tg.time))}` });
+        }
       }
       // Dogs mode: the walk rating, air quality, storm words and the paw.
       let walk = null;
@@ -4510,6 +4516,43 @@
         walk,
         marks,
       };
+    }
+
+    // When a line's touch grass weather that point i is in runs out: where the
+    // line leaves the range, found straight between its points, or halfway
+    // to the first point after dark; the green on the chart ends in the same
+    // place (touchGrassSpans). Null when point i is not touch grass weather.
+    function grassEnd(values, isDay, labels, i, stepMs) {
+      const { min, max } = touchGrassRange();
+      const ok = (j) => isDay[j] && Number.isFinite(values[j]) && values[j] >= min && values[j] <= max;
+      if (!ok(i)) return null;
+      let j = i;
+      while (j + 1 < values.length && ok(j + 1)) j++;
+      let f = 0;
+      if (j + 1 < values.length) {
+        if (!isDay[j + 1]) f = 0.5;
+        else {
+          const v1 = values[j];
+          const v2 = values[j + 1];
+          const edge = v2 > max ? max : min;
+          f = v2 !== v1 ? Math.min(1, Math.max(0, (edge - v1) / (v2 - v1))) : 0;
+        }
+      }
+      return labels[j].getTime() + f * stepMs;
+    }
+    // "Touch grass weather until 3pm", naming the sun or the shade when only
+    // one of them is, or when theirs end at different times.
+    function grassWords(i, labels, stepMs) {
+      if (!vibeChart) return null;
+      const isDay = vibeChart._isDayByHour || [];
+      const [sun, shade] = [0, 1].map((d) => grassEnd(vibeChart.data.datasets[d].data, isDay, labels, i, stepMs));
+      // To the nearest 5 minutes
+      const at = (ms) => fmtClock(new Date(Math.round(ms / 300000) * 300000));
+      if (sun !== null && shade !== null && at(sun) === at(shade)) return `Touch grass weather until ${at(sun)}`;
+      const parts = [];
+      if (sun !== null) parts.push(`in the sun until ${at(sun)}`);
+      if (shade !== null) parts.push(`in the shade until ${at(shade)}`);
+      return parts.length ? `Touch grass weather ${parts.join(", ")}` : null;
     }
 
     function readoutSentence(r) {
@@ -4588,6 +4631,13 @@
       }
       const markIcon = { leaf: "\u{1F343}", paw: "\u{1F43E}", sun: "\u{2600}\u{FE0F}" };
       for (const m of r.marks) {
+        if (m.kind === "grass") {
+          // Labs: the legend's short green line, as the chart's lines turn.
+          const line = el("p", "readout-mark readout-mark--leaf readout-mark--grass");
+          line.append(el("span", "dog-legend-green"), el("span", "", m.text));
+          nodes.push(line);
+          continue;
+        }
         nodes.push(
           el("p", `readout-mark readout-mark--${m.kind}`, `${markIcon[m.kind]} ${m.text}`)
         );
@@ -4780,10 +4830,16 @@
       const glide = (samples, upAt) => {
         stopGlide();
         if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        const recent = samples.filter((p) => upAt - p.t <= GLIDE_WINDOW_MS);
+        // Held still before letting go: no glide.
+        const last = samples[samples.length - 1];
+        if (!last || upAt - last.t > GLIDE_WINDOW_MS) return;
+        // The speed over the finger's last GLIDE_WINDOW_MS of moves, counted
+        // back from its last move rather than the lift, so a slow phone that
+        // sends moves far apart still glides.
+        const recent = samples.filter((p) => last.t - p.t <= GLIDE_WINDOW_MS && last.t - p.t >= 0);
         if (recent.length < 2) return;
         const a = recent[0];
-        const b = recent[recent.length - 1];
+        const b = last;
         if (b.t - a.t <= 0) return;
         // Positive: the finger was moving left, on to later hours.
         let v = Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, (a.x - b.x) / (b.t - a.t)));
