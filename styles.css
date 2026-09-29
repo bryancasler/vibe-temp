@@ -3,8 +3,8 @@
   --card: #121826;
   --muted: #8aa0b6;
   --text: #e6edf6;
-  --accent: #6ea8fe; /* shade line */
-  --sun: #ffb86b; /* sun line */
+  --accent: #3b82f6; /* shade line */
+  --sun: #f97316; /* sun line */
   --good: #22c55e; /* current time + vertical line */
   --border: #1f2a3b;
 }
@@ -15,7 +15,7 @@
   --muted: #6b7280;
   --text: #1f2937;
   --accent: #3b82f6;
-  --sun: #f59e0b;
+  --sun: #f97316;
   --good: #10b981;
   --border: #e5e7eb;
 }
@@ -2056,7 +2056,7 @@ select {
   width: 16px;
   height: 3px;
   border-radius: 2px;
-  background: var(--leaf);
+  background: var(--good);
   flex-shrink: 0;
 }
 .dog-legend-note {
@@ -2174,6 +2174,7 @@ select {
   color: var(--leaf);
 }
 .readout-mark--grass {
+  color: var(--good);
   display: flex;
   align-items: center;
   gap: 6px;

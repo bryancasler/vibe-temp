@@ -574,8 +574,9 @@
         )
       : [];
     const DEFAULT_CHART_COLORS = {
-      sun: { start: "#ffb86b", end: "#ff9500" },
-      shade: { start: "#6ea8fe", end: "#4a90e2" },
+      // Bright, in the family of the °C/°F buttons' green (Bryan, 2026-09-29)
+      sun: { start: "#f97316", end: "#ea580c" },
+      shade: { start: "#3b82f6", end: "#2563eb" },
     };
     const isHexColor = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
     let chartColors = storeJSON(CHART_COLORS_KEY, null);
@@ -4173,7 +4174,7 @@
           // In labs, each line is stroked again in green over the stretches
           // where its own values are touch grass weather (Bryan, 2026-09-29).
           const green = LABS
-            ? getComputedStyle(document.documentElement).getPropertyValue("--leaf").trim() || "#8fc28c"
+            ? getComputedStyle(document.documentElement).getPropertyValue("--good").trim() || "#22c55e"
             : null;
           lines.forEach(({ color, pts, slopes, values }) => {
             ctx.save();

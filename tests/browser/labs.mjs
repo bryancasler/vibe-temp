@@ -48,9 +48,9 @@ const read = (page) =>
       return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     };
     const colours = {
-      green: hex(getComputedStyle(document.documentElement).getPropertyValue("--leaf")),
-      sun: hex(JSON.parse(localStorage.getItem("vibe.v1.chartColors") || "null")?.sun?.start || "#ffb86b"),
-      shade: hex(JSON.parse(localStorage.getItem("vibe.v1.chartColors") || "null")?.shade?.start || "#6ea8fe"),
+      green: hex(getComputedStyle(document.documentElement).getPropertyValue("--good")),
+      sun: hex(JSON.parse(localStorage.getItem("vibe.v1.chartColors") || "null")?.sun?.start || "#f97316"),
+      shade: hex(JSON.parse(localStorage.getItem("vibe.v1.chartColors") || "null")?.shade?.start || "#3b82f6"),
     };
     // The colour nearest one of the three, within 3px of where the line runs, at point i or a fraction on
     // from it (the line's height read straight between the points).
