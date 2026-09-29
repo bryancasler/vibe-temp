@@ -2050,6 +2050,15 @@ select {
   width: 100%;
   border-radius: 1px;
 }
+/* Labs: a short green line, as the chart's lines turn in touch grass weather */
+.dog-legend-green {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--leaf);
+  flex-shrink: 0;
+}
 .dog-legend-note {
   margin: 6px 0 0;
   line-height: 1.4;

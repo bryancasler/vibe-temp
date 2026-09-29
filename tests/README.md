@@ -20,6 +20,10 @@ No build step and no package.json: these run with Node 22 and Playwright.
     with the sun's rays flaring) runs 2 seconds after load, on a tap and when a
     mouse comes over it; a second tap starts it over; the timed twinkles wait
     for it; with reduced motion nothing moves.
+  - `node tests/browser/labs.mjs`: with `?labs`, each line turns green where
+    its own values are touch grass weather (daylight, 65-75°F or 18-24°C) in
+    place of the leaf, in °F and °C; a too-warm sun line keeps its colour; labs
+    stays in the address; without it, the leaf is back.
   - `node tests/browser/screens.mjs <dir> [label] [now] [storage JSON]`:
     screenshots at 390px and 1280px, dark and light. Pass
     `'{"vibe.v1.dogs":"true"}'` to see Dogs mode.

@@ -643,6 +643,13 @@
     let lastSummaryTimelineHash = null; // Track hash of timelineState to detect data changes
 
     const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
+    // Experiments, on with ?labs in the address (Bryan, 2026-09-29): the
+    // lines turn green where it is touch grass weather, in place of the leaf.
+    // Read once, and kept in the address from then on.
+    const LABS = (() => {
+      const v = new URLSearchParams(location.search).get("labs");
+      return v !== null && v !== "0" && v !== "false";
+    })();
     const log = (...a) => {
       if (DEBUG) console.log("[Vibe]", ...a);
     };
@@ -728,8 +735,8 @@
       lastCoords = null;
       if (zipEls.input) zipEls.input.value = "";
 
-      // Remove all URL params
-      history.replaceState({}, "", location.pathname);
+      // Remove all URL params but labs
+      history.replaceState({}, "", LABS ? `${location.pathname}?labs` : location.pathname);
 
       // Back to Washington, DC (the browser is only asked from the location button)
       useDefaultPlace();
@@ -747,6 +754,7 @@
       const params = new URLSearchParams();
 
       // Add settings
+      if (LABS) params.set("labs", "1");
       if (unit) params.set("unit", unit);
       if (daysAhead) params.set("days", String(daysAhead));
       // The place on screen, no more precisely than the forecast needs: its
@@ -2758,16 +2766,14 @@
       }));
     }
 
+    // Touch grass weather for people: 65-75°F, or 18-24°C, in daylight.
+    function touchGrassRange() {
+      return unit === "F" ? { min: 65, max: 75 } : { min: 18, max: 24 };
+    }
+
     // Find ideal "Touch Grass" time per day (65-75°F / 18-24°C during daytime)
     function findTouchGrassTimes(labels, sunVals, isDayByHour) {
-      const idealMinF = 65;
-      const idealMaxF = 75;
-      const idealMinC = 18;
-      const idealMaxC = 24;
-
-      // Convert ideal range based on current unit
-      const idealMin = unit === "F" ? idealMinF : idealMinC;
-      const idealMax = unit === "F" ? idealMaxF : idealMaxC;
+      const { min: idealMin, max: idealMax } = touchGrassRange();
 
       const touchGrassTimes = [];
       const timesByDay = new Map(); // Map of day key -> best time for that day
@@ -3625,7 +3631,9 @@
         id: "touchGrass",
         afterDatasetsDraw(chart) {
           const touchGrassTimes = chart._touchGrassTimes || [];
-          if (touchGrassTimes.length === 0) return;
+          // In labs the lines turn green instead (gradientFill), and no leaf.
+          if (LABS) chart._touchGrassPositions = [];
+          if (touchGrassTimes.length === 0 || LABS) return;
 
           const { ctx, scales, chartArea } = chart;
           const sunDsIndex = chart.data.datasets.findIndex(
@@ -4143,6 +4151,7 @@
                   : chartColors.shade.start,
               pts,
               slopes: MonotoneCurve.slopes(pts),
+              values: dataset.data,
             });
           });
 
@@ -4161,12 +4170,73 @@
             );
           }
 
-          lines.forEach(({ color, pts, slopes }) => {
+          // In labs, each line is stroked again in green over the stretches
+          // where its own values are touch grass weather (Bryan, 2026-09-29).
+          const green = LABS
+            ? getComputedStyle(document.documentElement).getPropertyValue("--leaf").trim() || "#8fc28c"
+            : null;
+          lines.forEach(({ color, pts, slopes, values }) => {
             ctx.save();
             ctx.lineWidth = 3;
             ctx.lineJoin = "round";
             ctx.lineCap = "round";
             ctx.strokeStyle = color;
+            tracePath(pts, slopes);
+            ctx.stroke();
+            if (green) {
+              const spans = touchGrassSpans(values, chart._isDayByHour || [], (i) => scales.x.getPixelForValue(i));
+              if (spans.length) {
+                ctx.beginPath();
+                for (const [x1, x2] of spans) ctx.rect(x1, chartArea.top - 10, x2 - x1, chartArea.bottom - chartArea.top + 20);
+                ctx.clip();
+                ctx.strokeStyle = green;
+                tracePath(pts, slopes);
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+          });
+
+          // The x ranges, in px, where a line's values are touch grass
+          // weather: daylight, and within the range. An edge on the range
+          // falls where the line crosses it, straight between two points; an
+          // edge on daylight halfway between them.
+          function touchGrassSpans(values, isDay, xAt) {
+            const { min, max } = touchGrassRange();
+            const spans = [];
+            const add = (a, b) => {
+              if (b <= a) return;
+              const last = spans[spans.length - 1];
+              if (last && a - last[1] < 0.5) last[1] = Math.max(last[1], b);
+              else spans.push([a, b]);
+            };
+            for (let i = 0; i < values.length - 1; i++) {
+              const v1 = values[i];
+              const v2 = values[i + 1];
+              if (!Number.isFinite(v1) || !Number.isFinite(v2)) continue;
+              // Daylight, as a share of the way from point i to i + 1
+              let lo = isDay[i] ? 0 : 0.5;
+              let hi = isDay[i + 1] ? 1 : 0.5;
+              if (!isDay[i] && !isDay[i + 1]) continue;
+              // Within the range, the same way
+              if (v1 === v2) {
+                if (v1 < min || v1 > max) continue;
+              } else {
+                const tAt = (v) => (v - v1) / (v2 - v1);
+                const a = tAt(min);
+                const b = tAt(max);
+                lo = Math.max(lo, Math.min(a, b));
+                hi = Math.min(hi, Math.max(a, b));
+              }
+              if (hi <= lo) continue;
+              const x1 = xAt(i);
+              const x2 = xAt(i + 1);
+              add(x1 + (x2 - x1) * lo, x1 + (x2 - x1) * hi);
+            }
+            return spans;
+          }
+
+          function tracePath(pts, slopes) {
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
             if (pts.length === 1) ctx.lineTo(pts[0].x, pts[0].y);
@@ -4198,9 +4268,7 @@
                 ctx.lineTo(p2.x, p2.y);
               }
             }
-            ctx.stroke();
-            ctx.restore();
-          });
+          }
         },
       };
       // Show canvas so Chart.js can render, but keep skeleton visible until animation completes
@@ -5425,7 +5493,17 @@
           "How it's picked",
         ]);
       }
-      if (((vibeChart && vibeChart._touchGrassTimes) || []).length) {
+      if (LABS) {
+        // In labs the lines go green instead of the leaf.
+        const li = dogEl("li", "dog-legend-item");
+        li.append(dogEl("span", "dog-legend-green"), "Touch grass weather (people)");
+        items.push(li);
+        notes.push([
+          `The lines turn green in daylight from ${unit === "F" ? "65°F to 75°F" : "18°C to 24°C"}: Vibe Temp's touch grass rule for people. `,
+          "methodology.html#touch-grass",
+          "Where it comes from",
+        ]);
+      } else if (((vibeChart && vibeChart._touchGrassTimes) || []).length) {
         const li = dogEl("li", "dog-legend-item");
         li.append(dogEl("span", "dog-legend-leaf", "\u{1F343}"), "Touch grass time (people)");
         items.push(li);
@@ -5552,7 +5630,7 @@
         chart._pillLayout = [];
         if (!dogsOn || !dogState || !chart.scales.x) return;
         const { chartArea, scales } = chart;
-        const leaves = chart._touchGrassTimes || [];
+        const leaves = LABS ? [] : chart._touchGrassTimes || []; // no leaf in labs
         const sunData = chart.data.datasets[0].data;
         for (const p of dogState.paws) {
           const x = pixelForTime(chart, p.t * 1000);
@@ -5587,7 +5665,7 @@
         }
         // One of each: the next leaf gets its time, the one the caption names.
         const leafPills = [];
-        const nextLeaf = (chart._touchGrassTimes || [])
+        const nextLeaf = (LABS ? [] : chart._touchGrassTimes || [])
           .filter((tg) => {
             const t = new Date(tg.time).getTime();
             return t >= Date.now() - 15 * 60 * 1000 && t <= Date.now() + 24 * 3600 * 1000;
