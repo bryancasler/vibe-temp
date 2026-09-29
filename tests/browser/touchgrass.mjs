@@ -1,8 +1,8 @@
-// ?labs: the chart's lines turn green where their own values are touch grass
-// weather (daylight, 65-75°F or 18-24°C), in place of the leaf; a line that is
-// too warm keeps its colour while the other goes green. Labs stays in the
-// address. Needs the site on port 4800.
-// Usage: node tests/browser/labs.mjs
+// Touch grass weather: the chart's lines turn green where their own values
+// are touch grass weather (daylight, 65-75°F or 18-24°C), with no leaf; a line
+// that is too warm keeps its colour while the other goes green; the hover card
+// says until when it lasts. Needs the site on port 4800.
+// Usage: node tests/browser/touchgrass.mjs
 import { launch, openApp, waitForChart } from "./harness.mjs";
 
 const fails = [];
@@ -137,9 +137,9 @@ const open = async (path, o = {}) => {
   return { page, errors };
 };
 
-// Labs on
+// In °F
 {
-  const { page, errors } = await open("?labs");
+  const { page, errors } = await open("");
   const r = await read(page);
   expect("the day has a stretch of each kind to test", r.picks.sun !== null && r.picks.shadeOnly !== null && r.picks.neither !== null, JSON.stringify(r.picks));
   expect("where the sun line is touch grass weather, it turns green", r.sun?.sun === "green", JSON.stringify(r.sun));
@@ -166,55 +166,17 @@ const open = async (path, o = {}) => {
   );
   const hn = await hover(page, r.picks.neither, 0);
   expect("outside it, the card has no touch grass line", hn.text === null, JSON.stringify(hn));
-  // Labs stays in the address: after a highlight is shared, and after the ZIP is cleared.
-  const b = await page.locator("#vibeChart").boundingBox();
-  const y = b.y + b.height * 0.45;
-  await page.mouse.move(b.x + b.width * 0.3, y);
-  await page.mouse.down();
-  await page.mouse.up();
-  await page.mouse.down();
-  for (let i = 1; i <= 8; i++) await page.mouse.move(b.x + b.width * (0.3 + 0.03 * i), y);
-  await page.mouse.up();
-  await page.waitForTimeout(200);
-  const shared = await page.evaluate(() => location.search);
-  expect("a shared highlight's link keeps labs", /start=/.test(shared) && /[?&]labs=1/.test(shared), shared);
-  await page.locator("#chartLocation").fill("90012");
-  await page.locator("#chartLocation").press("Enter");
-  await page.waitForTimeout(1000);
-  await page.locator("#zipClearBtn").click();
-  await page.waitForTimeout(800);
-  const cleared = await page.evaluate(() => location.search);
-  expect("clearing the ZIP keeps labs", /[?&]labs/.test(cleared), cleared);
-  await page.evaluate(() => document.getElementById("useDefaultsBtn").click());
-  await page.waitForTimeout(800);
-  const reset = await page.evaluate(() => location.search);
-  expect("going back to the defaults keeps labs", /[?&]labs/.test(reset), reset);
-  expect("no errors (labs)", errors.length === 0, errors.join(" | "));
+  expect("no errors (°F)", errors.length === 0, errors.join(" | "));
   await page.context().close();
 }
 
-// Labs on, in °C: the same moments go green.
+// In °C: the same moments go green.
 {
-  const { page, errors } = await open("?labs&unit=C");
+  const { page, errors } = await open("?unit=C");
   const r = await read(page);
   expect("in °C, the sun line turns green in the same weather", r.sun?.sun === "green", JSON.stringify(r));
   expect("in °C, only the shade line where only the shade qualifies", r.shadeOnly?.shade === "green" && r.shadeOnly?.sun === "sun", JSON.stringify(r.shadeOnly));
   expect("no errors (°C)", errors.length === 0, errors.join(" | "));
-  await page.context().close();
-}
-
-// Labs off: no green, the leaf is back; ?labs=0 is off too.
-for (const path of ["", "?labs=0"]) {
-  const { page, errors } = await open(path);
-  const r = await read(page);
-  expect(
-    `${path || "without labs"}: the lines keep their colours and the leaf is there`,
-    r.sun?.sun === "sun" && r.shadeOnly?.shade === "shade" && r.leafMarks > 0 && r.legendLeaf && !r.legendGreen,
-    JSON.stringify(r)
-  );
-  const h = await hover(page, r.picks.sun, 0);
-  expect(`${path || "without labs"}: the card has no touch grass line`, h.text === null, JSON.stringify(h));
-  expect(`no errors (${path || "without labs"})`, errors.length === 0, errors.join(" | "));
   await page.context().close();
 }
 

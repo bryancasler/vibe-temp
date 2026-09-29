@@ -644,13 +644,6 @@
     let lastSummaryTimelineHash = null; // Track hash of timelineState to detect data changes
 
     const DEBUG = new URLSearchParams(location.search).get("debug") === "true";
-    // Experiments, on with ?labs in the address (Bryan, 2026-09-29): the
-    // lines turn green where it is touch grass weather, in place of the leaf.
-    // Read once, and kept in the address from then on.
-    const LABS = (() => {
-      const v = new URLSearchParams(location.search).get("labs");
-      return v !== null && v !== "0" && v !== "false";
-    })();
     const log = (...a) => {
       if (DEBUG) console.log("[Vibe]", ...a);
     };
@@ -736,8 +729,8 @@
       lastCoords = null;
       if (zipEls.input) zipEls.input.value = "";
 
-      // Remove all URL params but labs
-      history.replaceState({}, "", LABS ? `${location.pathname}?labs` : location.pathname);
+      // Remove all URL params
+      history.replaceState({}, "", location.pathname);
 
       // Back to Washington, DC (the browser is only asked from the location button)
       useDefaultPlace();
@@ -755,7 +748,6 @@
       const params = new URLSearchParams();
 
       // Add settings
-      if (LABS) params.set("labs", "1");
       if (unit) params.set("unit", unit);
       if (daysAhead) params.set("days", String(daysAhead));
       // The place on screen, no more precisely than the forecast needs: its
@@ -3631,60 +3623,6 @@
         },
       };
 
-      // Touch Grass marker plugin - shows ideal temperature time per day
-      const touchGrassPlugin = {
-        id: "touchGrass",
-        afterDatasetsDraw(chart) {
-          const touchGrassTimes = chart._touchGrassTimes || [];
-          // In labs the lines turn green instead (gradientFill), and no leaf.
-          if (LABS) chart._touchGrassPositions = [];
-          if (touchGrassTimes.length === 0 || LABS) return;
-
-          const { ctx, scales, chartArea } = chart;
-          const sunDsIndex = chart.data.datasets.findIndex(
-            (d) => d.label === "Sun Vibe"
-          );
-          if (sunDsIndex === -1) return;
-          const sunData = chart.data.datasets[sunDsIndex].data;
-
-          // Store positions for hover detection
-          const positions = [];
-
-          ctx.save();
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-
-          touchGrassTimes.forEach((tgTime) => {
-            // Get x position for the time
-            const x = scales.x.getPixelForValue(tgTime.index);
-
-            // Only draw if within chart area
-            if (x < chartArea.left || x > chartArea.right) return;
-
-            // Get y position on sun vibe line (moved off the paw in Dogs mode)
-            const ySun =
-              scales.y.getPixelForValue(sunData[tgTime.index]) +
-              ((chart._leafShift && chart._leafShift[tgTime.index]) || 0);
-
-            // Store position for hover detection
-            positions.push({
-              x,
-              y: ySun,
-              time: tgTime.time,
-              temp: tgTime.temp,
-              index: tgTime.index,
-            });
-
-            // Draw leaf icon
-            ctx.fillText("🍃", x, ySun - 8);
-          });
-
-          chart._touchGrassPositions = positions;
-          ctx.restore();
-        },
-      };
-
       // Wind chill indicator plugin - shows when wind significantly affects feel
       const windChillPlugin = {
         id: "windChill",
@@ -4175,11 +4113,10 @@
             );
           }
 
-          // In labs, each line is stroked again in green over the stretches
-          // where its own values are touch grass weather (Bryan, 2026-09-29).
-          const green = LABS
-            ? getComputedStyle(document.documentElement).getPropertyValue("--good").trim() || "#22c55e"
-            : null;
+          // Each line is stroked again in green over the stretches where its
+          // own values are touch grass weather, in place of the old leaf
+          // (Bryan, 2026-09-29).
+          const green = getComputedStyle(document.documentElement).getPropertyValue("--good").trim() || "#22c55e";
           lines.forEach(({ color, pts, slopes, values }) => {
             ctx.save();
             ctx.lineWidth = 3;
@@ -4360,7 +4297,6 @@
           selectionHighlightPlugin,
           currentLine,
           sunMarkerPlugin,
-          touchGrassPlugin,
           dogStripPlugin,
           dogMarksPlugin,
           windChillPlugin,
@@ -4471,16 +4407,9 @@
           if (e && nearEvent(t, e)) marks.push({ kind: "sun", text: `${kind} ${fmtClock(new Date(e))}` });
         }
       }
-      if (LABS) {
-        // Labs: in touch grass weather, how long it lasts (Bryan, 2026-09-29).
-        const grass = grassWords(i, s.labels, stepMs);
-        if (grass) marks.push({ kind: "grass", text: grass });
-      } else {
-        for (const tg of (vibeChart && vibeChart._touchGrassTimes) || []) {
-          if (nearEvent(t, tg.time))
-            marks.push({ kind: "leaf", text: `Touch grass: ${fmtClock(new Date(tg.time))}` });
-        }
-      }
+      // In touch grass weather, how long it lasts (Bryan, 2026-09-29).
+      const grass = grassWords(i, s.labels, stepMs);
+      if (grass) marks.push({ kind: "grass", text: grass });
       // Dogs mode: the walk rating, air quality, storm words and the paw.
       let walk = null;
       let aqi = null;
@@ -4732,25 +4661,6 @@
       return pixelToTime(x, timelineState.labels, vibeChart.scales);
     }
 
-    // Near a touch-grass leaf, the card names it (as it always has).
-    function paintLeafCardIfNear(clientX, clientY) {
-      const rect = els.chartCanvas.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
-      for (const pos of vibeChart._touchGrassPositions || []) {
-        if (Math.hypot(x - pos.x, y - pos.y) >= 20) continue;
-        const tempStr = `${formatUserTemp(pos.temp)}${unitSuffix()}`;
-        if (els.combinedLabel)
-          els.combinedLabel.textContent = `\u{1F343} Touch Grass - ${fmtHM(pos.time)} - ${tempStr}`;
-        if (els.combinedTemp) els.combinedTemp.textContent = tempStr;
-        if (els.combinedTempWrapper) els.combinedTempWrapper.style.display = "flex";
-        if (els.sunTempWrapper) els.sunTempWrapper.style.display = "none";
-        if (els.shadeTempWrapper) els.shadeTempWrapper.style.display = "none";
-        els.sunTempWrapper?.parentElement?.classList.add("sun-hidden");
-        return;
-      }
-    }
-
     // A finished drag: select the range and share it.
     function finishSelection(startTime, endTime) {
       const from = startTime < endTime ? startTime : endTime;
@@ -4925,7 +4835,6 @@
           const i = pointIndexAt(e.clientX);
           if (i !== null) {
             showPoint(i);
-            paintLeafCardIfNear(e.clientX, e.clientY);
           }
         }
       });
@@ -4956,7 +4865,6 @@
         const i = pointIndexAt(e.clientX);
         if (i === null) return;
         showPoint(i);
-        paintLeafCardIfNear(e.clientX, e.clientY);
         readoutPinned = e.pointerType !== "mouse";
       });
 
@@ -5097,7 +5005,6 @@
     const DOGS_KEY = STORE + "dogs";
     const DOG_STRIP_SPACE = 16; // px under the plot for the walk strip
     const PAW_BROWN = "#3D2E1C";
-    const LEAF_GREEN = "#3F7D3C";
     let dogsOn = storeGet(DOGS_KEY) !== "false";
     let currentForecast = null; // the raw forecast behind the chart
     // Air and storms for the place on screen: { key, air: Map|null,
@@ -5554,22 +5461,13 @@
           "How it's picked",
         ]);
       }
-      if (LABS) {
-        // In labs the lines go green instead of the leaf.
+      {
+        // The lines go green in touch grass weather.
         const li = dogEl("li", "dog-legend-item");
         li.append(dogEl("span", "dog-legend-green"), "Touch grass weather (people)");
         items.push(li);
         notes.push([
           `The lines turn green in daylight from ${unit === "F" ? "65°F to 75°F" : "18°C to 24°C"}: Vibe Temp's touch grass rule for people. `,
-          "methodology.html#touch-grass",
-          "Where it comes from",
-        ]);
-      } else if (((vibeChart && vibeChart._touchGrassTimes) || []).length) {
-        const li = dogEl("li", "dog-legend-item");
-        li.append(dogEl("span", "dog-legend-leaf", "\u{1F343}"), "Touch grass time (people)");
-        items.push(li);
-        notes.push([
-          `The leaf marks the daylight time that comes closest to ${unit === "F" ? "70°F" : "21°C"} in the sun, anywhere from ${unit === "F" ? "65°F to 75°F" : "18°C to 24°C"}, favoring 10am to 5pm: Vibe Temp's rule for people. `,
           "methodology.html#touch-grass",
           "Where it comes from",
         ]);
@@ -5686,30 +5584,14 @@
     const dogMarksPlugin = {
       id: "dogMarks",
       beforeDatasetsDraw(chart) {
-        chart._leafShift = {};
         chart._pawLayout = [];
         chart._pillLayout = [];
         if (!dogsOn || !dogState || !chart.scales.x) return;
         const { chartArea, scales } = chart;
-        const leaves = LABS ? [] : chart._touchGrassTimes || []; // no leaf in labs
-        const sunData = chart.data.datasets[0].data;
         for (const p of dogState.paws) {
           const x = pixelForTime(chart, p.t * 1000);
           if (x === null || x < chartArea.left || x > chartArea.right) continue;
-          let y = scales.y.getPixelForValue(toUserTemp(p.sunF));
-          // The leaf sits 8px above its point; part the two just enough.
-          for (const tg of leaves) {
-            const lx = scales.x.getPixelForValue(tg.index);
-            const ly = scales.y.getPixelForValue(sunData[tg.index]) - 8;
-            const dx = Math.abs(lx - x);
-            const dy = Math.abs(ly - y);
-            if (dx < 18 && dy < 18) {
-              const push = (18 - dy) / 2 + 1;
-              const leafUp = ly <= y;
-              chart._leafShift[tg.index] = leafUp ? -push : push;
-              y += leafUp ? push : -push;
-            }
-          }
+          const y = scales.y.getPixelForValue(toUserTemp(p.sunF));
           chart._pawLayout.push({ x, y, t: p.t });
         }
       },
@@ -5724,25 +5606,8 @@
           const side = p.x > (chartArea.left + chartArea.right) / 2 ? "left" : "right";
           pills.push(timePill(ctx, VibeDogs.formatClock(p.t, placeZone), p.x, p.y, PAW_BROWN, chartArea, side));
         }
-        // One of each: the next leaf gets its time, the one the caption names.
-        const leafPills = [];
-        const nextLeaf = (LABS ? [] : chart._touchGrassTimes || [])
-          .filter((tg) => {
-            const t = new Date(tg.time).getTime();
-            return t >= Date.now() - 15 * 60 * 1000 && t <= Date.now() + 24 * 3600 * 1000;
-          })
-          .sort((a, b) => a.time - b.time)
-          .slice(0, 1);
-        for (const tg of nextLeaf) {
-          const t = new Date(tg.time).getTime();
-          const x = scales.x.getPixelForValue(tg.index);
-          const y = scales.y.getPixelForValue(chart.data.datasets[0].data[tg.index]) - 8 + (chart._leafShift?.[tg.index] || 0);
-          const pawSide = pills[0] && pills[0].left > x ? "left" : "right";
-          const pill = timePill(ctx, VibeDogs.formatClock(t / 1000, placeZone), x, y, LEAF_GREEN, chartArea, pills.length ? pawSide : x > (chartArea.left + chartArea.right) / 2 ? "left" : "right");
-          if (!pills.some((q) => overlaps(q, pill))) leafPills.push(pill);
-        }
-        chart._pillLayout = [...pills, ...leafPills];
-        for (const p of [...leafPills, ...pills]) drawPill(ctx, p);
+        chart._pillLayout = pills;
+        for (const p of pills) drawPill(ctx, p);
       },
     };
 
