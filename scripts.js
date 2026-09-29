@@ -161,6 +161,7 @@
     const presetTodayBtn = $("#presetToday");
     const cardsContainer = $(".cards");
     const presetTomorrowBtn = $("#presetTomorrow");
+    const presetSixBtn = $("#presetSix");
     const presetDefaultBtn = $("#presetDefault");
     const presetWeekBtn = $("#presetWeek");
     const preset3DayBtn = $("#preset3Day");
@@ -634,6 +635,13 @@
     // keys, and the Week view shows all of it (Bryan, 2026-09-26).
     const DATA_DAYS = 7;
     let viewStart = 0;
+    // The 6 hours: the last hour and the next 6, a window of their own on the
+    // same week, opened on its own when they are changeable (Bryan,
+    // 2026-09-30). viewPicked: a view was clicked, or the link named one, so
+    // the chart no longer picks for itself.
+    let sixView = false;
+    let viewPicked = false;
+    let dayStartBeforeSix = null;
     let timelineState = null; // { labels, shadeVals, sunVals, solarByHour, isDayByHour, windByHour, humidityByHour, precipitationByHour, weathercodeByHour, now } all in °F
     window.timelineState = null; // Expose timeline state for tooltip data access
     let simActive = false;
@@ -2582,9 +2590,86 @@
     }
     // The view's window on the chart, in point indexes: daysAhead days
     // from viewStart, kept inside the week.
+    // The chart's point at or just before now, or null before there is one.
+    function nowPointIndex() {
+      const labels = vibeChart?._rawLabels || [];
+      const now = timelineState?.now ? new Date(timelineState.now).getTime() : Date.now();
+      let at = null;
+      for (let i = 0; i < labels.length; i++) {
+        if (new Date(labels[i]).getTime() <= now) at = i;
+        else break;
+      }
+      return at;
+    }
+
+    // Changeable in the next 6 hours, as DC Goldens reads it (Bryan,
+    // 2026-09-30): rain, snow, ice or storms start or stop in them (all-day
+    // rain does not count), or the shade feel moves CHANGEABLE_JUMP_F within
+    // two hours. Returns the reason, or null.
+    const CHANGEABLE_HOURS = 6;
+    const CHANGEABLE_JUMP_F = 8;
+    function changeableSoon(s = timelineState) {
+      if (!s || !s.labels || s.labels.length < 2) return null;
+      const now = s.now ? new Date(s.now).getTime() : Date.now();
+      const end = now + CHANGEABLE_HOURS * HOUR_MS;
+      const stepMs = s.labels[1].getTime() - s.labels[0].getTime();
+      const idx = [];
+      for (let i = 0; i < s.labels.length; i++) {
+        const t = s.labels[i].getTime();
+        if (t + stepMs > now && t <= end) idx.push(i);
+      }
+      const code = (i) => s.weathercodeByHour?.[i];
+      const storm = (i) => {
+        const c = code(i);
+        if (c >= 95 && c <= 99) return true;
+        if (!dogState) return false;
+        const hourT = PlaceTime.startOfHour(s.labels[i], placeZone) / 1000;
+        const h = dogState.hours.find((x) => x.t === hourT);
+        return !!h && VibeDogs.isThunder(h);
+      };
+      const falls = (i) => {
+        const p = s.precipitationByHour?.[i];
+        const c = code(i);
+        return p > 0 && ((c >= 51 && c <= 67) || (c >= 71 && c <= 77) || (c >= 80 && c <= 86));
+      };
+      const wet = (i) => falls(i) || storm(i);
+      for (let k = 1; k < idx.length; k++) {
+        const was = wet(idx[k - 1]);
+        const is = wet(idx[k]);
+        if (was === is) continue;
+        const at = fmtClock(s.labels[idx[k]]);
+        if (!is) return `dry from ${at}`;
+        const c = code(idx[k]);
+        const what = storm(idx[k]) ? "storms" : (c >= 71 && c <= 77) || c === 85 || c === 86 ? "snow" : "rain";
+        return `${what} from ${at}`;
+      }
+      for (let a = 0; a < idx.length; a++) {
+        for (let b = a + 1; b < idx.length; b++) {
+          const i = idx[a];
+          const j = idx[b];
+          if (s.labels[j].getTime() - s.labels[i].getTime() > 2 * HOUR_MS) break;
+          const d = s.shadeVals[j] - s.shadeVals[i];
+          if (Number.isFinite(d) && Math.abs(d) >= CHANGEABLE_JUMP_F)
+            return `${Math.round(Math.abs(d))}°F ${d < 0 ? "drop" : "rise"} by ${fmtClock(s.labels[j])}`;
+        }
+      }
+      return null;
+    }
+
+    // After each forecast loads, unless a view was chosen: the 6 hours when
+    // they are changeable, the 24 hours when not.
+    function pickViewForForecast() {
+      const reason = changeableSoon();
+      if (chartBox) chartBox.dataset.changeable = reason || "";
+      if (viewPicked || !vibeChart) return;
+      if (reason && !sixView && daysAhead === 2) setTimePreset("six");
+      else if (!reason && sixView) setTimePreset("default");
+    }
+
     function viewWindow(labels = vibeChart?._rawLabels || []) {
       const last = Math.max(0, labels.length - 1);
-      const len = Math.min(last, daysAhead * pointsPerDay(labels));
+      const perDay = pointsPerDay(labels);
+      const len = Math.min(last, sixView ? Math.round((7 * perDay) / 24) : daysAhead * perDay);
       const start = Math.min(last - len, Math.max(0, Math.round(viewStart)));
       return { min: start, max: start + len, len, last };
     }
@@ -5853,6 +5938,7 @@
             ds.now,
             ds.isDayByHour
           );
+          pickViewForForecast();
           // Update remainder of day summary after chart renders
           await updateRemainderOfDaySummary();
           // Update summary if selection exists (weather data may have changed)
@@ -5944,6 +6030,7 @@
         ds.now,
         ds.isDayByHour
       );
+      pickViewForForecast();
       // Update remainder of day summary after chart renders
       await updateRemainderOfDaySummary();
       updateAdvStats(); // Update stats after chart is rendered
@@ -6336,6 +6423,7 @@
 
         // Clear active state from all presets
         const allPresetBtns = [
+          presetSixBtn,
           presetTodayBtn,
           presetTomorrowBtn,
           presetDefaultBtn,
@@ -6366,6 +6454,11 @@
             newDaysAhead = 1;
             startFromTomorrow = true;
             clickedBtn = presetTomorrowBtn;
+            break;
+          case "six":
+            newDaysAhead = 2;
+            startFromTomorrow = false;
+            clickedBtn = presetSixBtn;
             break;
           case "default":
             newDaysAhead = 2;
@@ -6403,12 +6496,25 @@
         daysAhead = newDaysAhead;
         if (els.daysAhead) els.daysAhead.value = daysAhead;
         storageCacheSet(DAYS_AHEAD_KEY, String(daysAhead));
+        // Into the 6 hours: from an hour before now; out of them, the 24
+        // hours come back where they were left.
+        const wasSix = sixView;
+        sixView = preset === "six";
+        if (sixView && !wasSix) {
+          dayStartBeforeSix = viewStart;
+          const at = nowPointIndex();
+          if (at !== null) viewStart = Math.max(0, at - pointsPerDay(vibeChart?._rawLabels || []) / 24);
+        } else if (!sixView && wasSix && dayStartBeforeSix !== null) {
+          viewStart = dayStartBeforeSix;
+        }
 
         // Update date display (needs to be after daysAhead is set)
         updateHeadlineDate();
 
         // Update chart title
-        if (preset === "tomorrow") {
+        if (preset === "six") {
+          if (chartTitleEl) chartTitleEl.textContent = "Next 6 Hours";
+        } else if (preset === "tomorrow") {
           if (chartTitleEl) chartTitleEl.textContent = "Tomorrow";
         } else if (preset === "default") {
           if (chartTitleEl) chartTitleEl.textContent = "24-Hour Forecast";
@@ -6418,7 +6524,7 @@
 
         // 24 hours and Week draw the same week: the switch only moves the
         // window, so it zooms there instead of redrawing (Bryan, 2026-09-26)
-        if (vibeChart && timelineState && fromWindow && (preset === "default" || preset === "week")) {
+        if (vibeChart && timelineState && fromWindow && (preset === "six" || preset === "default" || preset === "week")) {
           const to = viewWindow();
           animateWindow(fromWindow, [to.min, to.max], async () => {
             applyWindow();
@@ -6568,13 +6674,22 @@
         }
       }
 
-      // Time preset buttons
+      // Time preset buttons. A click is a choice: the chart stops picking.
+      presetSixBtn &&
+        presetSixBtn.addEventListener("click", () => {
+          viewPicked = true;
+          setTimePreset("six");
+        });
       presetDefaultBtn &&
-        presetDefaultBtn.addEventListener("click", () =>
-          setTimePreset("default")
-        );
+        presetDefaultBtn.addEventListener("click", () => {
+          viewPicked = true;
+          setTimePreset("default");
+        });
       presetWeekBtn &&
-        presetWeekBtn.addEventListener("click", () => setTimePreset("week"));
+        presetWeekBtn.addEventListener("click", () => {
+          viewPicked = true;
+          setTimePreset("week");
+        });
 
       // Day navigation function
 
@@ -7448,6 +7563,7 @@
       // Set initial active preset button based on daysAhead
       // First, clear all active states to ensure only one is active
       const allPresetBtns = [
+        presetSixBtn,
         presetTodayBtn,
         presetTomorrowBtn,
         presetDefaultBtn,
@@ -7581,6 +7697,8 @@
 
         // Apply days ahead
         const urlDays = params.get("days");
+        // A link that names its days or a highlight keeps them: no automatic 6 hours.
+        if (urlDays || (params.get("start") && params.get("end"))) viewPicked = true;
         if (urlDays) {
           const days = parseInt(urlDays, 10);
           if (days >= 1 && days <= 7) {
