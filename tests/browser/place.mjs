@@ -46,6 +46,21 @@ for (const size of ["phone", "desktop"]) {
     (size === "phone" ? at.beside : at.under && !at.beside) && at.fits,
     JSON.stringify(at)
   );
+  // Sunrise and sunset suns sit on the line, not above it (Bryan, 2026-09-29): each one's centre at the sun
+  // line's height there, straight between the points either side, where the line is split and drawn.
+  const suns = await page.evaluate(() => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    const labels = (ch._rawLabels || []).map((d) => new Date(d).getTime());
+    const sun = ch.data.datasets[0].data;
+    return (ch._sunMarkerPositions || []).map((m) => {
+      const t = new Date(m.time).getTime();
+      const i = labels.findIndex((l) => l > t) - 1;
+      const f = (t - labels[i]) / (labels[i + 1] - labels[i]);
+      const lineY = ch.scales.y.getPixelForValue(sun[i] + (sun[i + 1] - sun[i]) * f);
+      return +(m.y - lineY).toFixed(2);
+    });
+  });
+  expect(`${size}: the sunrise and sunset suns sit on the line`, suns.length > 0 && suns.every((d) => Math.abs(d) < 1), JSON.stringify(suns));
   expect(`${size}: never asks for the device's location on load`, (await asked(page)) === 0, `${await asked(page)}`);
   await page.locator("#gpsLocationBtn").click();
   await page.waitForTimeout(800);

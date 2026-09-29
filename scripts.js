@@ -3562,6 +3562,7 @@
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+          chart._sunMarkerPositions = [];
 
           markers.forEach((m) => {
             // Get exact x position for the sunrise/sunset time
@@ -3620,7 +3621,10 @@
               return; // Can't determine position
             }
 
-            ctx.fillText(m.emoji, x, ySun - 8);
+            // On the line, not above it (Bryan, 2026-09-29): the line runs
+            // through this very point, split there at sunrise and sunset.
+            ctx.fillText(m.emoji, x, ySun);
+            chart._sunMarkerPositions.push({ x, y: ySun, time: m.time });
           });
 
           ctx.restore();
