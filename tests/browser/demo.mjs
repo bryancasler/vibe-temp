@@ -38,20 +38,27 @@ const browser = await launch();
     const px = (x, y) => ctx.getImageData(Math.round(x * r), Math.round(y * r), 1, 1).data;
     const near = (d, [R, G, B]) => Math.hypot(d[0] - R, d[1] - G, d[2] - B) < 40;
     const sums = { hot: [], cold: [], none: [] };
-    const coldPx = [];
+    const coldLow = [];
+    const coldTopA = [];
     for (let x = a.left + 2; x < a.right - 2; x += 3) {
       const strip = px(x, a.bottom + 3 + 16 - 5 - 2);
       const kind = near(strip, [0xd6, 0x48, 0x3a]) ? "hot" : near(strip, [0x02, 0x84, 0xc7]) ? "cold" : strip[3] < 50 ? "none" : null;
       if (!kind) continue;
-      const p = px(x, a.top + 4);
+      // Read near the strip, where the fade is strongest, and near the top.
+      const p = px(x, a.bottom - 6);
       sums[kind].push(p[0] - p[2]);
-      if (kind === "cold") coldPx.push(p[0] + p[1] + p[2]);
+      if (kind === "cold") {
+        coldLow.push(p[3]);
+        coldTopA.push(px(x, a.top + 4)[3]);
+        (sums.coldSum ||= []).push(p[0] + p[1] + p[2]);
+      }
     }
     const mean = (v) => (v.length ? v.reduce((s, n) => s + n, 0) / v.length : null);
-    return { hot: mean(sums.hot), cold: mean(sums.cold), none: mean(sums.none), coldSpread: coldPx.length ? Math.max(...coldPx) - Math.min(...coldPx) : null };
+    return { hot: mean(sums.hot), cold: mean(sums.cold), none: mean(sums.none), lowAlpha: mean(coldLow), topAlpha: mean(coldTopA), coldSpread: sums.coldSum ? Math.max(...sums.coldSum) - Math.min(...sums.coldSum) : null };
   });
   expect("too-hot hours tint the plot red", tint.hot !== null && tint.hot > tint.none + 8, JSON.stringify(tint));
-  expect("a band is one even colour, night and day alike", tint.coldSpread !== null && tint.coldSpread <= 12, JSON.stringify(tint));
+  expect("a band fades up from the strip", tint.lowAlpha > tint.topAlpha + 40, JSON.stringify(tint));
+  expect("the night shading shows through a band", tint.coldSpread !== null && tint.coldSpread > 20, JSON.stringify(tint));
   expect("too-cold hours tint the plot blue", tint.cold !== null && tint.cold < tint.none - 8, JSON.stringify(tint));
   const kinds = ["Getting warm", "Getting cold", "Rain, storms or poor air", "Too hot", "Too cold", "Storms or unhealthy air", "Paw to grass", "Touch grass"];
   const missing = kinds.filter((k) => !s.legend.some((l) => l.includes(k)));
