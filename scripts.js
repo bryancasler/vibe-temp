@@ -4378,6 +4378,7 @@
           humidityPlugin,
           gradientFillPlugin,
           dayNightShadingPlugin,
+          dogExtremePlugin,
           selectionHighlightPlugin,
           currentLine,
           sunMarkerPlugin,
@@ -5583,6 +5584,43 @@
       const x1 = chart.scales.x.getPixelForValue(i + 1);
       return x0 + ((x1 - x0) * (ms - t0)) / (t1 - t0);
     }
+
+    // The hours to skip (too hot, too cold, storms or unhealthy air) tint the
+    // plot in the strip's colour, over the night shading and under the lines
+    // (Bryan, 2026-09-30). Neighbouring hours of a kind are one band.
+    const DOG_EXTREME_ALPHA = { "too-hot": 0.16, "too-cold": 0.16, "storms-air": 0.28 };
+    const dogExtremePlugin = {
+      id: "dogExtreme",
+      beforeDatasetsDraw(chart) {
+        if (!dogsOn || !dogState) return;
+        const { ctx, chartArea } = chart;
+        const labels = chart._rawLabels || [];
+        const bands = [];
+        for (let i = 0; i < labels.length; i++) {
+          if (zp(labels[i]).minute !== 0) continue;
+          const w = walkAt(labels[i]);
+          if (!w || !(w.kind in DOG_EXTREME_ALPHA)) continue;
+          const t = labels[i].getTime();
+          const last = bands[bands.length - 1];
+          if (last && last.kind === w.kind && last.end === t) last.end = t + 3600000;
+          else bands.push({ kind: w.kind, start: t, end: t + 3600000 });
+        }
+        if (!bands.length) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        ctx.clip();
+        for (const b of bands) {
+          const x0 = pixelForTime(chart, b.start);
+          const x1 = pixelForTime(chart, b.end) ?? chartArea.right;
+          if (x0 === null || x1 < chartArea.left || x0 > chartArea.right) continue;
+          ctx.globalAlpha = DOG_EXTREME_ALPHA[b.kind];
+          ctx.fillStyle = VibeDogs.WALK_COLORS[b.kind];
+          ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+        }
+        ctx.restore();
+      },
+    };
 
     // The walk strip: one bar per hour under the plot, its colour the kind
     // of hour and its height the level, so it reads without colour too. Good

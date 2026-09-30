@@ -28,6 +28,28 @@ const browser = await launch();
   await page.click("#presetWeek");
   await page.clock.runFor(2000);
   s.legend = await page.evaluate(() => [...document.querySelectorAll(".dog-legend-item")].map((l) => l.textContent.trim()));
+  // Hours to skip tint the plot in the strip's colour: read each column's strip
+  // colour, and the plot's colour near its top, away from the lines.
+  const tint = await page.evaluate(() => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    const { chartArea: a } = ch;
+    const ctx = ch.canvas.getContext("2d");
+    const r = ch.canvas.width / ch.canvas.getBoundingClientRect().width;
+    const px = (x, y) => ctx.getImageData(Math.round(x * r), Math.round(y * r), 1, 1).data;
+    const near = (d, [R, G, B]) => Math.hypot(d[0] - R, d[1] - G, d[2] - B) < 40;
+    const sums = { hot: [], cold: [], none: [] };
+    for (let x = a.left + 2; x < a.right - 2; x += 3) {
+      const strip = px(x, a.bottom + 3 + 16 - 5 - 2);
+      const kind = near(strip, [0xd6, 0x48, 0x3a]) ? "hot" : near(strip, [0x02, 0x84, 0xc7]) ? "cold" : strip[3] < 50 ? "none" : null;
+      if (!kind) continue;
+      const p = px(x, a.top + 4);
+      sums[kind].push(p[0] - p[2]);
+    }
+    const mean = (v) => (v.length ? v.reduce((s, n) => s + n, 0) / v.length : null);
+    return { hot: mean(sums.hot), cold: mean(sums.cold), none: mean(sums.none) };
+  });
+  expect("too-hot hours tint the plot red", tint.hot !== null && tint.hot > tint.none + 8, JSON.stringify(tint));
+  expect("too-cold hours tint the plot blue", tint.cold !== null && tint.cold < tint.none - 8, JSON.stringify(tint));
   const kinds = ["Getting warm", "Getting cold", "Rain, storms or poor air", "Too hot", "Too cold", "Storms or unhealthy air", "Paw to grass", "Touch grass"];
   const missing = kinds.filter((k) => !s.legend.some((l) => l.includes(k)));
   expect("week: every walk rating, the paw and touch grass appear", missing.length === 0, `missing: ${missing.join(", ")}`);
