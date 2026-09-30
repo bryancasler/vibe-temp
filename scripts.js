@@ -2849,6 +2849,45 @@
     }
 
     // Touch grass weather for people: 65-75°F, or 18-24°C, in daylight.
+    // The x ranges, in px, where a line's values are touch grass
+    // weather: daylight, and within the range. An edge on the range
+    // falls where the line crosses it, straight between two points; an
+    // edge on daylight halfway between them.
+    function touchGrassSpans(values, isDay, xAt) {
+      const { min, max } = touchGrassRange();
+      const spans = [];
+      const add = (a, b) => {
+        if (b <= a) return;
+        const last = spans[spans.length - 1];
+        if (last && a - last[1] < 0.5) last[1] = Math.max(last[1], b);
+        else spans.push([a, b]);
+      };
+      for (let i = 0; i < values.length - 1; i++) {
+        const v1 = values[i];
+        const v2 = values[i + 1];
+        if (!Number.isFinite(v1) || !Number.isFinite(v2)) continue;
+        // Daylight, as a share of the way from point i to i + 1
+        let lo = isDay[i] ? 0 : 0.5;
+        let hi = isDay[i + 1] ? 1 : 0.5;
+        if (!isDay[i] && !isDay[i + 1]) continue;
+        // Within the range, the same way
+        if (v1 === v2) {
+          if (v1 < min || v1 > max) continue;
+        } else {
+          const tAt = (v) => (v - v1) / (v2 - v1);
+          const a = tAt(min);
+          const b = tAt(max);
+          lo = Math.max(lo, Math.min(a, b));
+          hi = Math.min(hi, Math.max(a, b));
+        }
+        if (hi <= lo) continue;
+        const x1 = xAt(i);
+        const x2 = xAt(i + 1);
+        add(x1 + (x2 - x1) * lo, x1 + (x2 - x1) * hi);
+      }
+      return spans;
+    }
+
     function touchGrassRange() {
       return unit === "F" ? { min: 65, max: 75 } : { min: 18, max: 24 };
     }
@@ -4237,45 +4276,6 @@
             ctx.restore();
           });
 
-          // The x ranges, in px, where a line's values are touch grass
-          // weather: daylight, and within the range. An edge on the range
-          // falls where the line crosses it, straight between two points; an
-          // edge on daylight halfway between them.
-          function touchGrassSpans(values, isDay, xAt) {
-            const { min, max } = touchGrassRange();
-            const spans = [];
-            const add = (a, b) => {
-              if (b <= a) return;
-              const last = spans[spans.length - 1];
-              if (last && a - last[1] < 0.5) last[1] = Math.max(last[1], b);
-              else spans.push([a, b]);
-            };
-            for (let i = 0; i < values.length - 1; i++) {
-              const v1 = values[i];
-              const v2 = values[i + 1];
-              if (!Number.isFinite(v1) || !Number.isFinite(v2)) continue;
-              // Daylight, as a share of the way from point i to i + 1
-              let lo = isDay[i] ? 0 : 0.5;
-              let hi = isDay[i + 1] ? 1 : 0.5;
-              if (!isDay[i] && !isDay[i + 1]) continue;
-              // Within the range, the same way
-              if (v1 === v2) {
-                if (v1 < min || v1 > max) continue;
-              } else {
-                const tAt = (v) => (v - v1) / (v2 - v1);
-                const a = tAt(min);
-                const b = tAt(max);
-                lo = Math.max(lo, Math.min(a, b));
-                hi = Math.min(hi, Math.max(a, b));
-              }
-              if (hi <= lo) continue;
-              const x1 = xAt(i);
-              const x2 = xAt(i + 1);
-              add(x1 + (x2 - x1) * lo, x1 + (x2 - x1) * hi);
-            }
-            return spans;
-          }
-
           function tracePath(pts, slopes) {
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
@@ -4393,6 +4393,7 @@
           gradientFillPlugin,
           dayNightShadingPlugin,
           dogExtremePlugin,
+          touchGrassBandPlugin,
           selectionHighlightPlugin,
           currentLine,
           sunMarkerPlugin,
@@ -5684,6 +5685,39 @@
             slice(edges[e], edges[e + 1], b.kind, clamp01(k));
           }
         });
+        ctx.restore();
+      },
+    };
+
+    // Touch grass weather rises into the plot in green, fading toward the
+    // top like the Dogs bands (Bryan, 2026-09-30, option B). Each line's own
+    // touch grass spans are one layer, so where both the sun and the shade
+    // are touch grass weather the green is stronger than where only one is.
+    const TOUCH_GRASS_BAND_ALPHA = 0.175;
+    const touchGrassBandPlugin = {
+      id: "touchGrassBand",
+      beforeDatasetsDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!scales.x || !chart.data.datasets.length) return;
+        const green = getComputedStyle(document.documentElement).getPropertyValue("--good").trim();
+        if (!/^#[0-9a-f]{6}$/i.test(green)) return;
+        const isDay = chart._isDayByHour || [];
+        const xAt = (i) => scales.x.getPixelForValue(i);
+        const a = Math.round(TOUCH_GRASS_BAND_ALPHA * 255).toString(16).padStart(2, "0");
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        ctx.clip();
+        const g = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        g.addColorStop(0, `${green}${a}`);
+        g.addColorStop(1, `${green}00`);
+        ctx.fillStyle = g;
+        for (const d of chart.data.datasets.slice(0, 2)) {
+          for (const [x1, x2] of touchGrassSpans(d.data, isDay, xAt)) {
+            if (x2 < chartArea.left || x1 > chartArea.right) continue;
+            ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+          }
+        }
         ctx.restore();
       },
     };

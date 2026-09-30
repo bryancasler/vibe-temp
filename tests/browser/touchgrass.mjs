@@ -166,6 +166,37 @@ const open = async (path, o = {}) => {
   );
   const hn = await hover(page, r.picks.neither, 0);
   expect("outside it, the card has no touch grass line", hn.text === null, JSON.stringify(hn));
+  // The green rises into the plot as a band that fades toward the top, stronger where both lines are
+  // touch grass weather than where one is (Bryan, 2026-09-30, option B).
+  const band = await page.evaluate(() => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    const { chartArea: a, scales } = ch;
+    const sun = ch.data.datasets[0].data, shade = ch.data.datasets[1].data, day = ch._isDayByHour || [];
+    const inR = (v) => v >= 65 && v <= 75;
+    const r = ch.canvas.width / ch.canvas.getBoundingClientRect().width;
+    const ctx = ch.canvas.getContext("2d");
+    // Green over red at a point's x, near the bottom or the top of the plot, away from the lines.
+    // The canvas reads back unpremultiplied colour and alpha: the green's lead over red, weighted by alpha.
+    const tint = (i, y) => { const d = ctx.getImageData(Math.round(scales.x.getPixelForValue(i) * r), Math.round(y * r), 1, 1).data; return ((d[1] - d[0]) * d[3]) / 255; };
+    // A height near the bottom (or top) that no line passes within 10px of at point i.
+    const clear = (i, from, step) => {
+      const ys = [sun[i], shade[i]].map((v) => scales.y.getPixelForValue(v));
+      for (let y = from; y > a.top && y < a.bottom; y += step) if (ys.every((l) => Math.abs(l - y) > 10)) return y;
+      return from;
+    };
+    const shown = (i) => { const x = scales.x.getPixelForValue(i); return x > a.left + 10 && x < a.right - 10; };
+    const find = (test) => { for (let i = 2; i < sun.length - 2; i++) if (shown(i) && [-2, -1, 0, 1, 2].every((d) => test(i + d))) return i; return null; };
+    const both = find((i) => day[i] && inR(sun[i]) && inR(shade[i]));
+    const sunOnly = find((i) => day[i] && inR(sun[i]) && !inR(shade[i]));
+    const shadeOnly = find((i) => day[i] && !inR(sun[i]) && inR(shade[i]));
+    const at = (i) => (i === null ? null : { low: tint(i, clear(i, a.bottom - 4, -4)), high: tint(i, clear(i, a.top + 4, 4)) });
+    return { both: at(both), sunOnly: at(sunOnly), shadeOnly: at(shadeOnly) };
+  });
+  // Untinted daylight reads 0: the day shading is white, no lead for green.
+  const tinted = (m) => m && m.low > 10;
+  expect("touch grass weather tints the plot green, for the sun line and the shade line alike", tinted(band.sunOnly) && (band.shadeOnly === null || tinted(band.shadeOnly)), JSON.stringify(band));
+  expect("stronger where both lines are touch grass weather", band.both && band.sunOnly && band.both.low > band.sunOnly.low + 8, JSON.stringify(band));
+  expect("the green fades toward the top", band.both && band.both.low > band.both.high + 15, JSON.stringify(band));
   expect("no errors (°F)", errors.length === 0, errors.join(" | "));
   await page.context().close();
 }
