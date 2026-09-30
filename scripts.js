@@ -3158,6 +3158,16 @@
             ? "rgba(0, 0, 0, 0.15)" // Darker for night in light mode
             : "rgba(255, 255, 255, 0.08)"; // Lighter for day in dark mode
 
+          // Dogs mode's hours to skip carry their own tint instead
+          // (dogExtremePlugin): shade everywhere but those bands.
+          const skipBands = dogExtremeBands(chart);
+          if (skipBands.length) {
+            ctx.beginPath();
+            ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+            for (const b of skipBands) ctx.rect(b.x0, chartArea.top, b.x1 - b.x0, chartArea.bottom - chartArea.top);
+            ctx.clip("evenodd");
+          }
+
           // Get the start and end times of the visible range
           const chartStartTime = new Date(rawLabels[0]);
           const chartEndTime = new Date(rawLabels[rawLabels.length - 1]);
@@ -5586,37 +5596,48 @@
     }
 
     // The hours to skip (too hot, too cold, storms or unhealthy air) tint the
-    // plot in the strip's colour, over the night shading and under the lines
-    // (Bryan, 2026-09-30). Neighbouring hours of a kind are one band.
-    const DOG_EXTREME_ALPHA = { "too-hot": 0.16, "too-cold": 0.16, "storms-air": 0.28 };
+    // plot in the strip's colour, under the lines (Bryan, 2026-09-30). The
+    // night shading leaves those hours out, so each band is one even colour
+    // day or night rather than two tones (option B2). Neighbouring hours of a
+    // kind are one band. On the dark theme slate is lightened to show.
+    const DOG_EXTREME_ALPHA = 0.2;
+    const DOG_EXTREME_KINDS = new Set(["too-hot", "too-cold", "storms-air"]);
+    const DOG_EXTREME_SLATE_ON_DARK = "#94A3B8";
+    // The bands in view, as pixel spans, or none outside Dogs mode.
+    function dogExtremeBands(chart) {
+      if (!dogsOn || !dogState || !chart.scales || !chart.scales.x) return [];
+      const { chartArea } = chart;
+      const labels = chart._rawLabels || [];
+      const spans = [];
+      for (let i = 0; i < labels.length; i++) {
+        if (zp(labels[i]).minute !== 0) continue;
+        const w = walkAt(labels[i]);
+        if (!w || !DOG_EXTREME_KINDS.has(w.kind)) continue;
+        const t = labels[i].getTime();
+        const last = spans[spans.length - 1];
+        if (last && last.kind === w.kind && last.end === t) last.end = t + 3600000;
+        else spans.push({ kind: w.kind, start: t, end: t + 3600000 });
+      }
+      const bands = [];
+      for (const b of spans) {
+        const x0 = Math.max(chartArea.left, pixelForTime(chart, b.start) ?? chartArea.left);
+        const x1 = Math.min(chartArea.right, pixelForTime(chart, b.end) ?? chartArea.right);
+        if (x1 > x0) bands.push({ kind: b.kind, x0, x1 });
+      }
+      return bands;
+    }
     const dogExtremePlugin = {
       id: "dogExtreme",
       beforeDatasetsDraw(chart) {
-        if (!dogsOn || !dogState) return;
-        const { ctx, chartArea } = chart;
-        const labels = chart._rawLabels || [];
-        const bands = [];
-        for (let i = 0; i < labels.length; i++) {
-          if (zp(labels[i]).minute !== 0) continue;
-          const w = walkAt(labels[i]);
-          if (!w || !(w.kind in DOG_EXTREME_ALPHA)) continue;
-          const t = labels[i].getTime();
-          const last = bands[bands.length - 1];
-          if (last && last.kind === w.kind && last.end === t) last.end = t + 3600000;
-          else bands.push({ kind: w.kind, start: t, end: t + 3600000 });
-        }
+        const bands = dogExtremeBands(chart);
         if (!bands.length) return;
+        const { ctx, chartArea } = chart;
+        const dark = document.documentElement.getAttribute("data-theme") !== "light";
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
-        ctx.clip();
+        ctx.globalAlpha = DOG_EXTREME_ALPHA;
         for (const b of bands) {
-          const x0 = pixelForTime(chart, b.start);
-          const x1 = pixelForTime(chart, b.end) ?? chartArea.right;
-          if (x0 === null || x1 < chartArea.left || x0 > chartArea.right) continue;
-          ctx.globalAlpha = DOG_EXTREME_ALPHA[b.kind];
-          ctx.fillStyle = VibeDogs.WALK_COLORS[b.kind];
-          ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+          ctx.fillStyle = b.kind === "storms-air" && dark ? DOG_EXTREME_SLATE_ON_DARK : VibeDogs.WALK_COLORS[b.kind];
+          ctx.fillRect(b.x0, chartArea.top, b.x1 - b.x0, chartArea.bottom - chartArea.top);
         }
         ctx.restore();
       },
