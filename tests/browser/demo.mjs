@@ -72,7 +72,7 @@ const browser = await launch();
     page.evaluate(() => ({
       items: [...document.querySelectorAll(".dog-legend-item")].map((l) => l.textContent.trim()),
       notes: document.querySelectorAll(".dog-legend-note").length,
-      more: document.querySelector(".dog-legend-more a")?.getAttribute("href"),
+      more: document.querySelector(".chart-how a")?.getAttribute("href"),
       now: document.getElementById("combinedLabel")?.textContent || "",
     }));
   await page.click("#presetSix");
@@ -81,6 +81,12 @@ const browser = await launch();
   expect("6 hours: the legend leaves out the week's heat and cold", !six.items.some((l) => /Too hot|Too cold|Getting cold/.test(l)), six.items.join(" | "));
   expect("6 hours: the legend names the rain it draws", six.items.some((l) => /Rain, storms or poor air/.test(l)), six.items.join(" | "));
   expect("no explanation paragraphs, one link to them", six.notes === 0 && /^methodology\.html/.test(six.more || ""), JSON.stringify(six));
+  const links = await page.evaluate(() => {
+    const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+    const leg = r("#dogLegend"), how = r(".chart-how a"), credit = r(".data-credit:not(.chart-how) a");
+    return { below: how.top >= leg.bottom, rows: credit.top >= how.bottom, left: Math.abs(how.left - leg.left) < 2 && Math.abs(credit.left - leg.left) < 2 };
+  });
+  expect("the two links sit under the legend, left, one to a row", links.below && links.rows && links.left, JSON.stringify(links));
   expect("the Now card never says 'in sun'", !/in sun\b|in shade\b/.test(six.now), six.now);
   expect("demo: no page errors", errors.length === 0, errors.join("; "));
   await page.context().close();

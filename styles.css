@@ -2027,7 +2027,7 @@ select {
 .data-credit {
   margin: 6px 0 0;
   font-size: 11px;
-  text-align: right;
+  text-align: left;
   color: var(--muted);
 }
 .data-credit a,

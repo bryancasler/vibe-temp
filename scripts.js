@@ -5564,11 +5564,6 @@
         li.append(dogEl("span", "dog-legend-green"), "Touch grass weather (people)");
         items.push(li);
       }
-      // The explanations live on the methodology page, one link away (Bryan,
-      // 2026-09-30: less on the page).
-      const more = dogEl("li", "dog-legend-item dog-legend-more");
-      more.append(link("methodology.html#best-times", "How the chart works"));
-      items.push(more);
       const list = dogEl("ul", "dog-legend-list");
       list.append(...items);
       dogLegendEl.replaceChildren(list);
