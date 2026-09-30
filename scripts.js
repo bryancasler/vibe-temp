@@ -5520,7 +5520,7 @@
       const labels = timelineState.labels;
       for (let i = 0; i < labels.length; i += 1) {
         const w = walkAt(labels[i]);
-        if (w) shown.add(w.kind);
+        if (w && w.kind !== "good") shown.add(w.kind); // good hours draw no bar
         if (w && w.heatIndexF !== null && w.heatIndexF >= VibeDogs.T.NWS_CAUTION_HI_F && w.heatIndexF > timelineState.sunVals[i]) hiAboveSun = true;
       }
       const items = [];
@@ -5591,7 +5591,8 @@
     }
 
     // The walk strip: one bar per hour under the plot, its colour the kind
-    // of hour and its height the level, so it reads without colour too.
+    // of hour and its height the level, so it reads without colour too. Good
+    // hours draw nothing, only the ones that need care (Bryan, 2026-09-30).
     const dogStripPlugin = {
       id: "dogStrip",
       afterDatasetsDraw(chart) {
@@ -5604,7 +5605,7 @@
         for (let i = 0; i < labels.length; i++) {
           if (zp(labels[i]).minute !== 0) continue;
           const w = walkAt(labels[i]);
-          if (!w) continue;
+          if (!w || w.kind === "good") continue;
           const x0 = Math.max(chartArea.left, pixelForTime(chart, labels[i].getTime()));
           const x1 = Math.min(chartArea.right, pixelForTime(chart, labels[i].getTime() + 3600000) ?? chartArea.right);
           const h = height * VibeDogs.WALK_HEIGHT[w.kind];
