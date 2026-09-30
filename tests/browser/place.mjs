@@ -35,17 +35,45 @@ for (const size of ["phone", "desktop"]) {
   await waitForChart(page, t0);
   expect(`${size}: opens on Washington, DC`, forecastAt(log).at(-1) === "38.91,-77.04", forecastAt(log).join(" "));
   expect(`${size}: says it is showing Washington, DC`, await note(page).isVisible() && /Showing Washington, DC/.test(await note(page).textContent()));
-  // Beside the ZIP box and the location button on a phone, under the heading on a wider screen (Bryan, 2026-09-27).
+  // The note sits under the heading and the ZIP box, inside the screen. On a phone the heading is "Vibe @",
+  // with the ZIP box and the controls on the same row, and nothing wider than the screen (Bryan, 2026-09-30);
+  // the full name stays in the heading for screen readers.
   const at = await page.evaluate(() => {
     const r = (s) => document.querySelector(s).getBoundingClientRect();
-    const [zip, gps, n, h] = [r(".zip-inline-wrapper"), r("#gpsLocationBtn"), r("#defaultPlaceNote"), r(".headline")];
-    return { beside: n.left >= gps.right && n.top < zip.bottom && n.bottom > zip.top, under: n.top >= Math.max(h.bottom, zip.bottom) - 1, fits: n.right <= innerWidth };
+    const [zip, n, h, c] = [r(".zip-inline-wrapper"), r("#defaultPlaceNote"), r(".headline"), r(".header-controls")];
+    const mid = (b) => b.top + b.height / 2;
+    return {
+      under: n.top >= Math.max(h.bottom, zip.bottom) - 1,
+      fits: n.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth,
+      oneRow: Math.abs(mid(h) - mid(zip)) < 8 && Math.abs(mid(zip) - mid(c)) < 8,
+      // The name on screen: whichever of the two is drawn at full size.
+      shown: [".headline-full", ".headline-short"].map((q) => document.querySelector(q)).find((e) => e.getBoundingClientRect().width > 2)?.textContent.trim(),
+      name: document.querySelector(".headline").textContent.replace(/\s+/g, " "),
+    };
   });
-  expect(
-    `${size}: the DC note sits ${size === "phone" ? "beside the ZIP box and the location button" : "under the heading"}, inside the screen`,
-    (size === "phone" ? at.beside : at.under && !at.beside) && at.fits,
-    JSON.stringify(at)
-  );
+  expect(`${size}: the DC note sits under the heading and the ZIP box, inside the screen`, at.under && at.fits, JSON.stringify(at));
+  if (size === "phone") {
+    expect("phone: 'Vibe @', the ZIP box and the controls share one row", at.oneRow && at.shown === "Vibe @", JSON.stringify(at));
+    expect("phone: the heading still names Vibe Temp for screen readers", /Vibe Temp at/.test(at.name), at.name);
+  } else {
+    expect("desktop: the heading reads 'Vibe Temp at'", at.shown === "Vibe Temp at", at.shown);
+  }
+  // The location pin sits in the ZIP box where the clear button goes; one or the other shows.
+  const swap = async () =>
+    page.evaluate(() => {
+      const v = (id) => getComputedStyle(document.getElementById(id)).display !== "none";
+      const box = document.getElementById("chartLocation").getBoundingClientRect();
+      const pin = document.getElementById("gpsLocationBtn").getBoundingClientRect();
+      return { pin: v("gpsLocationBtn"), clear: v("zipClearBtn"), inBox: pin.width === 0 || (pin.left > box.left + box.width / 2 && pin.right <= box.right) };
+    });
+  const empty = await swap();
+  expect(`${size}: with no ZIP the pin shows in the box, and no clear button`, empty.pin && !empty.clear && empty.inBox, JSON.stringify(empty));
+  await page.locator("#chartLocation").fill("2000");
+  await page.locator("#chartLocation").dispatchEvent("input");
+  const typed = await swap();
+  await page.locator("#chartLocation").fill("");
+  await page.locator("#chartLocation").dispatchEvent("input");
+  expect(`${size}: typing swaps the pin for the clear button`, !typed.pin && typed.clear, JSON.stringify(typed));
   // Sunrise and sunset suns sit on the line, not above it (Bryan, 2026-09-29): each one's centre at the sun
   // line's height there, straight between the points either side, where the line is split and drawn.
   const suns = await page.evaluate(() => {

@@ -41,7 +41,9 @@
               <path d="M35 17a15 15 0 0 1 0 30a7 15 0 0 0 0-30z" fill="#6ea8fe"/>
               <g class="logo-star" fill="#e6edf6"><path d="M51.5 12.1 Q51.5 15.5 54.9 15.5 Q51.5 15.5 51.5 18.9 Q51.5 15.5 48.1 15.5 Q51.5 15.5 51.5 12.1Z"/></g>
             </svg>
-            <span class="headline-main">Vibe Temp at</span>
+            <!-- On a phone the name shortens to "Vibe @" so the ZIP box fits on the same row
+                 (Bryan, 2026-09-30); screen readers keep the full name. -->
+            <span class="headline-main"><span class="headline-full">Vibe Temp at</span><span class="headline-short" aria-hidden="true">Vibe @</span></span>
           </h1>
           <!-- The place: the ZIP box, the location button and, while Washington, DC is
                showing by default, the note beside them on a phone (Bryan, 2026-09-27). -->
@@ -76,17 +78,20 @@
                     <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
                   </svg>
                 </button>
+                <!-- The location pin sits where the clear button goes, in the box, and shows
+                     whenever the clear button doesn't (Bryan, 2026-09-30). -->
+                <button
+                  id="gpsLocationBtn"
+                  class="gps-icon-btn gps-in-box"
+                  type="button"
+                  title="Use current location"
+                  aria-label="Use current location"
+                >
+                  <svg class="gps-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/>
+                  </svg>
+                </button>
               </div>
-              <button
-                id="gpsLocationBtn"
-                class="gps-icon-btn"
-                type="button"
-                title="Use current location"
-              >
-                <svg class="gps-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/>
-                </svg>
-              </button>
             </span>
             <p id="defaultPlaceNote" class="default-place-note" hidden>
               Showing Washington, DC. Enter a ZIP code or tap 📍 for yours.

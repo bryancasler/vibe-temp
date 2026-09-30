@@ -467,6 +467,9 @@
       const hasValue = zipEls.input.value.trim().length > 0;
       const isLoading = zipEls.loadingSpinner?.style.display !== "none";
       zipEls.clearBtn.style.display = hasValue && !isLoading ? "flex" : "none";
+      // The location pin sits in the same spot: it shows whenever the clear
+      // button and the spinner don't (Bryan, 2026-09-30).
+      if (gpsLocationBtn) gpsLocationBtn.style.display = !hasValue && !isLoading ? "inline-flex" : "none";
     }
 
     // State

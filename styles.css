@@ -615,6 +615,31 @@ body {
   animation: spin-vertical 0.8s linear infinite;
   pointer-events: none;
 }
+/* The location pin, in the ZIP box where the clear button goes; one or the
+   other shows (updateZipClearButton). */
+.zip-inline-wrapper .gps-icon-btn.gps-in-box {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--muted);
+}
+.zip-inline-wrapper .gps-icon-btn.gps-in-box:hover {
+  color: var(--text);
+}
+.zip-inline-wrapper .gps-icon-btn.gps-in-box:active {
+  transform: translateY(-50%) scale(0.95);
+}
+.zip-inline-wrapper .gps-icon-btn.gps-in-box .gps-icon {
+  width: 16px;
+  height: 16px;
+}
+.headline-short {
+  display: none;
+}
 .zip-clear-btn {
   position: absolute;
   right: 6px;
@@ -1990,11 +2015,80 @@ select {
   .headline {
     font-size: 24px;
   }
+  /* "Vibe @" and the ZIP box on the top row with the controls (Bryan,
+     2026-09-30); the note gets the row under them. The full name stays for
+     screen readers. */
+  .headline-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .headline-short {
+    display: inline;
+    white-space: nowrap;
+  }
+  .header {
+    grid-template-columns: auto auto 1fr auto;
+  }
+  .header > .header-controls {
+    grid-column: 4;
+  }
+  .place-row {
+    display: contents;
+  }
+  .place-row .zip-inline-wrapper {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .place-row .default-place-note {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  /* Room for the one row at 360px: a slimmer ZIP box, tighter gaps and
+     controls. */
+  .header {
+    column-gap: 6px;
+  }
+  .headline .headline-main {
+    font-size: 22px;
+  }
+  .chart-location-input {
+    font-size: 16px;
+    letter-spacing: 0.2px;
+    padding: 6px 26px 6px 7px;
+    width: calc(5ch + 38px);
+  }
+  .header-controls {
+    gap: 4px !important;
+  }
+  .header-controls .theme-btn,
+  .header-controls .unit-btn,
+  .header-controls .dogs-btn {
+    padding: 6px 6px !important;
+  }
 }
 
 @media (max-width: 374px) {
   .headline .headline-main {
-    font-size: 20px;
+    font-size: 19px;
+  }
+  .headline-logo {
+    width: 20px;
+    height: 20px;
+  }
+  .chart-location-input {
+    font-size: 15px;
+    letter-spacing: 0;
+    padding: 6px 24px 6px 5px;
+    width: calc(5ch + 38px);
+  }
+  .header-controls .theme-btn,
+  .header-controls .unit-btn,
+  .header-controls .dogs-btn {
+    padding: 5px 4px !important;
   }
 }
 
