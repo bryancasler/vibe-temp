@@ -50,14 +50,30 @@ const browser = await launch();
       if (kind === "cold") {
         coldLow.push(p[3]);
         coldTopA.push(px(x, a.top + 4)[3]);
+        (sums.coldCols ||= []).push({ low: p[3], top: px(x, a.top + 4)[3] });
         (sums.coldSum ||= []).push(p[0] + p[1] + p[2]);
       }
     }
     const mean = (v) => (v.length ? v.reduce((s, n) => s + n, 0) / v.length : null);
-    return { hot: mean(sums.hot), cold: mean(sums.cold), none: mean(sums.none), lowAlpha: mean(coldLow), topAlpha: mean(coldTopA), coldSpread: sums.coldSum ? Math.max(...sums.coldSum) - Math.min(...sums.coldSum) : null };
+    return { hot: mean(sums.hot), cold: mean(sums.cold), none: mean(sums.none), lowAlpha: mean(coldLow), topAlpha: mean(coldTopA),
+      // The strongest and weakest cold columns at the strip, and how much of each is left at the top.
+      strong: (sums.coldCols || []).reduce((m, c) => (!m || c.low > m.low ? c : m), null),
+      weak: (sums.coldCols || []).reduce((m, c) => (!m || c.low < m.low ? c : m), null), coldSpread: sums.coldSum ? Math.max(...sums.coldSum) - Math.min(...sums.coldSum) : null };
   });
   expect("too-hot hours tint the plot red", tint.hot !== null && tint.hot > tint.none + 8, JSON.stringify(tint));
-  expect("a band fades up from the strip", tint.lowAlpha > tint.topAlpha + 40, JSON.stringify(tint));
+  // The further past the line, the stronger and flatter: the weakest cold hour fades out toward the
+  // top, the strongest keeps more of its tint there (Bryan, 2026-09-30).
+  const kept = (c) => (c ? c.top / Math.max(1, c.low) : 0);
+  expect("a mild hour fades up from the strip", tint.weak && kept(tint.weak) < 0.5, JSON.stringify(tint.weak));
+  expect("an extreme hour is stronger and flatter", tint.strong && tint.strong.low > tint.weak.low + 20 && kept(tint.strong) > kept(tint.weak) + 0.3, JSON.stringify({ strong: tint.strong, weak: tint.weak }));
+  // Weather emoji sit on the plot's top edge, none overlapping.
+  const sky = await page.evaluate(() => {
+    const ch = Chart.getChart(document.getElementById("vibeChart"));
+    return { icons: ch._skyIcons || [], top: ch.chartArea.top };
+  });
+  const overlaps = sky.icons.filter((c, n) => n && c.x0 < sky.icons[n - 1].x1);
+  expect("weather emoji don't overlap", sky.icons.length > 3 && overlaps.length === 0, `${sky.icons.length} icons, ${overlaps.length} overlapping`);
+  expect("weather emoji sit on the chart's top edge", sky.icons.every((c) => Math.abs(c.bottom - sky.top) <= 2), JSON.stringify(sky.icons.slice(0, 3)));
   expect("the night shading shows through a band", tint.coldSpread !== null && tint.coldSpread > 20, JSON.stringify(tint));
   expect("too-cold hours tint the plot blue", tint.cold !== null && tint.cold < tint.none - 8, JSON.stringify(tint));
   const kinds = ["Getting warm", "Getting cold", "Rain, storms or poor air", "Too hot", "Too cold", "Storms or unhealthy air", "Paw to grass", "Touch grass"];

@@ -3736,11 +3736,8 @@
               ctx.moveTo(x, chartArea.top);
               ctx.lineTo(x, y);
               ctx.stroke();
-              // Add wind icon
-              ctx.fillStyle = "rgba(100, 150, 255, 0.6)";
-              ctx.font = "12px system-ui";
-              ctx.textAlign = "center";
-              ctx.fillText("\u{1F4A8}", x, chartArea.top - 8); // 💨
+              // Its 💨 is placed with the rain and snow icons (precipitationIcons),
+              // so the two never pile up.
             }
           }
           ctx.restore();
@@ -3799,6 +3796,19 @@
           ctx.font = "14px system-ui";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
+          // The icons sit on the plot's top edge, spaced so none overlap: one
+          // that would touch the last is left out (Bryan, 2026-09-30).
+          const ICON_GAP = 2;
+          const placed = [];
+          const place = (icon, x) => {
+            const w = ctx.measureText(icon).width;
+            const last = placed[placed.length - 1];
+            if (last && x - w / 2 < last.x1 + ICON_GAP) return;
+            const bottom = chartArea.top - 1;
+            ctx.fillText(icon, x, bottom);
+            placed.push({ icon, x0: x - w / 2, x1: x + w / 2, bottom });
+          };
+          const windByHour = timelineState.windByHour || [];
 
           // Only process points at hourly boundaries (minutes === 0)
           for (let i = 0; i < rawLabels.length; i++) {
@@ -3815,8 +3825,6 @@
             const wmo = weathercodeByHour?.[i] ?? 0;
             const condition = getWeatherCondition(tempF, precip, wmo, i);
 
-            if (!condition) continue;
-
             // Check if the appropriate icon toggle is enabled
             let icon = null;
             if (condition === "rain" && rainIconsEnabled && precip > 0) {
@@ -3829,17 +3837,18 @@
               icon = "\u{1F9CA}"; // 🧊
             }
 
+            // Wind over 15 mph, where there's no rain or snow to show
+            if (!icon && windIconsEnabled && windByHour[i] > 15) icon = "\u{1F4A8}"; // 💨
+
             if (!icon) continue;
 
             const x = scales.x.getPixelForValue(i);
             if (x < chartArea.left || x > chartArea.right) continue;
 
-            // Position icon above the chart area
-            const y = chartArea.top - 10;
-
             ctx.fillStyle = "rgba(100, 150, 255, 0.8)";
-            ctx.fillText(icon, x, y);
+            place(icon, x);
           }
+          chart._skyIcons = placed;
 
           ctx.restore();
         },
@@ -5588,31 +5597,51 @@
     // The hours to skip (too hot, too cold, storms or unhealthy air) tint the
     // plot in the strip's colour (Bryan, 2026-09-30, option C): strongest at
     // the strip and fading toward the top, over the night shading, which
-    // shows through, and under the lines. Neighbouring hours of a kind are
-    // one band. On the dark theme slate is lightened to show.
-    const DOG_EXTREME_ALPHA = 0.35;
+    // shows through, and under the lines. The further an hour is past the
+    // line, the stronger and darker its tint and the less it fades, up to
+    // flat at the extreme. On the dark theme slate is lightened to show.
     const DOG_EXTREME_KINDS = new Set(["too-hot", "too-cold", "storms-air"]);
     const DOG_EXTREME_SLATE_ON_DARK = "#94A3B8";
-    // The bands in view, as pixel spans, or none outside Dogs mode.
+    // The deep shade each kind darkens toward on the light theme.
+    const DOG_EXTREME_DEEP = { "too-hot": "#7F1D1D", "too-cold": "#0C4A6E", "storms-air": "#1E293B" };
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    // How far past the line an hour is, 0 (just past) to 1 (extreme): heat
+    // index 95°F to 115°F (DC's Heat Alert starts at 95), wind chill 15°F to
+    // -15°F (DC's Extreme Cold Alert starts at 15), thunderstorms likely 0.5,
+    // AQI 151 (Unhealthy) to 301 (Hazardous).
+    function dogExtremeIntensity(kind, w, h) {
+      if (kind === "too-hot") return clamp01(((w.heatIndexF ?? 95) - 95) / 20);
+      if (!h) return 0;
+      if (kind === "too-cold") {
+        const felt = Number.isFinite(h.windMph) ? VibeDogs.windChillF(h.tempF, h.windMph) : h.tempF;
+        return clamp01((15 - felt) / 30);
+      }
+      const storm = VibeDogs.isThunderLikely(h) ? 0.5 : 0;
+      const air = Number.isFinite(h.aqi) ? clamp01((h.aqi - 151) / 150) : 0;
+      return Math.max(storm, air);
+    }
+    function mixHex(a, b, f) {
+      const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const [x, y] = [p(a), p(b)];
+      return `#${x.map((v, i) => Math.round(v + (y[i] - v) * f).toString(16).padStart(2, "0")).join("")}`;
+    }
+    // The hours in view to tint, as pixel spans with their kind and intensity,
+    // or none outside Dogs mode.
     function dogExtremeBands(chart) {
       if (!dogsOn || !dogState || !chart.scales || !chart.scales.x) return [];
       const { chartArea } = chart;
       const labels = chart._rawLabels || [];
-      const spans = [];
+      const bands = [];
       for (let i = 0; i < labels.length; i++) {
         if (zp(labels[i]).minute !== 0) continue;
         const w = walkAt(labels[i]);
         if (!w || !DOG_EXTREME_KINDS.has(w.kind)) continue;
         const t = labels[i].getTime();
-        const last = spans[spans.length - 1];
-        if (last && last.kind === w.kind && last.end === t) last.end = t + 3600000;
-        else spans.push({ kind: w.kind, start: t, end: t + 3600000 });
-      }
-      const bands = [];
-      for (const b of spans) {
-        const x0 = Math.max(chartArea.left, pixelForTime(chart, b.start) ?? chartArea.left);
-        const x1 = Math.min(chartArea.right, pixelForTime(chart, b.end) ?? chartArea.right);
-        if (x1 > x0) bands.push({ kind: b.kind, x0, x1 });
+        const x0 = Math.max(chartArea.left, pixelForTime(chart, t) ?? chartArea.left);
+        const x1 = Math.min(chartArea.right, pixelForTime(chart, t + 3600000) ?? chartArea.right);
+        if (x1 <= x0) continue;
+        const h = dogState.hours.find((x) => x.t === PlaceTime.startOfHour(labels[i], placeZone) / 1000);
+        bands.push({ kind: w.kind, x0, x1, k: dogExtremeIntensity(w.kind, w, h) });
       }
       return bands;
     }
@@ -5623,17 +5652,38 @@
         if (!bands.length) return;
         const { ctx, chartArea } = chart;
         const dark = document.documentElement.getAttribute("data-theme") !== "light";
+        const alpha = (v) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0");
         ctx.save();
-        ctx.globalAlpha = DOG_EXTREME_ALPHA;
-        for (const b of bands) {
-          const col = b.kind === "storms-air" && dark ? DOG_EXTREME_SLATE_ON_DARK : VibeDogs.WALK_COLORS[b.kind];
-          // Strongest at the strip, fading out toward the top (option C).
+        // The intensity eases from hour to hour instead of stepping: each hour
+        // is drawn in thin slices, from the midpoint with the hour before to
+        // the midpoint with the hour after (when they are the same kind).
+        const touching = (a, b) => a && b && a.kind === b.kind && Math.abs(a.x1 - b.x0) < 1;
+        const slice = (x0, x1, kind, k) => {
+          const base = kind === "storms-air" && dark ? DOG_EXTREME_SLATE_ON_DARK : VibeDogs.WALK_COLORS[kind];
+          const col = dark ? base : mixHex(base, DOG_EXTREME_DEEP[kind], k * 0.6);
+          const low = 0.35 + 0.35 * k;
           const g = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-          g.addColorStop(0, col);
-          g.addColorStop(1, `${col}00`);
+          g.addColorStop(0, `${col}${alpha(low)}`);
+          g.addColorStop(1, `${col}${alpha(low * k)}`);
           ctx.fillStyle = g;
-          ctx.fillRect(b.x0, chartArea.top, b.x1 - b.x0, chartArea.bottom - chartArea.top);
-        }
+          ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+        };
+        bands.forEach((b, n) => {
+          const prev = touching(bands[n - 1], b) ? bands[n - 1] : null;
+          const next = touching(b, bands[n + 1]) ? bands[n + 1] : null;
+          const kL = prev ? (prev.k + b.k) / 2 : b.k;
+          const kR = next ? (next.k + b.k) / 2 : b.k;
+          const mid = (b.x0 + b.x1) / 2;
+          // Whole pixels, so the slices meet without a seam.
+          const edges = [];
+          for (let x = Math.round(b.x0); x < Math.round(b.x1); x += 2) edges.push(x);
+          edges.push(Math.round(b.x1));
+          for (let e = 0; e + 1 < edges.length; e++) {
+            const c = (edges[e] + edges[e + 1]) / 2;
+            const k = c < mid ? kL + ((b.k - kL) * (c - b.x0)) / Math.max(1, mid - b.x0) : b.k + ((kR - b.k) * (c - mid)) / Math.max(1, b.x1 - mid);
+            slice(edges[e], edges[e + 1], b.kind, clamp01(k));
+          }
+        });
         ctx.restore();
       },
     };
