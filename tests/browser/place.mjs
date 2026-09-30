@@ -80,6 +80,10 @@ for (const size of ["phone", "desktop"]) {
   await page.locator("#chartLocation").press("Enter");
   await page.waitForTimeout(1000);
   expect("a ZIP shows its place and drops the DC note", forecastAt(log).at(-1) !== "38.91,-77.04" && !(await note(page).isVisible()), forecastAt(log).join(" "));
+  // A ZIP that worked lets go of the box; the clear button hands it back (Bryan, 2026-09-30).
+  const focused = () => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
+  const afterZip = await focused();
+  expect("a ZIP that works takes the focus off the box", afterZip !== "chartLocation", afterZip);
   // The clear button sits at the end of the box, after the ZIP, centred up and down (Bryan, 2026-09-28);
   // the date sits above the 24 hours / Week switch.
   const lay = await page.evaluate(() => {
@@ -91,6 +95,8 @@ for (const size of ["phone", "desktop"]) {
   expect("the date sits above the 24 hours / Week switch", lay.dateFirst, JSON.stringify(lay));
   await page.locator("#zipClearBtn").click();
   await page.waitForTimeout(1000);
+  const afterClear = await focused();
+  expect("the clear button puts the focus in the ZIP box", afterClear === "chartLocation", afterClear);
   // DC's forecast is still cached from the first load, so no new request: the label and the chart's own place say it.
   const shown = await page.evaluate(() => [window.timelineState?.labels?.length > 0, document.getElementById("defaultPlaceNote").hidden]);
   expect(

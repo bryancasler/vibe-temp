@@ -7270,6 +7270,7 @@
         updateZipClearButton();
         if (!vibeChart) showChartLoading();
 
+        let found = false;
         try {
           hideError();
           const { latitude, longitude, place } = await getCoordsForZip(zip5);
@@ -7287,6 +7288,7 @@
           clearHighlight();
 
           updateChartTitle();
+          found = true;
         } catch (e) {
           console.warn(e);
           let errorTitle = "ZIP Lookup Failed";
@@ -7316,6 +7318,9 @@
             zipEls.loadingSpinner.style.display = "none";
           if (zipEls.input) {
             zipEls.input.disabled = false;
+            // A ZIP that worked is done with: let go of the box (and the
+            // phone's keyboard) (Bryan, 2026-09-30).
+            if (found) zipEls.input.blur();
           }
           updateZipClearButton();
         }
@@ -7422,6 +7427,8 @@
           useDefaultPlace();
 
           updateZipClearButton();
+          // Ready for the next ZIP (Bryan, 2026-09-30).
+          if (zipEls.input) zipEls.input.focus();
         });
 
       // Buttons
