@@ -2225,3 +2225,17 @@ select {
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+/* ?demo: says the weather is made up (demo.js). */
+.demo-banner {
+  margin: 0;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  background: var(--good);
+  color: #0b1220;
+  font-weight: 600;
+}
+.demo-banner a {
+  color: inherit;
+}

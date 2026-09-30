@@ -64,7 +64,9 @@
     // disk makes every call throw, and the page has to work without it.
     // Keys are versioned (vibe.v1.<name>); values saved under the old
     // names move over once.
-    const STORE = "vibe.v1.";
+    // ?demo keeps its own settings and caches, so made-up weather never
+    // mixes with a real forecast (demo.js).
+    const STORE = window.VibeDemo && window.VibeDemo.on ? "vibe.demo." : "vibe.v1.";
     const storeGet = (key) => {
       try {
         return localStorage.getItem(key);
