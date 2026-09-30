@@ -2455,7 +2455,12 @@
     function showError(title, details, suggestion, options = {}) {
       if (!errorMessageEl) return;
       if (errorTitleEl) errorTitleEl.textContent = title;
-      if (errorDetailsEl) errorDetailsEl.textContent = details;
+      if (errorDetailsEl) {
+        errorDetailsEl.textContent = details || "";
+        errorDetailsEl.hidden = !details;
+      }
+      // The ZIP box's own warnings have no close button: fixing the ZIP clears them.
+      if (errorDismissBtn) errorDismissBtn.style.display = options.dismiss === false ? "none" : "";
       if (errorSuggestionEl) errorSuggestionEl.textContent = suggestion || "";
 
       // Stop skeleton animations when location permission error is shown
@@ -7248,29 +7253,25 @@
 
         const zip5 = normalizeZip(raw);
         if (!zip5) {
-          showError(
-            "Invalid ZIP Code",
-            "Please enter a valid 5-digit US ZIP code.",
-            "",
-            {
-              zip: () => {
-                if (zipEls.input) zipEls.input.focus();
-              },
-            }
-          );
+          // Just the warning: the ZIP box keeps the focus to fix it (Bryan, 2026-09-30).
+          showError("Invalid ZIP Code", "Please enter a valid 5-digit US ZIP code.", "", { dismiss: false });
+          zipEls.input.focus();
           return;
         }
 
         // Show loading state
         if (zipEls.loadingSpinner)
           zipEls.loadingSpinner.style.display = "block";
+        // Read-only while it loads, not disabled: disabling drops the focus and
+        // fires the box's blur, which would look the ZIP up again.
         if (zipEls.input) {
-          zipEls.input.disabled = true;
+          zipEls.input.readOnly = true;
         }
         updateZipClearButton();
         if (!vibeChart) showChartLoading();
 
         let found = false;
+        failedZip = null;
         try {
           hideError();
           const { latitude, longitude, place } = await getCoordsForZip(zip5);
@@ -7291,13 +7292,14 @@
           found = true;
         } catch (e) {
           console.warn(e);
+          failedZip = raw;
           let errorTitle = "ZIP Lookup Failed";
           let errorDetails = "Could not find that ZIP code.";
           let errorSuggestion = "Please check the ZIP code and try again.";
 
           if (e.message === "ZIP_NOT_FOUND") {
             errorTitle = "ZIP Code Not Found";
-            errorDetails = `The ZIP code "${zip5}" was not found.`;
+            errorDetails = "";
             errorSuggestion =
               "Please verify the ZIP code and try again, or use your device location.";
           } else if (e.message === "ZIP_LOOKUP_FAILED") {
@@ -7307,20 +7309,18 @@
               "Please try again in a moment or use your device location.";
           }
 
-          showError(errorTitle, errorDetails, errorSuggestion, {
-            zip: () => {
-              if (zipEls.input) zipEls.input.focus();
-            },
-          });
+          showError(errorTitle, errorDetails, errorSuggestion, { dismiss: false });
         } finally {
           // Always clear loading state
           if (zipEls.loadingSpinner)
             zipEls.loadingSpinner.style.display = "none";
           if (zipEls.input) {
-            zipEls.input.disabled = false;
+            zipEls.input.readOnly = false;
             // A ZIP that worked is done with: let go of the box (and the
             // phone's keyboard) (Bryan, 2026-09-30).
             if (found) zipEls.input.blur();
+            // One that didn't stays in the box, ready to correct.
+            else zipEls.input.focus();
           }
           updateZipClearButton();
         }
@@ -7328,6 +7328,8 @@
 
       // Debounce ZIP input to avoid excessive lookups
       let zipSubmitTimeout = null;
+      // The ZIP that just failed: leaving the box doesn't look it up again.
+      let failedZip = null;
       if (zipEls.input) {
         zipEls.input.addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
@@ -7393,7 +7395,7 @@
 
           // Only submit if value changed
           const savedZip = storageCacheGet(ZIP_KEY);
-          if (currentValue !== savedZip && currentValue !== currentPlaceName) {
+          if (currentValue !== savedZip && currentValue !== currentPlaceName && currentValue !== failedZip) {
             if (zipSubmitTimeout) clearTimeout(zipSubmitTimeout);
             zipSubmitTimeout = setTimeout(handleZipSubmit, 300);
           }

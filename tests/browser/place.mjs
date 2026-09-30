@@ -70,6 +70,41 @@ for (const size of ["phone", "desktop"]) {
   await page.context().close();
 }
 
+// A ZIP that isn't found: just the warning, no second ZIP box, no close button, no
+// "was not found" line, and the focus stays in the ZIP box to fix it (Bryan, 2026-09-30).
+{
+  const { page, t0, errors, log } = await openApp(browser, { size: "phone" });
+  await waitForChart(page, t0);
+  await page.locator("#chartLocation").fill("99999");
+  await page.locator("#chartLocation").press("Enter");
+  await page.waitForTimeout(1200);
+  const w = await page.evaluate(() => {
+    const vis = (sel) => { const e = document.querySelector(sel); return !!e && !e.hidden && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0; };
+    return {
+      shown: vis("#errorMessage"),
+      title: document.querySelector(".error-title")?.textContent,
+      text: document.getElementById("errorMessage").innerText,
+      secondBox: vis(".error-zip-input-wrapper"),
+      close: vis("#errorDismissBtn"),
+      focus: document.activeElement?.id,
+    };
+  });
+  expect("a ZIP not found shows the warning", w.shown && /Not Found/.test(w.title), JSON.stringify(w));
+  expect("the warning has no ZIP box of its own and no close button", !w.secondBox && !w.close, JSON.stringify(w));
+  expect("the warning drops the 'was not found' line", !/was not found/.test(w.text), w.text);
+  expect("the focus stays in the ZIP box to fix it", w.focus === "chartLocation", w.focus);
+  // The browser logs the lookup's 404 itself; that is the answer, not a fault.
+  const real = errors.filter((e) => !/status of 404/.test(e));
+  expect("not found: no page errors", real.length === 0, real.join("; "));
+  // Leaving the box doesn't look the same bad ZIP up again.
+  const before = log.filter((l) => l.host === "zippopotam").length;
+  await page.locator("#headlineDate").click();
+  await page.waitForTimeout(800);
+  const after = log.filter((l) => l.host === "zippopotam").length;
+  expect("leaving the box doesn't look the failed ZIP up again", after === before, `${before} -> ${after}`);
+  await page.context().close();
+}
+
 // A ZIP picks a place; clearing it goes back to DC without asking.
 {
   const { page, t0, errors, log } = await openApp(browser, { size: "desktop", scheme: "light", goto: false });
