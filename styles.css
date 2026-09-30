@@ -1070,8 +1070,28 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   letter-spacing: 0;
   font-size: 12px;
 }
-.readout-words {
+.readout-words,
+.readout-say {
   margin-top: 6px !important;
+}
+/* The out-of-the-ordinary clauses in the card's one line, in their colour. */
+.readout-bit--storm {
+  font-weight: 600;
+  color: var(--alert);
+}
+.readout-bit--walk {
+  font-weight: 600;
+}
+.readout-bit--paw {
+  color: var(--paw);
+  font-weight: 600;
+}
+.readout-bit--grass {
+  color: var(--good);
+  font-weight: 600;
+}
+.readout-bit--sun {
+  color: var(--muted);
 }
 .readout-facts {
   color: var(--muted);

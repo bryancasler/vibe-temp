@@ -4473,16 +4473,6 @@
       const wind = s.windByHour?.[i];
       const pop = s.popByHour?.[i];
       const hi = VibeWeather.heatIndexOrNull(airF, rh);
-      const facts = [
-        ["Air", temp(airF)],
-        [
-          "Heat index",
-          hi !== null && hi >= VibeWeather.HEAT_INDEX_CAUTION_F ? temp(hi) : null,
-        ],
-        ["Humidity", Number.isFinite(rh) ? `${Math.round(rh)}%` : null],
-        ["Wind", Number.isFinite(wind) ? `${Math.round(wind)} mph` : null],
-        ["Rain", Number.isFinite(pop) ? `${Math.round(pop)}%` : null],
-      ].filter(([, v]) => v);
       const marks = [];
       for (const [kind, list] of [
         ["Sunrise", sunTimes.sunrises || []],
@@ -4501,7 +4491,7 @@
       let storm = null;
       if (dogsOn && dogState) {
         const w = walkAt(t);
-        if (w) walk = { kind: w.kind, text: VibeDogs.walkWords(w) };
+        if (w) walk = { kind: w.kind, flags: w.flags, text: VibeDogs.walkWords(w) };
         const hourT = PlaceTime.startOfHour(t, placeZone) / 1000;
         const h = dogState.hours.find((x) => x.t === hourT);
         if (h) {
@@ -4517,24 +4507,62 @@
             marks.unshift({ kind: "paw", text: `Paw to grass: ${fmtClock(new Date(p.t * 1000))}` });
         }
       }
-      return {
+      const aqiN = dogsOn && dogState ? dogState.hours.find((x) => x.t === PlaceTime.startOfHour(t, placeZone) / 1000)?.aqi : null;
+      const r = {
         when: whenWords(t, stepMs),
         sun: temp(s.sunVals[i]),
         shade: temp(s.shadeVals[i]),
-        words: combinedVibeDescriptor(
-          s.shadeVals[i],
-          s.sunVals[i],
-          s.solarByHour[i],
-          isDay,
-          t
-        ),
-        facts,
         sky: VibeWeather.conditionLabel(s.weathercodeByHour?.[i], isDay),
         aqi,
         storm,
         walk,
         marks,
       };
+      r.bits = readoutBits(r, { sunF: s.sunVals[i], shadeF: s.shadeVals[i], airF, isDay, hi, rh, wind, pop, aqiN });
+      return r;
+    }
+
+    // What the card says under the sun and shade numbers, as one line of
+    // clauses (Bryan, 2026-09-30): how it feels, then only what is out of
+    // the ordinary. Typical readings (a 0% chance of rain, a light breeze,
+    // everyday humidity, good or moderate air) are left out.
+    const READOUT_RAIN_PCT = 30;
+    const READOUT_WIND_MPH = 15;
+    const READOUT_WINDY_MPH = 25;
+    const READOUT_HUMID_PCT = 75;
+    const READOUT_HUMID_AIR_F = 70;
+    const READOUT_DRY_PCT = 25;
+    const READOUT_AQI = 101;
+    // describeDay's words, trimmed to the feel: "Quite warm; shade helps" is "Quite warm".
+    const feelWords = (f, context) =>
+      describeDay(f, context).split(/[;,]/)[0].replace(/ in (the )?(sun|shade)$/, "").trim();
+    const lc = (w) => w.charAt(0).toLowerCase() + w.slice(1);
+    function readoutBits(r, { sunF, shadeF, airF, isDay, hi, rh, wind, pop, aqiN }) {
+      const bits = [];
+      let feel;
+      if (!isDay || !Number.isFinite(sunF) || Math.abs(sunF - shadeF) < 2) {
+        feel = isDay ? feelWords(shadeF, "shade") : vibeDescriptor(shadeF, { isDay: false, context: "shade" });
+      } else {
+        const a = feelWords(sunF, "sun");
+        const b = feelWords(shadeF, "shade");
+        feel = a === b ? `${a} in the sun and the shade` : `${a} in the sun, ${lc(b)} in the shade`;
+      }
+      bits.push({ kind: "feel", text: r.sky ? `${r.sky}. ${feel}` : feel });
+      if (r.storm) bits.push({ kind: "storm", text: r.storm });
+      if (Number.isFinite(pop) && pop >= READOUT_RAIN_PCT) bits.push({ kind: "fact", text: `${Math.round(pop)}% chance of rain` });
+      if (hi !== null && hi >= VibeWeather.HEAT_INDEX_CAUTION_F) bits.push({ kind: "fact", text: `Heat index ${formatTemp(hi)}${unitSuffix()}` });
+      // Humid only matters when it is warm: most nights run over 75%.
+      if (Number.isFinite(rh) && rh >= READOUT_HUMID_PCT && airF >= READOUT_HUMID_AIR_F) bits.push({ kind: "fact", text: `Humid, ${Math.round(rh)}%` });
+      else if (Number.isFinite(rh) && rh <= READOUT_DRY_PCT) bits.push({ kind: "fact", text: `Dry air, ${Math.round(rh)}% humidity` });
+      if (Number.isFinite(wind) && wind >= READOUT_WIND_MPH)
+        bits.push({ kind: "fact", text: `${wind >= READOUT_WINDY_MPH ? "Windy" : "Breezy"}, ${Math.round(wind)} mph` });
+      if (Number.isFinite(aqiN) && aqiN >= READOUT_AQI) bits.push({ kind: "fact", text: `Air quality ${r.aqi.split(", ")[1]} (AQI ${Math.round(aqiN)})` });
+      // The dogs' rating, unless it only repeats the rain already named.
+      const rainSaid = bits.some((b) => /chance of rain/.test(b.text));
+      if (r.walk && r.walk.kind !== "good" && !(rainSaid && r.walk.flags.every((f) => f === "rain")))
+        bits.push({ kind: "walk", walk: r.walk.kind, text: `For dogs: ${lc(r.walk.text.replace(/: (.+)$/, " ($1)"))}` });
+      for (const m of r.marks) bits.push({ kind: m.kind, text: m.text });
+      return bits;
     }
 
     // When a line's touch grass weather that point i is in runs out: where the
@@ -4580,14 +4608,7 @@
         r.sun === r.shade
           ? `In the sun or the shade, ${r.shade}.`
           : `In the sun ${r.sun}, in the shade ${r.shade}.`,
-        r.facts.length
-          ? `${r.facts.map(([k, v], n) => `${n ? k.toLowerCase() : k} ${v}`).join(", ")}.`
-          : "",
-        r.sky ? `${r.sky}.` : "",
-        r.aqi ? `AQI ${r.aqi}.` : "",
-        r.storm ? `${r.storm}.` : "",
-        r.walk ? `${r.walk.text}.` : "",
-        ...r.marks.map((m) => `${m.text}.`),
+        ...r.bits.map((b) => `${b.text}.`),
       ]
         .filter(Boolean)
         .join(" ");
@@ -4631,36 +4652,15 @@
         }
         nodes.push(chips);
       }
-      if (r.words) nodes.push(el("p", "readout-words", r.words));
-      if (r.facts.length)
-        nodes.push(el("p", "readout-facts", r.facts.map(([k, v]) => `${k} ${v}`).join(" · ")));
-      const skyLine = [r.sky, r.aqi ? `AQI ${r.aqi}` : null].filter(Boolean).join(" · ");
-      if (skyLine) nodes.push(el("p", "readout-facts", skyLine));
-      if (r.storm) nodes.push(el("p", "readout-storm", r.storm));
-      if (r.walk) {
-        // The strip's own swatch: the kind by colour, the level by height.
-        const line = el("p", "readout-walk");
-        const sw = el("span", "dog-swatch");
-        const bar = el("span", "dog-swatch-bar");
-        bar.style.background = VibeDogs.WALK_COLORS[r.walk.kind];
-        bar.style.height = `${VibeDogs.WALK_HEIGHT[r.walk.kind] * 100}%`;
-        sw.append(bar);
-        line.append(sw, el("span", "", r.walk.text));
-        nodes.push(line);
-      }
-      const markIcon = { leaf: "\u{1F343}", paw: "\u{1F43E}", sun: "\u{2600}\u{FE0F}" };
-      for (const m of r.marks) {
-        if (m.kind === "grass") {
-          // Labs: the legend's short green line, as the chart's lines turn.
-          const line = el("p", "readout-mark readout-mark--leaf readout-mark--grass");
-          line.append(el("span", "dog-legend-green"), el("span", "", m.text));
-          nodes.push(line);
-          continue;
-        }
-        nodes.push(
-          el("p", `readout-mark readout-mark--${m.kind}`, `${markIcon[m.kind]} ${m.text}`)
-        );
-      }
+      // One line of text: each clause a sentence, the out-of-the-ordinary ones in their colour.
+      const say = el("p", "readout-say");
+      r.bits.forEach((bit, n) => {
+        if (n) say.append(" ");
+        const span = el("span", `readout-bit readout-bit--${bit.kind}`, `${bit.text}.`);
+        span.dataset.bit = bit.kind;
+        say.append(span);
+      });
+      nodes.push(say);
       readoutEl.replaceChildren(...nodes);
       readoutEl.hidden = false;
 

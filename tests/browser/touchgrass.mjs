@@ -108,7 +108,7 @@ const hover = async (page, i, line) => {
   }, [i, line]);
   await page.mouse.move(where.x, where.y);
   await page.waitForTimeout(150);
-  const text = await page.evaluate(() => document.querySelector("#chartReadout .readout-mark--grass")?.textContent || null);
+  const text = await page.evaluate(() => document.querySelector("#chartReadout [data-bit=grass]")?.textContent || null);
   // The clock in the card, as a time on the run's day
   const clock = (words) => {
     const m = words && words.match(/(\d{1,2})(?::(\d\d))?(am|pm)/g);
