@@ -2046,6 +2046,8 @@ select {
   .place-row .default-place-note {
     grid-row: 2;
     grid-column: 1 / -1;
+    justify-self: stretch;
+    text-align: center;
   }
   /* Room for the one row at 360px: a slimmer ZIP box, tighter gaps and
      controls. */
@@ -2309,11 +2311,25 @@ select {
   }
 }
 
-/* Under the heading while the default place, Washington, DC, is showing */
+/* Under the heading while the default place, Washington, DC, is showing:
+   two lines, the second with the location button's pin. */
 .default-place-note {
   margin: 4px 0 0;
   font-size: 0.8rem;
   color: var(--muted);
+}
+.default-place-note .note-line {
+  display: block;
+}
+.default-place-note .note-pin {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+}
+/* The phone heading's @, small like the °C and °F. */
+.headline-short .headline-at {
+  font-size: 0.65em;
+  vertical-align: 0.12em;
 }
 
 /* ?demo: says the weather is made up (demo.js). */

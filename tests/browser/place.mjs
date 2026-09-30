@@ -55,6 +55,30 @@ for (const size of ["phone", "desktop"]) {
   if (size === "phone") {
     expect("phone: 'Vibe @', the ZIP box and the controls share one row", at.oneRow && at.shown === "Vibe @", JSON.stringify(at));
     expect("phone: the heading still names Vibe Temp for screen readers", /Vibe Temp at/.test(at.name), at.name);
+    // The note: two lines, centred, with the location button's own pin; the @ small like the °C and °F.
+    const nt = await page.evaluate(() => {
+      const n = document.getElementById("defaultPlaceNote");
+      // Each line's text itself (a block line is full width whatever its text does).
+      const lines = [...n.querySelectorAll(".note-line")].map((l) => {
+        const range = document.createRange();
+        range.selectNodeContents(l);
+        const b = range.getBoundingClientRect();
+        return { rows: Math.round(b.height / parseFloat(getComputedStyle(l).lineHeight || 16)) || 1, mid: b.left + b.width / 2, h: b.height };
+      });
+      const size = (q) => parseFloat(getComputedStyle(document.querySelector(q)).fontSize);
+      return {
+        lines,
+        centre: innerWidth / 2,
+        emoji: /\u{1F4CD}/u.test(n.textContent),
+        pin: !!n.querySelector("svg.note-pin path"),
+        at: size(".headline-at"),
+        vibe: size(".headline-short"),
+        units: size(".unit-btn"),
+      };
+    });
+    expect("phone: the note is two lines, each centred", nt.lines.length === 2 && nt.lines.every((l) => l.h < 24 && Math.abs(l.mid - nt.centre) < 3), JSON.stringify(nt));
+    expect("phone: the note shows the location pin, not the emoji", nt.pin && !nt.emoji, JSON.stringify(nt));
+    expect("phone: the @ is small, near the °C and °F", nt.at < nt.vibe * 0.75 && Math.abs(nt.at - nt.units) <= 2, JSON.stringify(nt));
   } else {
     expect("desktop: the heading reads 'Vibe Temp at'", at.shown === "Vibe Temp at", at.shown);
   }

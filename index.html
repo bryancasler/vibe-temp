@@ -43,7 +43,7 @@
             </svg>
             <!-- On a phone the name shortens to "Vibe @" so the ZIP box fits on the same row
                  (Bryan, 2026-09-30); screen readers keep the full name. -->
-            <span class="headline-main"><span class="headline-full">Vibe Temp at</span><span class="headline-short" aria-hidden="true">Vibe @</span></span>
+            <span class="headline-main"><span class="headline-full">Vibe Temp at</span><span class="headline-short" aria-hidden="true">Vibe <span class="headline-at">@</span></span></span>
           </h1>
           <!-- The place: the ZIP box, the location button and, while Washington, DC is
                showing by default, the note beside them on a phone (Bryan, 2026-09-27). -->
@@ -94,7 +94,11 @@
               </div>
             </span>
             <p id="defaultPlaceNote" class="default-place-note" hidden>
-              Showing Washington, DC. Enter a ZIP code or tap 📍 for yours.
+              <!-- Two lines, with the location button's own pin (Bryan, 2026-09-30). -->
+              <span class="note-line">Showing Washington, DC.</span>
+              <span class="note-line">Enter a ZIP code or tap
+                <svg class="note-pin" viewBox="0 0 24 24" width="12" height="12" role="img" aria-label="the location pin" focusable="false"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/></svg>
+                for yours.</span>
             </p>
           </div>
         </div>
