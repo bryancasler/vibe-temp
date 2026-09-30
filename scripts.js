@@ -1726,22 +1726,18 @@
 
       // Get base descriptions
       const sunBase = describeDay(sunF, "sun");
-      const shadeBase = describeDay(shadeF, "shade");
 
       let description = "";
 
       // Adjust wording based on temperature difference. The gap tops out at
       // 8 + 4 × reflectivity (9.2°F on concrete) at the default calibration.
-      if (diff < 2) {
-        // Very similar - use single description
-        description = sunBase;
-      } else if (diff >= 8) {
-        // Moderate difference
-        description = `${sunBase} in sun, ${shadeBase} in shade`;
-      } else {
-        // Small difference (2-8°F) - mention both with similarity emphasis
-        description = `${sunBase} in sun, similar ${shadeBase} in shade`;
-      }
+      // The hover card's wording (feelWords): "Quite warm in the sun, warm
+      // and glowy in the shade", never "in the sun in sun" (Bryan, 2026-09-30).
+      const a = feelWords(sunF, "sun");
+      const b = feelWords(shadeF, "shade");
+      if (diff < 2) description = sunBase;
+      else if (a === b) description = `${a} in the sun and the shade`;
+      else description = `${a} in the sun, ${lc(b)} in the shade`;
 
       // Add sunset time if within 3 hours
       if (currentTime && sunTimes && sunTimes.sunsets) {
@@ -2714,6 +2710,7 @@
       x.min = Math.max(0, Math.floor(start));
       x.max = Math.min(last, Math.ceil(start + len));
       vibeChart._shown = Number.isInteger(start) && Number.isInteger(len) ? null : { start, len };
+      if (dogsOn && dogState) renderDogLegend([start, start + len]);
     }
     // The window on screen, [first, last] as fractional point indexes.
     function shownWindow() {
@@ -4536,9 +4533,12 @@
     const READOUT_DRY_PCT = 25;
     const READOUT_AQI = 101;
     // describeDay's words, trimmed to the feel: "Quite warm; shade helps" is "Quite warm".
-    const feelWords = (f, context) =>
-      describeDay(f, context).split(/[;,]/)[0].replace(/ in (the )?(sun|shade)$/, "").trim();
-    const lc = (w) => w.charAt(0).toLowerCase() + w.slice(1);
+    function feelWords(f, context) {
+      return describeDay(f, context).split(/[;,]/)[0].replace(/ in (the )?(sun|shade)$/, "").trim();
+    }
+    function lc(w) {
+      return w.charAt(0).toLowerCase() + w.slice(1);
+    }
     function readoutBits(r, { sunF, shadeF, airF, isDay, hi, rh, wind, pop, aqiN }) {
       const bits = [];
       let feel;
@@ -5514,17 +5514,27 @@
     }
 
     // The legend: only what this view draws.
-    function renderDogLegend() {
+    // `range` is the window on screen as [first, last] point indexes; the
+    // legend names only what it draws (Bryan, 2026-09-30), and the page is
+    // only touched when that changes, since sliding calls this every frame.
+    let dogLegendKey = null;
+    function renderDogLegend(range = vibeChart ? shownWindow() : null) {
       if (!dogLegendEl || !dogState || !timelineState) return;
       const s = dogState;
       const shown = new Set();
-      let hiAboveSun = false;
       const labels = timelineState.labels;
-      for (let i = 0; i < labels.length; i += 1) {
+      const first = range ? Math.max(0, Math.floor(range[0])) : 0;
+      const last = range ? Math.min(labels.length - 1, Math.ceil(range[1])) : labels.length - 1;
+      for (let i = first; i <= last; i += 1) {
         const w = walkAt(labels[i]);
         if (w && w.kind !== "good") shown.add(w.kind); // good hours draw no bar
-        if (w && w.heatIndexF !== null && w.heatIndexF >= VibeDogs.T.NWS_CAUTION_HI_F && w.heatIndexF > timelineState.sunVals[i]) hiAboveSun = true;
       }
+      const from = labels[first] ? labels[first].getTime() / 1000 : -Infinity;
+      const to = labels[last] ? labels[last].getTime() / 1000 : Infinity;
+      const pawShown = s.paws.some((p) => p.t >= from && p.t <= to);
+      const key = [...shown, pawShown].join("|");
+      if (key === dogLegendKey && !dogLegendEl.hidden) return;
+      dogLegendKey = key;
       const items = [];
       for (const kind of VibeDogs.WALK_KINDS) {
         if (!shown.has(kind)) continue;
@@ -5537,43 +5547,25 @@
         li.append(sw, VibeDogs.WALK_WORDS[kind]);
         items.push(li);
       }
-      const notes = [];
-      if (s.paws.length) {
+      if (pawShown) {
         const li = dogEl("li", "dog-legend-item");
         li.append(dogEl("span", "dog-legend-paw", "\u{1F43E}"), "Paw to grass time (Goldens)");
         items.push(li);
-        notes.push([
-          `${s.week ? "A paw marks the time each day" : "The paw marks the time"}, in daylight and good for a walk, that comes closest to ${VibeDogs.formatTemp(VibeDogs.T.PAW_TO_GRASS_TARGET_F, unit)} in the sun, our own pick for a golden. `,
-          "methodology.html#paw-to-grass",
-          "How it's picked",
-        ]);
       }
       {
         // The lines go green in touch grass weather.
         const li = dogEl("li", "dog-legend-item");
         li.append(dogEl("span", "dog-legend-green"), "Touch grass weather (people)");
         items.push(li);
-        notes.push([
-          `The lines turn green in daylight from ${unit === "F" ? "65°F to 75°F" : "18°C to 24°C"}: Vibe Temp's touch grass rule for people. `,
-          "methodology.html#touch-grass",
-          "Where it comes from",
-        ]);
       }
-      if (hiAboveSun) {
-        notes.push([
-          "The colours under the chart judge heat by the heat index, a different scale made for people, and on a humid afternoon it can read higher than both lines. ",
-          "methodology.html#walk-ratings",
-          "Walk ratings",
-        ]);
-      }
+      // The explanations live on the methodology page, one link away (Bryan,
+      // 2026-09-30: less on the page).
+      const more = dogEl("li", "dog-legend-item dog-legend-more");
+      more.append(link("methodology.html#best-times", "How the chart works"));
+      items.push(more);
       const list = dogEl("ul", "dog-legend-list");
       list.append(...items);
-      const noteEls = notes.map(([text, href, label]) => {
-        const p = dogEl("p", "dog-legend-note", text);
-        p.append(link(href, label));
-        return p;
-      });
-      dogLegendEl.replaceChildren(list, ...noteEls);
+      dogLegendEl.replaceChildren(list);
       dogLegendEl.hidden = false;
     }
 

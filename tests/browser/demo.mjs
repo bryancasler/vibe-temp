@@ -24,13 +24,32 @@ const browser = await launch();
   }));
   expect("banner says the weather is made up", /made-up weather/.test(s.banner), s.banner);
   expect("rain in two hours opens on 6 Hours", s.active === "presetSix", s.active);
+  // The whole week names every rating.
+  await page.click("#presetWeek");
+  await page.clock.runFor(2000);
+  s.legend = await page.evaluate(() => [...document.querySelectorAll(".dog-legend-item")].map((l) => l.textContent.trim()));
   const kinds = ["Getting warm", "Getting cold", "Rain, storms or poor air", "Too hot", "Too cold", "Storms or unhealthy air", "Paw to grass", "Touch grass"];
   const missing = kinds.filter((k) => !s.legend.some((l) => l.includes(k)));
-  expect("every walk rating, the paw and touch grass appear", missing.length === 0, `missing: ${missing.join(", ")}`);
+  expect("week: every walk rating, the paw and touch grass appear", missing.length === 0, `missing: ${missing.join(", ")}`);
   const want = [45, 51, 63, 66, 73, 95];
   expect("fog, drizzle, rain, freezing rain, snow and storms in the week", want.every((c) => s.codes.includes(c)), s.codes.join(","));
   expect("no weather request leaves the page", !log.some((l) => /open-meteo|weather\.gov/.test(l.url || l)), log.map((l) => l.url || l).join(" "));
   expect("its own storage only", s.keys.length > 0 && s.keys.every((k) => !k.startsWith("vibe.v1.") || k === "vibe.v1.theme"), s.keys.join(","));
+  // The legend names only what the view draws, then one link for the explanations.
+  const legendNow = () =>
+    page.evaluate(() => ({
+      items: [...document.querySelectorAll(".dog-legend-item")].map((l) => l.textContent.trim()),
+      notes: document.querySelectorAll(".dog-legend-note").length,
+      more: document.querySelector(".dog-legend-more a")?.getAttribute("href"),
+      now: document.getElementById("combinedLabel")?.textContent || "",
+    }));
+  await page.click("#presetSix");
+  await page.clock.runFor(1500);
+  const six = await legendNow();
+  expect("6 hours: the legend leaves out the week's heat and cold", !six.items.some((l) => /Too hot|Too cold|Getting cold/.test(l)), six.items.join(" | "));
+  expect("6 hours: the legend names the rain it draws", six.items.some((l) => /Rain, storms or poor air/.test(l)), six.items.join(" | "));
+  expect("no explanation paragraphs, one link to them", six.notes === 0 && /^methodology\.html/.test(six.more || ""), JSON.stringify(six));
+  expect("the Now card never says 'in sun'", !/in sun\b|in shade\b/.test(six.now), six.now);
   expect("demo: no page errors", errors.length === 0, errors.join("; "));
   await page.context().close();
 }

@@ -2079,10 +2079,6 @@ select {
   background: var(--good);
   flex-shrink: 0;
 }
-.dog-legend-note {
-  margin: 6px 0 0;
-  line-height: 1.4;
-}
 .dog-panel {
   background: var(--card);
   border: 1px solid var(--border);
