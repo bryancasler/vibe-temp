@@ -250,6 +250,9 @@ body {
   transform: scale(0.95);
 }
 .preset-date {
+  /* Its line is held before the date fills it, so the chart doesn't jump. */
+  min-height: 1.4em;
+  line-height: 1.4;
   font-size: 12px;
   color: var(--muted);
   margin-top: 0;
@@ -2345,4 +2348,36 @@ select {
 }
 .demo-banner a {
   color: inherit;
+}
+
+/* Before the scripts run (page-theme.js guesses, the scripts confirm and
+   drop the classes): the default-place note is drawn, and the legend, the
+   day's summary and the dog panel keep their room, so nothing on screen
+   moves when the forecast arrives (Bryan, 2026-10-01). */
+html.boot-default #defaultPlaceNote[hidden] {
+  display: block;
+}
+html.boot-legend #dogLegend[hidden] {
+  display: block;
+  /* Two rows on a phone, one wider up, as the legend usually takes. */
+  min-height: 38px;
+}
+html.boot-summary #remainderOfDaySummary {
+  display: block !important;
+  min-height: 275px;
+}
+html.boot-dogs #dogPanel[hidden] {
+  display: block;
+  min-height: 730px;
+}
+@media (min-width: 640px) {
+  html.boot-legend #dogLegend[hidden] {
+    min-height: 17px;
+  }
+  html.boot-summary #remainderOfDaySummary {
+    min-height: 163px;
+  }
+  html.boot-dogs #dogPanel[hidden] {
+    min-height: 452px;
+  }
 }

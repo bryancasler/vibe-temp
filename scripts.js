@@ -2469,7 +2469,14 @@
     }
 
     // Error handling with multiple action options
+    // page-theme.js held room for the summary, the dog panel and the legend
+    // until the first forecast is drawn; from here the scripts decide.
+    function settleBoot() {
+      document.documentElement.classList.remove("boot-summary", "boot-dogs", "boot-legend", "boot-default");
+    }
+
     function showError(title, details, suggestion, options = {}) {
+      settleBoot();
       if (!errorMessageEl) return;
       if (errorTitleEl) errorTitleEl.textContent = title;
       if (errorDetailsEl) {
@@ -5433,7 +5440,9 @@
       if (!dogsOn) {
         dogState = null;
         if (dogPanelEl) dogPanelEl.hidden = true;
+        document.documentElement.classList.remove("boot-dogs");
         if (dogLegendEl) dogLegendEl.hidden = true;
+        document.documentElement.classList.remove("boot-legend");
         if (vibeChart) {
           vibeChart.options.layout.padding.bottom = 40;
           vibeChart.update("none");
@@ -5578,6 +5587,7 @@
       }
       dogPanelEl.replaceChildren(...nodes);
       dogPanelEl.hidden = false;
+      document.documentElement.classList.remove("boot-dogs");
     }
 
     // The legend: only what this view draws.
@@ -5629,6 +5639,7 @@
       list.append(...items);
       dogLegendEl.replaceChildren(list);
       dogLegendEl.hidden = false;
+      document.documentElement.classList.remove("boot-legend");
     }
 
     // Pixel x for an instant on a chart built on 15-minute points.
@@ -6220,6 +6231,7 @@
       pickViewForForecast();
       // Update remainder of day summary after chart renders
       await updateRemainderOfDaySummary();
+      settleBoot();
       updateAdvStats(); // Update stats after chart is rendered
       // Update summary if selection exists (weather data may have changed)
       if (selectionRange) {
@@ -6451,6 +6463,8 @@
     const defaultNoteEl = $("#defaultPlaceNote");
     function setDefaultNote(on) {
       if (defaultNoteEl) defaultNoteEl.hidden = !on;
+      // page-theme.js's guess is done with (it drew the note before this ran).
+      document.documentElement.classList.remove("boot-default");
     }
     function useDefaultPlace() {
       return primeWeatherForCoords(DEFAULT_PLACE.latitude, DEFAULT_PLACE.longitude, DEFAULT_PLACE.name, DEFAULT_PLACE.name).catch(
