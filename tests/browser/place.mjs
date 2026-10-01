@@ -213,8 +213,9 @@ for (const size of ["phone", "desktop"]) {
   const asks = await asked(page);
   await page.locator("#gpsLocationBtn").click();
   await page.waitForTimeout(1000);
-  const gps = { asks: (await asked(page)) - asks, at: forecastAt(log).at(-1), box: await page.locator("#chartLocation").inputValue(), pin: await page.locator("#gpsLocationBtn").isVisible() };
+  const gps = { asks: (await asked(page)) - asks, at: forecastAt(log).at(-1), box: await page.locator("#chartLocation").inputValue(), pin: await page.locator("#gpsLocationBtn").isVisible(), focus: await focused() };
   expect("clear, then the pin: the device's place loads, and the box stays empty with the pin", gps.asks === 1 && gps.at === "38.91,-77.02" && gps.box === "" && gps.pin, JSON.stringify(gps));
+  expect("once the device's place loads, the ZIP box lets go of the focus", gps.focus !== "chartLocation", gps.focus);
   const afterGps = await page.evaluate(() => location.search);
   expect("the device's location takes the ZIP out of the address, and puts no coordinates in", !/zip=|lat=|lon=/.test(afterGps), afterGps);
   expect("no errors (ZIP)", errors.length === 0, errors.join(" | "));

@@ -6482,6 +6482,9 @@
           try {
             // Force fresh weather data fetch for the new location
             await primeWeatherForCoords(latitude, longitude, "device location");
+            // The device's place is on the chart: let go of the ZIP box (and
+            // the phone's keyboard), as a ZIP that works does (Bryan, 2026-10-01).
+            if (zipEls.input && document.activeElement === zipEls.input) zipEls.input.blur();
             hideError();
             // Ensure location display is updated (primeWeatherForCoords already calls this, but ensure it's current)
             updateChartTitle();
