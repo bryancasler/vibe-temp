@@ -7349,15 +7349,9 @@
         if (!zipEls.input) return;
         const raw = zipEls.input.value.trim();
 
-        // If empty, clear ZIP and use device location
-        if (!raw) {
-          storageCacheRemove(ZIP_KEY);
-          currentPlaceName = null;
-          updateChartTitle();
-          updateAdvStats();
-          useDefaultPlace();
-          return;
-        }
+        // Empty: nothing to look up, and the chart stays on the place it shows
+        // until a new ZIP works (Bryan, 2026-10-01).
+        if (!raw) return;
 
         const zip5 = normalizeZip(raw);
         if (!zip5) {
@@ -7478,26 +7472,11 @@
           const currentValue = zipEls.input.value.trim();
           updateZipClearButton();
 
-          // If ZIP code is deleted (empty), strip zip from URL and get user's current location
+          // Left empty: the chart stays where it is, and the box gets back the
+          // ZIP it shows, if it came from one (Bryan, 2026-10-01).
           if (currentValue === "") {
-            // Clear saved ZIP from storage
-            storageCacheRemove(ZIP_KEY);
-            currentPlaceName = null;
-
-            // Strip zip parameter from URL
-            const params = new URLSearchParams(location.search);
-            params.delete("zip");
-            const newUrl = params.toString()
-              ? `${location.pathname}?${params.toString()}`
-              : location.pathname;
-            history.pushState({}, "", newUrl);
-
-            // Clear highlighted vibe selection
-            clearHighlight();
-
-            // Back to Washington, DC
-            // Back to Washington, DC; this updates the title, stats and weather
-            useDefaultPlace();
+            if (currentZip) zipEls.input.value = currentZip;
+            updateZipClearButton();
             return;
           }
 
@@ -7513,31 +7492,10 @@
       // ZIP clear button
       zipEls.clearBtn &&
         zipEls.clearBtn.addEventListener("click", () => {
-          // Clear ZIP input
-          if (zipEls.input) {
-            zipEls.input.value = "";
-            updateZipClearButton();
-          }
-          // Clear saved ZIP from storage
-          storageCacheRemove(ZIP_KEY);
-          currentPlaceName = null;
-
-          // Strip zip parameter from URL
-          const params = new URLSearchParams(location.search);
-          params.delete("zip");
-          const newUrl = params.toString()
-            ? `${location.pathname}?${params.toString()}`
-            : location.pathname;
-          history.pushState({}, "", newUrl);
-
-          // Clear highlighted vibe selection
-          clearHighlight();
-
-          // Back to Washington, DC
-          useDefaultPlace();
-
+          // Just empties the box, ready for the next ZIP (Bryan, 2026-09-30); the
+          // chart stays where it is until a new ZIP works (Bryan, 2026-10-01).
+          if (zipEls.input) zipEls.input.value = "";
           updateZipClearButton();
-          // Ready for the next ZIP (Bryan, 2026-09-30).
           if (zipEls.input) zipEls.input.focus();
         });
 

@@ -1,6 +1,6 @@
 // Where the chart opens: Washington, DC, labelled, with no location prompt
 // on load; the location button asks, a ZIP or a link picks a place, and
-// clearing the ZIP goes back to DC. Needs the site on port 4800.
+// emptying the ZIP box leaves the place as it is. Needs the site on port 4800.
 // Usage: node tests/browser/place.mjs
 import { launch, openApp, waitForChart } from "./harness.mjs";
 
@@ -160,7 +160,7 @@ for (const size of ["phone", "desktop"]) {
   await page.context().close();
 }
 
-// A ZIP picks a place; clearing it goes back to DC without asking.
+// A ZIP picks a place; emptying the box leaves it there until a new ZIP works.
 {
   const { page, t0, errors, log } = await openApp(browser, { size: "desktop", scheme: "light", goto: false });
   await countAsks(page);
@@ -187,13 +187,22 @@ for (const size of ["phone", "desktop"]) {
   await page.waitForTimeout(1000);
   const afterClear = await focused();
   expect("the clear button puts the focus in the ZIP box", afterClear === "chartLocation", afterClear);
-  // DC's forecast is still cached from the first load, so no new request: the label and the chart's own place say it.
-  const shown = await page.evaluate(() => [window.timelineState?.labels?.length > 0, document.getElementById("defaultPlaceNote").hidden]);
-  expect(
-    "clearing the ZIP goes back to DC, labelled, without asking",
-    shown[0] && !shown[1] && (await note(page).isVisible()) && (await asked(page)) === 0,
-    `${forecastAt(log).join(" ")} asks ${await asked(page)} ${shown}`
-  );
+  // Emptying the box leaves the chart on the ZIP's place until a new ZIP works (Bryan, 2026-10-01): no new
+  // forecast, no DC note, and leaving the empty box puts the ZIP back.
+  const before = forecastAt(log).length;
+  const place = forecastAt(log).at(-1);
+  expect("the clear button leaves the chart where it is", forecastAt(log).length === before && !(await note(page).isVisible()), forecastAt(log).join(" "));
+  await page.locator("#headlineDate").click();
+  await page.waitForTimeout(800);
+  expect("leaving the empty box puts the ZIP back, and the chart stays", (await page.locator("#chartLocation").inputValue()) === "90012" && forecastAt(log).length === before, `${await page.locator("#chartLocation").inputValue()} ${forecastAt(log).join(" ")}`);
+  await page.locator("#chartLocation").fill("");
+  await page.locator("#chartLocation").press("Enter");
+  await page.waitForTimeout(800);
+  expect("Enter on an empty box changes nothing", forecastAt(log).length === before && forecastAt(log).at(-1) === place && !(await note(page).isVisible()), forecastAt(log).join(" "));
+  await page.locator("#chartLocation").fill("83814");
+  await page.locator("#chartLocation").press("Enter");
+  await page.waitForTimeout(1000);
+  expect("a new ZIP then loads its place", forecastAt(log).at(-1) !== place && forecastAt(log).at(-1).startsWith("47.6"), forecastAt(log).join(" "));
   expect("no errors (ZIP)", errors.length === 0, errors.join(" | "));
   await page.context().close();
 }
