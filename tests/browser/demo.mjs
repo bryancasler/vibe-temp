@@ -114,6 +114,32 @@ const browser = await launch();
   expect("without ?demo: no banner, demo off", !s.banner && s.on === false, JSON.stringify(s));
   await page.context().close();
 }
+{
+  // A ZIP that works leaves the demo for its real forecast, with the ZIP in the address (Bryan, 2026-10-01).
+  const { page, t0, errors, log } = await openApp(browser, { size: "desktop", path: "?demo" });
+  await waitForChart(page, t0);
+  await page.clock.runFor(3000);
+  await Promise.all([page.waitForURL(/zip=90012/, { timeout: 20000 }).catch(() => {}), (async () => {
+    await page.locator("#chartLocation").fill("90012");
+    await page.locator("#chartLocation").press("Enter");
+  })()]);
+  await page.waitForFunction(() => window.timelineState && window.timelineState.labels.length > 0, null, { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  const s = await page.evaluate(() => ({
+    search: location.search,
+    on: window.VibeDemo.on,
+    banner: !!document.querySelector(".demo-banner"),
+    box: document.getElementById("chartLocation").value,
+  }));
+  const at = log.filter((l) => /api\.open-meteo\.com/.test(l.url)).map((l) => new URL(l.url).searchParams.get("latitude")).at(-1);
+  expect(
+    "a ZIP in the demo leaves it: no ?demo, no banner, the ZIP in the address and the box, its real forecast",
+    !/demo/.test(s.search) && /zip=90012/.test(s.search) && !s.on && !s.banner && s.box === "90012" && String(at).startsWith("34.0"),
+    JSON.stringify({ ...s, at })
+  );
+  expect("leaving the demo: no page errors", errors.length === 0, errors.join("; "));
+  await page.context().close();
+}
 
 await browser.close();
 console.log(fails.length ? `\n${fails.length} failed` : "\nall passed");

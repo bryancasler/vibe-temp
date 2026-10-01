@@ -697,13 +697,11 @@
       }
       if (vibeChart) vibeChart.update("none");
 
-      // Remove start, end, lat, lon, and zip from URL but keep other params
+      // Remove the range from the URL; the place on screen stays in it, so a
+      // shared link still opens there (Bryan, 2026-10-01).
       const params = new URLSearchParams(location.search);
       params.delete("start");
       params.delete("end");
-      params.delete("lat");
-      params.delete("lon");
-      params.delete("zip");
       const newUrl = params.toString()
         ? `${location.pathname}?${params.toString()}`
         : location.pathname;
@@ -748,6 +746,28 @@
       }
 
       hideExpiredSelectionModal();
+    }
+
+    // The address names the place on screen, so a copied link opens there
+    // (Bryan, 2026-10-01): a ZIP's place puts its ZIP in, and the device's
+    // location takes the place out (a link never carries a GPS fix). Other
+    // places (the default, a shared lat/lon) leave the address as it is. The
+    // demo keeps its own address.
+    function placeInUrl(zip, fromDevice) {
+      if (window.VibeDemo && window.VibeDemo.on) return;
+      const params = new URLSearchParams(location.search);
+      if (zip) {
+        params.set("zip", zip);
+        params.delete("lat");
+        params.delete("lon");
+      } else if (fromDevice) {
+        params.delete("zip");
+        params.delete("lat");
+        params.delete("lon");
+      } else return;
+      const q = params.toString();
+      const url = q ? `${location.pathname}?${q}` : location.pathname;
+      if (url !== location.pathname + location.search) history.replaceState(history.state, "", url);
     }
 
     // URL generation helper
@@ -6161,6 +6181,7 @@
       sunTimes = dailySun;
       lastCoords = { latitude, longitude };
       currentZip = zip || null; // the ZIP this place came from, if any
+      placeInUrl(currentZip, sourceLabel === "device location");
 
       // The place comes from the ZIP lookup (or a saved favorite); a GPS
       // fix has none, since there is no reverse geocoding.
@@ -7391,6 +7412,18 @@
         try {
           hideError();
           const { latitude, longitude, place } = await getCoordsForZip(zip5);
+          // In the demo, a ZIP that works leaves it for that ZIP's real
+          // forecast (Bryan, 2026-10-01): the page reloads without ?demo.
+          if (window.VibeDemo && window.VibeDemo.on) {
+            const params = new URLSearchParams(location.search);
+            params.delete("demo");
+            params.delete("lat");
+            params.delete("lon");
+            params.set("zip", zip5);
+            found = true;
+            location.assign(`${location.pathname}?${params}`);
+            return;
+          }
           storageCacheSet(ZIP_KEY, zip5);
           await primeWeatherForCoords(
             latitude,
