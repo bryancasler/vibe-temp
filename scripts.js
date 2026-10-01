@@ -2718,6 +2718,32 @@
       x.min = Math.max(0, Math.floor(start));
       x.max = Math.min(last, Math.ceil(start + len));
       vibeChart._shown = Number.isInteger(start) && Number.isInteger(len) ? null : { start, len };
+      // The 6 hours fit their own temperatures, 3 degrees either side, at
+      // least 12 degrees tall and out to whole fives, rather than the whole week's, which flattens
+      // them (Bryan, 2026-10-01). The other views keep one range for the
+      // week, so the lines hold still while the chart slides.
+      const y = vibeChart.options.scales.y;
+      if (sixView) {
+        const vals = vibeChart.data.datasets
+          .slice(0, 2)
+          .flatMap((d) => d.data.slice(Math.max(0, Math.floor(start)), Math.ceil(start + len) + 1))
+          .filter(Number.isFinite);
+        if (vals.length) {
+          let lo = Math.floor(Math.min(...vals) - 3);
+          let hi = Math.ceil(Math.max(...vals) + 3);
+          if (hi - lo < 12) {
+            const pad = (12 - (hi - lo)) / 2;
+            lo = Math.floor(lo - pad);
+            hi = Math.ceil(hi + pad);
+          }
+          // Out to whole fives, so the ticks read evenly.
+          y.min = Math.floor(lo / 5) * 5;
+          y.max = Math.ceil(hi / 5) * 5;
+        }
+      } else {
+        delete y.min;
+        delete y.max;
+      }
       if (dogsOn && dogState) renderDogLegend([start, start + len]);
     }
     // The window on screen, [first, last] as fractional point indexes.

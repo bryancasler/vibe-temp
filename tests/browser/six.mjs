@@ -38,6 +38,13 @@ const state = (page) =>
       hours: ((x.max - x.min) * 15) / 60,
       min: x.min,
       six: !!document.getElementById("presetSix"),
+      // The y range, and the lines' own range over the points in view.
+      yMin: ch.scales.y.min,
+      yMax: ch.scales.y.max,
+      shown: (() => {
+        const v = ch.data.datasets.slice(0, 2).flatMap((d) => d.data.slice(Math.floor(x.min), Math.ceil(x.max) + 1));
+        return [Math.min(...v), Math.max(...v)];
+      })(),
     };
   });
 
@@ -92,10 +99,15 @@ const open = async (o) => {
   await page.clock.runFor(1500);
   const six = await state(page);
   expect("calm: 6 Hours on click", six.active === "presetSix" && Math.abs(six.hours - 7) < 0.3, `${six.active} ${six.hours}`);
+  // The 6 hours fit their own temperatures, not the whole week's (Bryan, 2026-10-01).
+  const fit = (t) => t.yMin <= t.shown[0] && t.yMax >= t.shown[1] && t.yMax - t.yMin <= Math.max(12, t.shown[1] - t.shown[0] + 6) + 10;
+  expect("calm: the 6 hours fit their own temperatures", fit(six), JSON.stringify({ y: [six.yMin, six.yMax], shown: six.shown }));
+  expect("calm: the 24 hours keep the week's wider range", s.yMax - s.yMin > six.yMax - six.yMin + 5, JSON.stringify({ day: [s.yMin, s.yMax], six: [six.yMin, six.yMax] }));
   await page.click("#presetDefault");
   await page.clock.runFor(1500);
   const back = await state(page);
   expect("calm: 24-hour start restored", Math.abs(back.min - s.min) < 0.01, `${back.min} vs ${s.min}`);
+  expect("calm: back on 24 hours, the week's range returns", back.yMin === s.yMin && back.yMax === s.yMax, JSON.stringify({ before: [s.yMin, s.yMax], after: [back.yMin, back.yMax] }));
   expect("calm: no page errors", errors.length === 0, errors.join("; "));
   await page.context().close();
 }
