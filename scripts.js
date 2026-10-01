@@ -5494,7 +5494,7 @@
     function renderDogPanel() {
       if (!dogPanelEl || !dogState) return;
       const s = dogState;
-      const nodes = [dogEl("h3", "summary-title", "For dogs")];
+      const nodes = [dogEl("h2", "summary-title", "For dogs")];
       const units = unit;
       nodes.push(
         dogEl(

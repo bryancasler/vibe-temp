@@ -16,6 +16,7 @@
       content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://api.zippopotam.us https://air-quality-api.open-meteo.com https://api.weather.gov; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>Vibe Temp</title>
+    <meta name="description" content="How warm it really feels in the sun and in the shade, hour by hour for the next day and the week, with the best time to touch grass. Enter a ZIP code or use your location." />
     <!-- Before the page paints: the theme, and the layout the scripts will
          settle on (page-theme.js), so nothing jumps when they run. -->
     <script src="page-theme.js"></script>
@@ -28,6 +29,10 @@
   --muted: #8aa0b6;
   --text: #e6edf6;
   --accent: #3b82f6; /* shade line */
+  /* Text in the line colours, readable on the page (WCAG AA, 4.5:1 for
+     small text); the dark theme's lines already are. */
+  --link: var(--accent);
+  --sun-text: var(--sun);
   --sun: #f97316; /* sun line */
   --good: #22c55e; /* current time + vertical line */
   --border: #1f2a3b;
@@ -42,6 +47,9 @@
   --sun: #f97316;
   --good: #10b981;
   --border: #e5e7eb;
+  /* Darker on white: blue 5.2:1, orange 5.2:1 (Bryan, 2026-10-01). */
+  --link: #2563eb;
+  --sun-text: #c2410c;
 }
 
 * {
@@ -247,6 +255,9 @@ body {
   font-size: 28px;
 }
 .zip-inline-wrapper .gps-icon-btn {
+  /* At least 24px to tap (WCAG 2.5.8). */
+  min-width: 24px;
+  min-height: 24px;
   background: none;
   border: none;
   cursor: pointer;
@@ -424,16 +435,13 @@ body {
   letter-spacing: 0.5px;
 }
 .card-temp-sun {
-  color: var(--sun);
+  color: var(--sun-text);
 }
 .card-temp-shade {
   color: var(--accent);
 }
 .card-temp-combined {
-  color: var(--sun);
-}
-.card-temp-combined {
-  color: var(--sun);
+  color: var(--sun-text);
 }
 .card-desc {
   display: block;
@@ -1168,7 +1176,7 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   font-size: 12px;
 }
 .tip-content small {
-  opacity: 0.8;
+  font-size: inherit;
 }
 .desktop-only {
   display: inline;
@@ -1796,7 +1804,8 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
-.adv-col h4 {
+.adv-col h3 {
+  font-size: 1em;
   margin: 8px 0;
   color: var(--muted);
 }
@@ -2157,7 +2166,17 @@ select {
 .data-credit a,
 .dog-panel a,
 .dog-legend a {
-  color: var(--accent);
+  color: var(--link);
+}
+/* A 24px-tall tap target for the credit links, without moving the lines. */
+.data-credit a {
+  display: inline-block;
+  padding: 6px 0;
+  margin: -6px 0;
+}
+/* Room between two credit lines, so their links' targets don't overlap. */
+.data-credit + .data-credit {
+  margin-top: 12px;
 }
 .dog-legend {
   margin-top: 8px;
@@ -2466,6 +2485,7 @@ html.boot-dogs #dogPanel[hidden] {
                   inputmode="numeric"
                   pattern="[0-9]*"
                   title="Enter 5-digit ZIP code"
+                  aria-label="ZIP code"
                   autocomplete="new-password"
                   data-lpignore="true"
                   data-1p-ignore="true"
@@ -2608,6 +2628,7 @@ html.boot-dogs #dogPanel[hidden] {
       </div>
 
       <!-- Chart -->
+      <main>
       <section class="chart-wrap">
         <!-- The date first, then the switch (Bryan, 2026-09-28) -->
         <div class="preset-date" id="headlineDate"></div>
@@ -2686,7 +2707,7 @@ html.boot-dogs #dogPanel[hidden] {
       >
         <div class="summary-content">
           <div class="summary-header">
-            <h3 class="summary-title">Remainder of Day</h3>
+            <h2 class="summary-title">Remainder of Day</h2>
           </div>
           <div id="remainderTimeRange" class="summary-time-range"></div>
           <div id="remainderText" class="summary-text">Generating summary...</div>
@@ -2701,7 +2722,7 @@ html.boot-dogs #dogPanel[hidden] {
       >
         <div class="summary-content">
           <div class="summary-header">
-            <h3 class="summary-title">Highlighted Vibes</h3>
+            <h2 class="summary-title">Highlighted Vibes</h2>
             <div class="summary-actions">
               <button
                 id="copySummaryBtn"
@@ -2775,7 +2796,7 @@ html.boot-dogs #dogPanel[hidden] {
           <div class="adv-grid">
             <!-- Inputs -->
             <div class="adv-col">
-              <h4 class="adv-h4">Inputs</h4>
+              <h3 class="adv-h4">Inputs</h3>
               <div class="fields-grid">
                 <label class="field">
                   <span class="field-label"
@@ -2865,12 +2886,12 @@ html.boot-dogs #dogPanel[hidden] {
 
             <!-- Location -->
             <div class="adv-col">
-              <h4 class="adv-h4">Location</h4>
+              <h3 class="adv-h4">Location</h3>
               <div class="adv-status" id="status">Getting weather…</div>
 
               <hr class="adv-sep" />
 
-              <h4 class="adv-h4">Auto Updates</h4>
+              <h3 class="adv-h4">Auto Updates</h3>
               <div class="row">
                 <label class="inline">
                   <span>Update every</span>
@@ -2897,7 +2918,7 @@ html.boot-dogs #dogPanel[hidden] {
                 </button>
               </div>
               <hr class="adv-sep" />
-              <h4 class="adv-h4">Graph Display</h4>
+              <h3 class="adv-h4">Graph Display</h3>
               <div class="row">
                 <label class="inline">
                   <span>Days ahead</span>
@@ -2934,7 +2955,7 @@ html.boot-dogs #dogPanel[hidden] {
                 </label>
               </div>
               <hr class="adv-sep" />
-              <h4 class="adv-h4">Weather Display Options</h4>
+              <h3 class="adv-h4">Weather Display Options</h3>
               <div class="chart-shading-toggles" style="flex-direction: column; align-items: flex-start; gap: 12px;">
                 <label class="shading-toggle-label">
                   <input
@@ -3018,7 +3039,7 @@ html.boot-dogs #dogPanel[hidden] {
                 </div>
               </div>
               <hr class="adv-sep" />
-              <h4 class="adv-h4">Chart Colors</h4>
+              <h3 class="adv-h4">Chart Colors</h3>
               <div class="row">
                 <label class="field">
                   <span class="field-label">Sun Vibe Start</span>
@@ -3065,7 +3086,7 @@ html.boot-dogs #dogPanel[hidden] {
                 </button>
               </div>
               <hr class="adv-sep" />
-              <h4 class="adv-h4">Formula Calibration</h4>
+              <h3 class="adv-h4">Formula Calibration</h3>
               <div class="hint" style="margin-bottom: 16px;">
                 Adjust these coefficients to fine-tune the vibe temperature calculations based on your personal experience.
               </div>
@@ -3176,7 +3197,7 @@ html.boot-dogs #dogPanel[hidden] {
 
             <!-- Formula -->
             <div class="adv-col">
-              <h4 class="adv-h4">Formula</h4>
+              <h3 class="adv-h4">Formula</h3>
               <pre class="formula">
 Shade = T + (RH - 40) / 15
         - 0.7 × Wind
@@ -3248,6 +3269,7 @@ Cloud = 100
         <div class="controls-right">
         </div>
       </section>
+      </main>
 
     <div id="notification" class="notification" style="display: none"></div>
 
@@ -3262,7 +3284,7 @@ Cloud = 100
       aria-modal="true"
     >
       <div class="modal-dialog">
-        <h3 id="modalTitle" class="modal-title">Time Range Expired</h3>
+        <h2 id="modalTitle" class="modal-title">Time Range Expired</h2>
         <p class="modal-message">The highlighted time range has passed.</p>
         <div class="modal-buttons">
           <button
@@ -3289,7 +3311,7 @@ Cloud = 100
       aria-modal="true"
     >
       <div class="modal-dialog">
-        <h3 id="shortcutsModalTitle" class="modal-title">Keyboard Shortcuts</h3>
+        <h2 id="shortcutsModalTitle" class="modal-title">Keyboard Shortcuts</h2>
         <div class="shortcuts-list">
           <div class="shortcut-item">
             <kbd>C</kbd>
