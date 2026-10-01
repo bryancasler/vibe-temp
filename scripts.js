@@ -2681,6 +2681,9 @@
     }
     // A shared link's highlight, to slide into view once the chart has its points
     let revealTime = null;
+    // A new place's points, still to come: the labels drawn before it, so the
+    // 6 hours re-anchor on the new ones, not the old (null when none pending).
+    let sixAnchorFrom = null;
     // Slide the window so point i shows, `margin` points in from the edge it is past.
     function revealIndex(i, margin = 2) {
       const w = viewWindow();
@@ -2695,6 +2698,11 @@
         const i = Math.round((revealTime - labels[0]) / (labels[1] - labels[0]));
         revealTime = null;
         if (i >= 0 && i < labels.length) revealIndex(i, pointsPerDay(labels) / 8);
+      }
+      if (sixAnchorFrom && labels !== sixAnchorFrom && labels.length > 1) {
+        sixAnchorFrom = null;
+        const at = nowPointIndex();
+        if (sixView && at !== null) viewStart = Math.max(0, at - pointsPerDay(labels) / 24);
       }
       const w = viewWindow();
       // Kept as a fraction, and drawn at it: the chart slides smoothly rather
@@ -6242,7 +6250,14 @@
       // Name the default place under the heading, so nobody takes it for theirs
       setDefaultNote(!zip && latitude === DEFAULT_PLACE.latitude && longitude === DEFAULT_PLACE.longitude);
       // A new place opens its 24 hours at today, not where the last one was slid to
-      if (!lastCoords || lastCoords.latitude !== latitude || lastCoords.longitude !== longitude) viewStart = 0;
+      // In the 6 hours, it opens at an hour before now once its points are
+      // in, and 24 hours comes back at today (Bryan, 2026-10-01: a new ZIP
+      // drew the 6 hours from midnight).
+      if (!lastCoords || lastCoords.latitude !== latitude || lastCoords.longitude !== longitude) {
+        viewStart = 0;
+        if (sixView) dayStartBeforeSix = 0;
+        sixAnchorFrom = vibeChart?._rawLabels || [];
+      }
       const seq = ++primeSeq;
       const place = { latitude, longitude, sourceLabel, placeName, zip, seq };
       const held = peekForecast(latitude, longitude);

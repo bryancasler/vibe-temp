@@ -37,6 +37,8 @@ const state = (page) =>
       active: document.querySelector(".preset-btn.active")?.id,
       hours: ((x.max - x.min) * 15) / 60,
       min: x.min,
+      // The point now falls on, in the chart's own points.
+      nowAt: (ch._rawLabels || []).filter((l) => new Date(l).getTime() <= Date.now()).length - 1,
       six: !!document.getElementById("presetSix"),
       // The y range, and the lines' own range over the points in view.
       yMin: ch.scales.y.min,
@@ -109,6 +111,34 @@ const open = async (o) => {
   expect("calm: 24-hour start restored", Math.abs(back.min - s.min) < 0.01, `${back.min} vs ${s.min}`);
   expect("calm: back on 24 hours, the week's range returns", back.yMin === s.yMin && back.yMax === s.yMax, JSON.stringify({ before: [s.yMin, s.yMax], after: [back.yMin, back.yMax] }));
   expect("calm: no page errors", errors.length === 0, errors.join("; "));
+  await page.context().close();
+}
+{
+  // A new ZIP in the 6 hours keeps them at now, not the new place's midnight
+  // (Bryan, 2026-10-01); back on 24 hours, the new place opens at today.
+  const { page, errors } = await open({});
+  await page.click("#presetSix");
+  await page.clock.runFor(1500);
+  for (const zip of ["20001", "90012"]) {
+    await page.locator("#chartLocation").fill(zip);
+    await page.locator("#chartLocation").press("Enter");
+    // The ZIP lookup and forecast run on real time, the page's timers on the test clock.
+    for (let i = 0; i < 20; i++) {
+      await page.waitForTimeout(250);
+      await page.clock.runFor(500);
+    }
+    const z = await state(page);
+    expect(
+      `new ZIP ${zip} in 6 Hours: still from an hour before now`,
+      z.active === "presetSix" && Math.abs(z.min - (z.nowAt - 4)) < 0.6 && Math.abs(z.hours - 7) < 0.3,
+      JSON.stringify({ active: z.active, min: z.min, nowAt: z.nowAt, hours: z.hours })
+    );
+  }
+  await page.click("#presetDefault");
+  await page.clock.runFor(1500);
+  const d = await state(page);
+  expect("new ZIP, then 24 hours: opens at the new place's today", d.min < 0.01, d.min);
+  expect("new ZIP in 6 Hours: no page errors", errors.length === 0, errors.join("; "));
   await page.context().close();
 }
 {
