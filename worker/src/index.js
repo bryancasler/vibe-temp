@@ -9,6 +9,8 @@ import { previewTags, zipFrom } from "./meta.js";
 import inter400 from "../fonts/inter-latin-400-normal.woff";
 import inter700 from "../fonts/inter-latin-700-normal.woff";
 import inter800 from "../fonts/inter-latin-800-normal.woff";
+// The site's own logo (favicon.svg), drawn top right on the card.
+import LOGO from "../../favicon.svg";
 
 const FONTS = [
   { name: "Inter", data: inter400, weight: 400, style: "normal" },
@@ -35,6 +37,7 @@ async function forecastFor({ latitude, longitude }) {
     longitude: longitude.toFixed(2),
     hourly:
       "temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,weathercode",
+    daily: "sunrise,sunset",
     temperature_unit: "fahrenheit",
     wind_speed_unit: "mph",
     timezone: "auto",
@@ -63,7 +66,7 @@ async function image(url, ctx) {
   if (hit) return hit;
   const p = await previewFor(zip);
   if (!p) return Response.redirect(`${url.origin}/apple-touch-icon.png`, 302);
-  const res = new ImageResponse(card(zip, p.place, p.data), { width: 1200, height: 630, fonts: FONTS });
+  const res = new ImageResponse(card(zip, p.place, p.data, LOGO), { width: 1200, height: 630, fonts: FONTS });
   const out = new Response(res.body, res);
   out.headers.set("Cache-Control", "public, max-age=600");
   ctx.waitUntil(cache.put(key, out.clone()));

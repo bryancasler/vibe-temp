@@ -96,9 +96,28 @@ export function previewData(forecast, nowSec) {
     night: !isDayNow,
     condition: hourNow && Number.isFinite(hourNow.code) ? VibeWeather.conditionLabel(hourNow.code, isDayNow) : "",
     series,
+    sunEvents: sunEventsIn(forecast.daily, series),
     grass: touchGrassLine(series, nowSec, zone),
     alert: alertOf(series, nowSec, zone),
   };
+}
+
+/** Sunrises and sunsets inside the chart's hours, with the sun line's value there. */
+function sunEventsIn(daily, series) {
+  if (!daily || series.length < 2) return [];
+  const t0 = series[0].t;
+  const t1 = series[series.length - 1].t;
+  const out = [];
+  for (const [kind, list] of [["Sunrise", daily.sunrise], ["Sunset", daily.sunset]]) {
+    for (const t of list || []) {
+      if (!Number.isFinite(t) || t <= t0 || t >= t1) continue;
+      const k = series.findIndex((p, i) => i + 1 < series.length && p.t <= t && series[i + 1].t >= t);
+      const a = series[k];
+      const b = series[k + 1];
+      out.push({ kind, t, sun: a.sun + ((b.sun - a.sun) * (t - a.t)) / (b.t - a.t) });
+    }
+  }
+  return out.sort((x, y) => x.t - y.t);
 }
 
 const isGrass = (p) => p.day && [p.sun, p.shade].some((v) => v >= TOUCH_GRASS.min && v <= TOUCH_GRASS.max);
@@ -168,25 +187,23 @@ export function previewDescription(d) {
 
 const C = { ink: "#0f172a", muted: "#64748b", sun: "#f97316", shade: "#3b82f6", grass: "#22c55e", bg: "#ffffff", panel: "#f1f5f9" };
 
-const SUN_ICON = `<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="13" fill="${C.sun}"/>${[0, 45, 90, 135, 180, 225, 270, 315]
-  .map((a) => {
-    const r = (a * Math.PI) / 180;
-    return `<line x1="${32 + Math.cos(r) * 19}" y1="${32 + Math.sin(r) * 19}" x2="${32 + Math.cos(r) * 28}" y2="${32 + Math.sin(r) * 28}" stroke="${C.sun}" stroke-width="5" stroke-linecap="round"/>`;
-  })
-  .join("")}</svg>`;
-
-function header(zip, place, d) {
+function header(zip, place, d, logoSvg) {
+  // The brand top right; the time sits under the place, where it reads with
+  // the ZIP it belongs to (Bryan, 2026-10-01).
+  const logo = logoSvg ? `<img src="data:image/svg+xml;base64,${toBase64(logoSvg)}" style="width:64px;height:64px;margin-left:18px"/>` : "";
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%">
     <div style="display:flex;flex-direction:column">
       <div style="display:flex;font-size:64px;font-weight:800;color:${C.ink};line-height:1">${escapeHtml(zip)}</div>
-      <div style="display:flex;font-size:34px;font-weight:700;color:${C.muted};margin-top:10px">${escapeHtml(place)}</div>
+      <div style="display:flex;font-size:32px;font-weight:700;color:${C.muted};margin-top:10px">${escapeHtml(place)} · ${escapeHtml(stamp(d.nowSec, d.zone))}</div>
     </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end">
-      <div style="display:flex">${SUN_ICON}</div>
-      <div style="display:flex;font-size:30px;font-weight:700;color:${C.ink};margin-top:10px">${escapeHtml(stamp(d.nowSec, d.zone))}</div>
+    <div style="display:flex;align-items:center">
+      <div style="display:flex;font-size:44px;font-weight:800;color:${C.ink}">VibeTemp</div>${logo}
     </div>
   </div>`;
 }
+
+/** Base64 of an ASCII string, in a Worker (btoa) or Node (Buffer). */
+const toBase64 = (str) => (typeof btoa === "function" ? btoa(str) : Buffer.from(str).toString("base64"));
 
 const ALERT = {
   storm: { ink: "#ffffff", bg: "#475569", band: "#475569" },
@@ -197,6 +214,17 @@ const BOLT = (fill) =>
   `<svg width="30" height="36" viewBox="0 0 24 30"><path d="M14 0 L2 17 H11 L8 30 L22 11 H13 Z" fill="${fill}"/></svg>`;
 const THERMO = (fill) =>
   `<svg width="22" height="36" viewBox="0 0 16 30"><rect x="5" y="1" width="6" height="19" rx="3" fill="${fill}"/><circle cx="8" cy="23" r="6" fill="${fill}"/></svg>`;
+
+/** A small sun, with white around it so it stands off the line. */
+function sunMark(cx, cy) {
+  const rays = [0, 45, 90, 135, 180, 225, 270, 315]
+    .map((a) => {
+      const r = (a * Math.PI) / 180;
+      return `<line x1="${(cx + Math.cos(r) * 13).toFixed(1)}" y1="${(cy + Math.sin(r) * 13).toFixed(1)}" x2="${(cx + Math.cos(r) * 19).toFixed(1)}" y2="${(cy + Math.sin(r) * 19).toFixed(1)}" stroke="${C.sun}" stroke-width="4" stroke-linecap="round"/>`;
+    })
+    .join("");
+  return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="21" fill="#ffffff"/>${rays}<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="9" fill="${C.sun}"/>`;
+}
 
 /** The line under the header: the alert when there is one, touch grass otherwise. */
 function noticeLine(d) {
@@ -211,8 +239,10 @@ function noticeLine(d) {
 }
 
 /** The next 24 hours as the chart draws them, the temperatures beside. */
-export function card(zip, place, d) {
-  const W = 760;
+export function card(zip, place, d, logoSvg = "") {
+  // The chart takes the width the temperatures leave, so they sit flush right.
+  const SIDE = 190;
+  const W = 1088 - SIDE - 36;
   const Hh = 250;
   const s = d.series;
   const vals = s.flatMap((p) => [p.sun, p.shade]);
@@ -223,8 +253,9 @@ export function card(zip, place, d) {
   const x = (t) => ((t - t0) / (t1 - t0)) * W;
   const y = (v) => Hh - ((v - lo) / (hi - lo)) * Hh;
   const path = (k) => s.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p[k]).toFixed(1)}`).join(" ");
-  // Hour by hour, as the page shades them: night grey, touch grass green and
-  // the alert's hours in its colour, rising from the bottom.
+  // Hour by hour, as the page shades them: touch grass green and the alert's
+  // hours in its colour, rising from the bottom. Night isn't shaded; the
+  // sunrise and sunset suns on the line mark it (Bryan, 2026-10-01).
   const defs = `<defs>${[["g", C.grass], ["storm", ALERT.storm.band], ["heat", ALERT.heat.band]]
     .map(([id, c]) => `<linearGradient id="${id}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${c}" stop-opacity="0.45"/><stop offset="1" stop-color="${c}" stop-opacity="0.06"/></linearGradient>`)
     .join("")}</defs>`;
@@ -241,7 +272,6 @@ export function card(zip, place, d) {
     return out.join("");
   };
   const cells = [
-    runs("#e2e8f0", (p) => !p.day),
     runs("url(#storm)", (p) => p.storm),
     runs("url(#heat)", (p) => !p.storm && p.danger),
     runs("url(#g)", (p) => !p.storm && !p.danger && p.grass),
@@ -255,19 +285,25 @@ export function card(zip, place, d) {
     <path d="${path("shade")}" fill="none" stroke="${C.shade}" stroke-width="6" stroke-linejoin="round"/>
     <path d="${path("sun")}" fill="none" stroke="${C.sun}" stroke-width="7" stroke-linejoin="round"/>
     <line x1="${nx}" y1="0" x2="${nx}" y2="${Hh}" stroke="${C.ink}" stroke-width="3" stroke-dasharray="8 7"/>
-    <circle cx="${nx}" cy="${y(d.sunF)}" r="10" fill="${C.sun}"/><circle cx="${nx}" cy="${y(d.shadeF)}" r="9" fill="${C.shade}"/></svg>`;
+    <circle cx="${nx}" cy="${y(d.sunF)}" r="10" fill="${C.sun}"/><circle cx="${nx}" cy="${y(d.shadeF)}" r="9" fill="${C.shade}"/>
+    ${d.sunEvents.map((e) => sunMark(x(e.t), y(e.sun))).join("")}</svg>`;
+  // Each sun's label above it, or below when the line sits near the top.
+  const labels = d.sunEvents.map((e) => {
+    const top = y(e.sun) < 70 ? y(e.sun) + 26 : y(e.sun) - 62;
+    return `<div style="display:flex;position:absolute;left:${Math.min(W - 220, Math.max(0, x(e.t) - 110))}px;top:${top}px;width:220px;justify-content:center;font-size:24px;font-weight:700;color:${C.ink}">${e.kind} ${escapeHtml(clock(e.t, d.zone))}</div>`;
+  });
   const side = (label, v, color) => `<div style="display:flex;flex-direction:column;margin-bottom:18px">
       <div style="display:flex;font-size:24px;font-weight:700;letter-spacing:2px;color:${color}">${label}</div>
       <div style="display:flex;font-size:88px;font-weight:800;color:${color};line-height:1">${v}°</div></div>`;
   return `<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;padding:44px 56px;background:${C.bg};font-family:Inter">
-    ${header(zip, place, d)}
+    ${header(zip, place, d, logoSvg)}
     ${noticeLine(d)}
     <div style="display:flex;align-items:flex-end;width:100%">
       <div style="display:flex;flex-direction:column;width:${W}px">
-        <div style="display:flex">${svg}</div>
+        <div style="display:flex;position:relative">${svg}${labels.join("")}</div>
         <div style="display:flex;position:relative;height:30px;margin-top:6px">${ticks.join("")}</div>
       </div>
-      <div style="display:flex;flex-direction:column;margin-left:48px">
+      <div style="display:flex;flex-direction:column;align-items:flex-end;width:${SIDE}px;margin-left:36px">
         ${d.night ? side("SUN OR SHADE", d.shadeF, C.shade) : side("SUN", d.sunF, C.sun) + side("SHADE", d.shadeF, C.shade)}
       </div>
     </div>

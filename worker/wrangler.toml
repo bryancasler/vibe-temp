@@ -10,3 +10,8 @@ routes = [{ pattern = "vibetemp.fun/*", zone_name = "vibetemp.fun" }]
 type = "Data"
 globs = ["**/*.woff"]
 fallthrough = true
+
+[[rules]]
+type = "Text"
+globs = ["**/*.svg"]
+fallthrough = true
