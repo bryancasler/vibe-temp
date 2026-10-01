@@ -7345,6 +7345,9 @@
         });
 
       // ZIP input handler - submit on Enter or blur
+      // The logo's big shine (twinkleLogoStar sets it): it also plays each
+      // time a ZIP loads (Bryan, 2026-10-01).
+      let shineLogo = () => {};
       async function handleZipSubmit() {
         if (!zipEls.input) return;
         const raw = zipEls.input.value.trim();
@@ -7392,6 +7395,7 @@
 
           updateChartTitle();
           found = true;
+          shineLogo();
         } catch (e) {
           console.warn(e);
           failedZip = raw;
@@ -7548,6 +7552,7 @@
         // A tap or a click starts it over; a mouse coming over it sets it off
         // unless it is already shining. A finger's tap sends pointerenter
         // too, so only the mouse's counts.
+        shineLogo = shine;
         logo.addEventListener("click", shine);
         logo.addEventListener("pointerenter", (e) => {
           if (e.pointerType === "mouse" && !shining) shine();

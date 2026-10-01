@@ -141,6 +141,40 @@ const dist = (p, q) => Math.hypot(p.cx - q.cx, p.cy - q.cy);
   await page.context().close();
 }
 
+// The shine plays again each time a ZIP loads, and not for one that fails (Bryan, 2026-10-01).
+{
+  const { page, t0, errors } = await openApp(browser, { size: "phone", scheme: "dark", goto: false });
+  await page.addInitScript(() => {
+    // Each shine's start, once: the star can take its class more than once in the same moment.
+    window.__starts = new Set();
+    new MutationObserver((ms) =>
+      ms.forEach((m) => {
+        if (m.target.classList?.contains("logo-star--mega")) window.__starts.add(Math.round(performance.now() / 50));
+      })
+    ).observe(document, { subtree: true, attributes: true, attributeFilter: ["class"] });
+  });
+  await page.goto("http://localhost:4800/", { waitUntil: "commit" });
+  await waitForChart(page, t0);
+  await page.clock.runFor(5000); // the load's shine, and over
+  await page.waitForTimeout(1500);
+  const megas = () => page.evaluate(() => window.__starts.size);
+  const afterLoad = await megas();
+  await page.locator("#chartLocation").fill("99999");
+  await page.locator("#chartLocation").press("Enter");
+  await page.waitForTimeout(1200);
+  const afterFail = await megas();
+  await page.locator("#chartLocation").fill("90012");
+  await page.locator("#chartLocation").press("Enter");
+  await page.waitForTimeout(1500);
+  const afterZip = await megas();
+  expect("the load shine ran once", afterLoad === 1, `${afterLoad}`);
+  expect("a ZIP that fails doesn't shine", afterFail === afterLoad, `${afterLoad} -> ${afterFail}`);
+  expect("a ZIP that works shines the logo", afterZip === afterFail + 1, `${afterFail} -> ${afterZip}`);
+  const real = errors.filter((e) => !/status of 404/.test(e));
+  expect("no errors (ZIP shine)", real.length === 0, real.join(" | "));
+  await page.context().close();
+}
+
 await browser.close();
 if (fails.length) {
   console.log(`\n${fails.length} failed`);
