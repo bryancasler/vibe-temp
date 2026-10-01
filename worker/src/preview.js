@@ -281,8 +281,6 @@ export function card(zip, place, d, logoSvg = "") {
     const t = t0 + h * H;
     return `<div style="display:flex;position:absolute;left:${x(t) - 60}px;width:120px;justify-content:center;font-size:24px;color:${C.muted}">${escapeHtml(clock(t, d.zone).replace(":00", ""))}</div>`;
   });
-  // The time now, under the dotted line (Bryan, 2026-10-01).
-  const nowLabel = `<div style="display:flex;position:absolute;left:${Math.max(0, nx - 70)}px;width:140px;justify-content:${nx < 70 ? "flex-start" : "center"};font-size:24px;font-weight:800;color:${C.ink}">${escapeHtml(clock(d.nowSec, d.zone))}</div>`;
   const svg = `<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}">${defs}${cells.join("")}
     <path d="${path("shade")}" fill="none" stroke="${C.shade}" stroke-width="6" stroke-linejoin="round"/>
     <path d="${path("sun")}" fill="none" stroke="${C.sun}" stroke-width="7" stroke-linejoin="round"/>
@@ -292,7 +290,7 @@ export function card(zip, place, d, logoSvg = "") {
   // Each sun's label where it covers the lines least (Bryan, 2026-10-01):
   // above, below, or to either side of its sun, kept inside the chart, the
   // spot crossing the fewest stretches of either line winning (above first
-  // on a tie). The text is about 13px a character at this size.
+  // on a full tie). The text is about 13px a character at this size.
   const LH = 30;
   const covers = (bx, by, bw) => {
     let n = 0;
@@ -308,6 +306,17 @@ export function card(zip, place, d, logoSvg = "") {
     }
     return n;
   };
+  // The shaded stretches (touch grass, storms, heat), as x ranges.
+  const shaded = [];
+  for (let i = 0; i + 1 < s.length; i++) {
+    const p = s[i];
+    if (!(p.storm || p.danger || p.grass)) continue;
+    let j = i;
+    while (j + 1 < s.length - 1 && (s[j + 1].storm || s[j + 1].danger || s[j + 1].grass)) j++;
+    shaded.push([x(p.t), x(s[j + 1].t)]);
+    i = j;
+  }
+  const onShade = (bx, bw) => shaded.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, bx + bw) - Math.max(a, bx)), 0);
   const labels = d.sunEvents.map((e) => {
     const text = `${e.kind} ${clock(e.t, d.zone)}`;
     const bw = text.length * 13 + 8;
@@ -323,13 +332,15 @@ export function card(zip, place, d, logoSvg = "") {
       [cx - bw - 10, cy + 24],
       [cx + 10, cy + 24],
     ].map(([bx, by]) => [Math.min(W - bw, Math.max(0, bx)), Math.min(Hh - LH, Math.max(0, by))]);
+    // Fewest line crossings first; among those, the least over shading, so
+    // the label sits in the white when it can (Bryan, 2026-10-01).
     let best = spots[0];
-    let bestN = Infinity;
+    let bestScore = [Infinity, Infinity];
     for (const [bx, by] of spots) {
       // Never over the sun itself.
       if (bx < cx + 22 && bx + bw > cx - 22 && by < cy + 22 && by + LH > cy - 22) continue;
-      const n = covers(bx, by, bw);
-      if (n < bestN) [best, bestN] = [[bx, by], n];
+      const score = [covers(bx, by, bw), onShade(bx, bw)];
+      if (score[0] < bestScore[0] || (score[0] === bestScore[0] && score[1] < bestScore[1])) [best, bestScore] = [[bx, by], score];
     }
     return `<div style="display:flex;position:absolute;left:${best[0].toFixed(0)}px;top:${best[1].toFixed(0)}px;width:${bw}px;height:${LH}px;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:${C.ink}">${escapeHtml(text)}</div>`;
   });
@@ -342,7 +353,7 @@ export function card(zip, place, d, logoSvg = "") {
     <div style="display:flex;align-items:flex-end;width:100%">
       <div style="display:flex;flex-direction:column;width:${W}px">
         <div style="display:flex;position:relative">${svg}${labels.join("")}</div>
-        <div style="display:flex;position:relative;height:30px;margin-top:6px">${ticks.join("")}${nowLabel}</div>
+        <div style="display:flex;position:relative;height:30px;margin-top:6px">${ticks.join("")}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;width:${SIDE}px;margin-left:36px">
         ${d.night ? side("SUN OR SHADE", d.shadeF, C.shade) : side("SUN", d.sunF, C.sun) + side("SHADE", d.shadeF, C.shade)}

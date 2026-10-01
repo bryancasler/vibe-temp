@@ -10,7 +10,7 @@ import { previewTags, zipFrom, bucketOf } from "../worker/src/meta.js";
 
 const NOW = Date.parse("2025-10-17T14:20:00-04:00") / 1000;
 const url = new URL(
-  "https://api.open-meteo.com/v1/forecast?latitude=38.92&longitude=-77.04&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,weathercode&timezone=auto&timeformat=unixtime&past_days=1&forecast_days=2"
+  "https://api.open-meteo.com/v1/forecast?latitude=38.92&longitude=-77.04&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,cloud_cover,uv_index,uv_index_clear_sky,shortwave_radiation,direct_radiation,is_day,weathercode&daily=sunrise,sunset&timezone=auto&timeformat=unixtime&past_days=1&forecast_days=2"
 );
 const fc = forecastResponse(url, { nowUnix: NOW });
 const d = previewData(fc, NOW);
@@ -97,4 +97,14 @@ test("dangerous heat from the NWS Danger level, 103°F heat index, not below", (
 test("storms come before heat", () => {
   const both = with_((u) => ({ temperature_2m: 98, relative_humidity_2m: 55, ...(u >= MORNING + 5 * 3600 && u < MORNING + 6 * 3600 ? { weathercode: 96 } : {}) }));
   assert.equal(both.alert.kind, "storm");
+});
+
+test("a sunset label keeps out of the shading when it can", () => {
+  // Storms from just after sunset to 1am shade the right of the sunset sun:
+  // the label goes to its left, where it is clear of the lines too.
+  const storm = with_(at(8, 14, { weathercode: 95 }));
+  const html = card("20009", "Washington, DC", storm);
+  const m = html.match(/left:(\d+)px;top:(\d+)px;width:(\d+)px;height:30px[^>]*>Sunset/);
+  const sunX = Number(html.match(/<circle cx="([\d.]+)" cy="[\d.]+" r="21"/)?.[1]);
+  assert.ok(m && Number(m[1]) + Number(m[3]) <= sunX, `${m?.slice(1)} vs sun at ${sunX}`);
 });
