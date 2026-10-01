@@ -553,7 +553,8 @@ body {
   width: calc(
     5ch + 52px
   ); /* 5 characters + left padding (12px) + right padding (28px) + extra space for letter-spacing */
-  text-align: center;
+  /* Left, so the cursor starts where typing does (Bryan, 2026-09-30). */
+  text-align: left;
   transition: all 0.2s ease;
   letter-spacing: 0.5px;
   position: relative;

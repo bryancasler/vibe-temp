@@ -90,6 +90,9 @@ for (const size of ["phone", "desktop"]) {
       const pin = document.getElementById("gpsLocationBtn").getBoundingClientRect();
       return { pin: v("gpsLocationBtn"), clear: v("zipClearBtn"), inBox: pin.width === 0 || (pin.left > box.left + box.width / 2 && pin.right <= box.right) };
     });
+  // The ZIP box is left-aligned, so the cursor starts where typing does (Bryan, 2026-09-30).
+  const align = await page.evaluate(() => getComputedStyle(document.getElementById("chartLocation")).textAlign);
+  expect(`${size}: the ZIP box is left-aligned`, align === "left" || align === "start", align);
   const empty = await swap();
   expect(`${size}: with no ZIP the pin shows in the box, and no clear button`, empty.pin && !empty.clear && empty.inBox, JSON.stringify(empty));
   await page.locator("#chartLocation").fill("2000");
