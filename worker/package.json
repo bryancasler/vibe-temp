@@ -1,0 +1,15 @@
+{
+  "name": "vibe-temp-preview",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "workers-og": "^0.0.27"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

@@ -1,0 +1,12 @@
+# Vibe Temp's link previews (see README.md). Not deployed yet: the route
+# needs vibetemp.fun's DNS on Cloudflare, proxied, with GitHub Pages as origin.
+name = "vibe-temp-preview"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+routes = [{ pattern = "vibetemp.fun/*", zone_name = "vibetemp.fun" }]
+
+[[rules]]
+type = "Data"
+globs = ["**/*.woff"]
+fallthrough = true
