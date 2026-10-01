@@ -281,6 +281,8 @@ export function card(zip, place, d, logoSvg = "") {
     const t = t0 + h * H;
     return `<div style="display:flex;position:absolute;left:${x(t) - 60}px;width:120px;justify-content:center;font-size:24px;color:${C.muted}">${escapeHtml(clock(t, d.zone).replace(":00", ""))}</div>`;
   });
+  // The time now, under the dotted line (Bryan, 2026-10-01).
+  const nowLabel = `<div style="display:flex;position:absolute;left:${Math.max(0, nx - 70)}px;width:140px;justify-content:${nx < 70 ? "flex-start" : "center"};font-size:24px;font-weight:800;color:${C.ink}">${escapeHtml(clock(d.nowSec, d.zone))}</div>`;
   const svg = `<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}">${defs}${cells.join("")}
     <path d="${path("shade")}" fill="none" stroke="${C.shade}" stroke-width="6" stroke-linejoin="round"/>
     <path d="${path("sun")}" fill="none" stroke="${C.sun}" stroke-width="7" stroke-linejoin="round"/>
@@ -301,7 +303,7 @@ export function card(zip, place, d, logoSvg = "") {
     <div style="display:flex;align-items:flex-end;width:100%">
       <div style="display:flex;flex-direction:column;width:${W}px">
         <div style="display:flex;position:relative">${svg}${labels.join("")}</div>
-        <div style="display:flex;position:relative;height:30px;margin-top:6px">${ticks.join("")}</div>
+        <div style="display:flex;position:relative;height:30px;margin-top:6px">${ticks.join("")}${nowLabel}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;width:${SIDE}px;margin-left:36px">
         ${d.night ? side("SUN OR SHADE", d.shadeF, C.shade) : side("SUN", d.sunF, C.sun) + side("SHADE", d.shadeF, C.shade)}
