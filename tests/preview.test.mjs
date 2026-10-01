@@ -5,8 +5,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import "../model.js";
 import { forecastResponse } from "./browser/mock-apis.mjs";
-import { CALIBRATION, REFLECTIVITY, previewData, stamp, cardA, cardB, previewTitle } from "../worker/src/preview.js";
-import { previewTags, zipFrom, variantFrom, bucketOf } from "../worker/src/meta.js";
+import { CALIBRATION, REFLECTIVITY, DANGER_HI_F, previewData, previewDescription, stamp, card, previewTitle } from "../worker/src/preview.js";
+import { previewTags, zipFrom, bucketOf } from "../worker/src/meta.js";
 
 const NOW = Date.parse("2025-10-17T14:20:00-04:00") / 1000;
 const url = new URL(
@@ -46,8 +46,6 @@ test("only a five-digit ZIP is taken from the address", () => {
   assert.equal(z("zip=20009"), "20009");
   assert.equal(z("zip=%2020009%20"), "20009");
   for (const q of ["", "zip=2000", "zip=200099", "zip=20009%3Cscript%3E", "zip=abcde", "zip=20009-1234"]) assert.equal(z(q), null, q);
-  assert.equal(variantFrom(new URLSearchParams("v=b")), "b");
-  assert.equal(variantFrom(new URLSearchParams("v=<x>"), "a"), "a");
 });
 
 test("the tags: title without the site name, image 1200x630 on a ten-minute bucket, all escaped", () => {
@@ -56,15 +54,47 @@ test("the tags: title without the site name, image 1200x630 on a ten-minute buck
   assert.ok(!/<script|"><b>/.test(tags), tags);
   assert.match(tags, /property="og:site_name" content="Vibe Temp"/);
   assert.ok(!/og:title" content="[^"]*Vibe Temp/.test(tags));
-  assert.match(tags, new RegExp(`og:image" content="https://vibetemp.fun/og.png\\?zip=20009&amp;v=a&amp;t=${bucketOf(NOW)}"`));
+  assert.match(tags, new RegExp(`og:image" content="https://vibetemp.fun/og.png\\?zip=20009&amp;t=${bucketOf(NOW)}"`));
   assert.match(tags, /og:image:width" content="1200"/);
   assert.equal(previewTitle("20009", "Washington, DC", d), `20009 · Washington, DC: ${d.sunF}°F sun, ${d.shadeF}°F shade`);
 });
 
-test("both cards carry the ZIP, the place and the time, escaped", () => {
-  for (const card of [cardA, cardB]) {
-    const html = card("20009", "A<b>&C", d);
-    assert.ok(html.includes("20009") && html.includes("A&lt;b&gt;&amp;C") && html.includes("2:20 PM EDT"));
-    assert.ok(!html.includes("A<b>"));
-  }
+test("the card carries the ZIP, the place and the time, escaped", () => {
+  const html = card("20009", "A<b>&C", d);
+  assert.ok(html.includes("20009") && html.includes("A&lt;b&gt;&amp;C") && html.includes("2:20 PM EDT"));
+  assert.ok(!html.includes("A<b>"));
+});
+
+// The same forecast with one thing changed, from 10:20am.
+const MORNING = Date.parse("2025-10-17T10:20:00-04:00") / 1000;
+const with_ = (hourly) => previewData(forecastResponse(url, { nowUnix: MORNING, scenario: { hourly } }), MORNING);
+const at = (h0, h1, over) => (u) => (u >= MORNING + h0 * 3600 && u < MORNING + h1 * 3600 ? over : null);
+
+test("a calm day: touch grass, no alert", () => {
+  const c = with_(() => null);
+  assert.equal(c.alert, null);
+  assert.match(c.grass, /^Touch grass (until \d|\d+ to \d+ [AP]M|noon)/);
+});
+
+test("storms: weather codes 95 to 99 only, with their hours", () => {
+  const s = with_(at(5, 8, { weathercode: 95 }));
+  assert.equal(s.alert.kind, "storm");
+  assert.equal(s.alert.text, "Thunderstorms 4 to 7 PM");
+  assert.equal(with_(at(5, 8, { weathercode: 99 })).alert.kind, "storm");
+  assert.equal(with_(at(5, 8, { weathercode: 82 })).alert, null);
+  assert.match(previewDescription(s), /Thunderstorms 4 to 7 PM\./);
+});
+
+test("dangerous heat from the NWS Danger level, 103°F heat index, not below", () => {
+  // 95°F air: 50% humidity gives a heat index of about 107, 35% about 98.
+  const hot = with_(at(2, 5, { temperature_2m: 95, relative_humidity_2m: 50 }));
+  assert.equal(hot.alert.kind, "heat");
+  assert.match(hot.alert.text, /^Dangerous heat 1 to 4 PM, heat index 10\d°F$/);
+  assert.equal(with_(at(2, 5, { temperature_2m: 95, relative_humidity_2m: 35 })).alert, null);
+  assert.equal(DANGER_HI_F, 103);
+});
+
+test("storms come before heat", () => {
+  const both = with_((u) => ({ temperature_2m: 98, relative_humidity_2m: 55, ...(u >= MORNING + 5 * 3600 && u < MORNING + 6 * 3600 ? { weathercode: 96 } : {}) }));
+  assert.equal(both.alert.kind, "storm");
 });

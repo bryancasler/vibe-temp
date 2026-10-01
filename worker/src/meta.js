@@ -10,17 +10,11 @@ export function zipFrom(params) {
   return /^\d{5}$/.test(z) ? z : null;
 }
 
-/** The variant to draw: a or b, a by default. */
-export function variantFrom(params, fallback = "a") {
-  const v = params.get("v");
-  return v === "a" || v === "b" ? v : fallback;
-}
-
 /** Ten-minute buckets: the image URL changes with them, so no cache serves an old one long. */
 export const bucketOf = (sec) => Math.floor(sec / 600);
 
-export function previewTags({ origin, pageUrl, zip, place, data, variant = "a" }) {
-  const image = `${origin}/og.png?zip=${zip}&v=${variant}&t=${bucketOf(data.nowSec)}`;
+export function previewTags({ origin, pageUrl, zip, place, data }) {
+  const image = `${origin}/og.png?zip=${zip}&t=${bucketOf(data.nowSec)}`;
   const title = previewTitle(zip, place, data);
   const desc = previewDescription(data);
   const tag = (attr, key, value) => `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;

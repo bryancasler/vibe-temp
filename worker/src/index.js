@@ -1,11 +1,11 @@
 // Vibe Temp's link previews (Bryan, 2026-10-01): a Cloudflare Worker in
 // front of the GitHub Pages site. Staged, not deployed; see worker/README.md.
 //   /?zip=20009   the page as GitHub Pages serves it, with that ZIP's preview tags
-//   /og.png?zip=  the preview image, drawn from the ZIP's forecast right now
+//   /og.png?zip=  the preview image (design B, Bryan 2026-10-01), drawn from the ZIP's forecast right now
 //   anything else passes straight through to GitHub Pages.
 import { ImageResponse } from "workers-og";
-import { CARDS, previewData } from "./preview.js";
-import { previewTags, variantFrom, zipFrom } from "./meta.js";
+import { card, previewData } from "./preview.js";
+import { previewTags, zipFrom } from "./meta.js";
 import inter400 from "../fonts/inter-latin-400-normal.woff";
 import inter700 from "../fonts/inter-latin-700-normal.woff";
 import inter800 from "../fonts/inter-latin-800-normal.woff";
@@ -16,8 +16,6 @@ const FONTS = [
   { name: "Inter", data: inter800, weight: 800, style: "normal" },
 ];
 const TIMEOUT_MS = 4000;
-// The variant shared links draw until Bryan picks one (then remove the other).
-const DEFAULT_VARIANT = "a";
 
 // Both as the page asks for them (scripts.js lookUpZip and fetchForecast).
 async function placeFor(zip) {
@@ -65,7 +63,7 @@ async function image(url, ctx) {
   if (hit) return hit;
   const p = await previewFor(zip);
   if (!p) return Response.redirect(`${url.origin}/apple-touch-icon.png`, 302);
-  const res = new ImageResponse(CARDS[variantFrom(url.searchParams, DEFAULT_VARIANT)](zip, p.place, p.data), { width: 1200, height: 630, fonts: FONTS });
+  const res = new ImageResponse(card(zip, p.place, p.data), { width: 1200, height: 630, fonts: FONTS });
   const out = new Response(res.body, res);
   out.headers.set("Cache-Control", "public, max-age=600");
   ctx.waitUntil(cache.put(key, out.clone()));
@@ -79,7 +77,7 @@ async function page(request, url) {
   if (!zip || !html || !origin.ok) return origin;
   const p = await previewFor(zip).catch(() => null);
   if (!p) return origin;
-  const tags = previewTags({ origin: url.origin, pageUrl: url.toString(), zip, place: p.place, data: p.data, variant: variantFrom(url.searchParams, DEFAULT_VARIANT) });
+  const tags = previewTags({ origin: url.origin, pageUrl: url.toString(), zip, place: p.place, data: p.data });
   const res = new HTMLRewriter()
     // The page's own generic tags give way to this ZIP's.
     .on('meta[property^="og:"], meta[name^="twitter:"]', { element: (e) => e.remove() })
