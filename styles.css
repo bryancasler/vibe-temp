@@ -4,6 +4,10 @@
   --muted: #8aa0b6;
   --text: #e6edf6;
   --accent: #3b82f6; /* shade line */
+  /* Text in the line colours, readable on the page (WCAG AA, 4.5:1 for
+     small text); the dark theme's lines already are. */
+  --link: var(--accent);
+  --sun-text: var(--sun);
   --sun: #f97316; /* sun line */
   --good: #22c55e; /* current time + vertical line */
   --border: #1f2a3b;
@@ -18,6 +22,9 @@
   --sun: #f97316;
   --good: #10b981;
   --border: #e5e7eb;
+  /* Darker on white: blue 5.2:1, orange 5.2:1 (Bryan, 2026-10-01). */
+  --link: #2563eb;
+  --sun-text: #c2410c;
 }
 
 * {
@@ -223,6 +230,9 @@ body {
   font-size: 28px;
 }
 .zip-inline-wrapper .gps-icon-btn {
+  /* At least 24px to tap (WCAG 2.5.8). */
+  min-width: 24px;
+  min-height: 24px;
   background: none;
   border: none;
   cursor: pointer;
@@ -400,16 +410,13 @@ body {
   letter-spacing: 0.5px;
 }
 .card-temp-sun {
-  color: var(--sun);
+  color: var(--sun-text);
 }
 .card-temp-shade {
   color: var(--accent);
 }
 .card-temp-combined {
-  color: var(--sun);
-}
-.card-temp-combined {
-  color: var(--sun);
+  color: var(--sun-text);
 }
 .card-desc {
   display: block;
@@ -1144,7 +1151,7 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   font-size: 12px;
 }
 .tip-content small {
-  opacity: 0.8;
+  font-size: inherit;
 }
 .desktop-only {
   display: inline;
@@ -1772,7 +1779,8 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
-.adv-col h4 {
+.adv-col h3 {
+  font-size: 1em;
   margin: 8px 0;
   color: var(--muted);
 }
@@ -2133,7 +2141,17 @@ select {
 .data-credit a,
 .dog-panel a,
 .dog-legend a {
-  color: var(--accent);
+  color: var(--link);
+}
+/* A 24px-tall tap target for the credit links, without moving the lines. */
+.data-credit a {
+  display: inline-block;
+  padding: 6px 0;
+  margin: -6px 0;
+}
+/* Room between two credit lines, so their links' targets don't overlap. */
+.data-credit + .data-credit {
+  margin-top: 12px;
 }
 .dog-legend {
   margin-top: 8px;
