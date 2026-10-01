@@ -289,10 +289,49 @@ export function card(zip, place, d, logoSvg = "") {
     <line x1="${nx}" y1="0" x2="${nx}" y2="${Hh}" stroke="${C.ink}" stroke-width="3" stroke-dasharray="8 7"/>
     <circle cx="${nx}" cy="${y(d.sunF)}" r="10" fill="${C.sun}"/><circle cx="${nx}" cy="${y(d.shadeF)}" r="9" fill="${C.shade}"/>
     ${d.sunEvents.map((e) => sunMark(x(e.t), y(e.sun))).join("")}</svg>`;
-  // Each sun's label above it, or below when the line sits near the top.
+  // Each sun's label where it covers the lines least (Bryan, 2026-10-01):
+  // above, below, or to either side of its sun, kept inside the chart, the
+  // spot crossing the fewest stretches of either line winning (above first
+  // on a tie). The text is about 13px a character at this size.
+  const LH = 30;
+  const covers = (bx, by, bw) => {
+    let n = 0;
+    for (let px = bx; px <= bx + bw; px += 6) {
+      const t = t0 + (px / W) * (t1 - t0);
+      const k = s.findIndex((p, i) => i + 1 < s.length && p.t <= t && s[i + 1].t >= t);
+      if (k < 0) continue;
+      const f = (t - s[k].t) / (s[k + 1].t - s[k].t);
+      for (const key of ["sun", "shade"]) {
+        const ly = y(s[k][key] + (s[k + 1][key] - s[k][key]) * f);
+        if (ly > by - 6 && ly < by + LH + 6) n++;
+      }
+    }
+    return n;
+  };
   const labels = d.sunEvents.map((e) => {
-    const top = y(e.sun) < 70 ? y(e.sun) + 26 : y(e.sun) - 62;
-    return `<div style="display:flex;position:absolute;left:${Math.min(W - 220, Math.max(0, x(e.t) - 110))}px;top:${top}px;width:220px;justify-content:center;font-size:24px;font-weight:700;color:${C.ink}">${e.kind} ${escapeHtml(clock(e.t, d.zone))}</div>`;
+    const text = `${e.kind} ${clock(e.t, d.zone)}`;
+    const bw = text.length * 13 + 8;
+    const cx = x(e.t);
+    const cy = y(e.sun);
+    const spots = [
+      [cx - bw / 2, cy - 30 - LH],
+      [cx - bw / 2, cy + 28],
+      [cx - bw - 26, cy - LH / 2],
+      [cx + 26, cy - LH / 2],
+      [cx - bw - 10, cy - 26 - LH],
+      [cx + 10, cy - 26 - LH],
+      [cx - bw - 10, cy + 24],
+      [cx + 10, cy + 24],
+    ].map(([bx, by]) => [Math.min(W - bw, Math.max(0, bx)), Math.min(Hh - LH, Math.max(0, by))]);
+    let best = spots[0];
+    let bestN = Infinity;
+    for (const [bx, by] of spots) {
+      // Never over the sun itself.
+      if (bx < cx + 22 && bx + bw > cx - 22 && by < cy + 22 && by + LH > cy - 22) continue;
+      const n = covers(bx, by, bw);
+      if (n < bestN) [best, bestN] = [[bx, by], n];
+    }
+    return `<div style="display:flex;position:absolute;left:${best[0].toFixed(0)}px;top:${best[1].toFixed(0)}px;width:${bw}px;height:${LH}px;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:${C.ink}">${escapeHtml(text)}</div>`;
   });
   const side = (label, v, color) => `<div style="display:flex;flex-direction:column;margin-bottom:18px">
       <div style="display:flex;font-size:24px;font-weight:700;letter-spacing:2px;color:${color}">${label}</div>
