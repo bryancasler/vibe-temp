@@ -203,6 +203,15 @@ for (const size of ["phone", "desktop"]) {
   await page.locator("#chartLocation").press("Enter");
   await page.waitForTimeout(1000);
   expect("a new ZIP then loads its place", forecastAt(log).at(-1) !== place && forecastAt(log).at(-1).startsWith("47.6"), forecastAt(log).join(" "));
+  // Clear, then the pin, with the mouse: the device's place loads and the box stays empty, rather than the
+  // blur putting the ZIP back over the pin before the click lands (Bryan, 2026-10-01).
+  await page.locator("#zipClearBtn").click();
+  await page.waitForTimeout(300);
+  const asks = await asked(page);
+  await page.locator("#gpsLocationBtn").click();
+  await page.waitForTimeout(1000);
+  const gps = { asks: (await asked(page)) - asks, at: forecastAt(log).at(-1), box: await page.locator("#chartLocation").inputValue(), pin: await page.locator("#gpsLocationBtn").isVisible() };
+  expect("clear, then the pin: the device's place loads, and the box stays empty with the pin", gps.asks === 1 && gps.at === "38.91,-77.02" && gps.box === "" && gps.pin, JSON.stringify(gps));
   expect("no errors (ZIP)", errors.length === 0, errors.join(" | "));
   await page.context().close();
 }

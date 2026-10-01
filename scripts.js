@@ -308,16 +308,10 @@
       // Update location input in top right
       const chartLocationEl = $("#chartLocation");
       if (chartLocationEl) {
-        // Show ZIP code if saved, otherwise show place name or empty
-        const savedZip = storageCacheGet(ZIP_KEY);
-        if (savedZip) {
-          // Show ZIP code value
-          chartLocationEl.value = savedZip;
-        } else if (currentPlaceName) {
-          chartLocationEl.value = "";
-        } else {
-          chartLocationEl.value = "";
-        }
+        // The ZIP of the place on screen, or empty for one that came from
+        // elsewhere (the device's location): not the last ZIP saved, which
+        // put an old ZIP over the device's place (Bryan, 2026-10-01).
+        chartLocationEl.value = currentZip || "";
         // Always keep placeholder as "12345"
         chartLocationEl.placeholder = "12345";
         // Update clear button visibility after setting initial value
@@ -7532,6 +7526,10 @@
         gpsLocationBtn.addEventListener("click", () => {
           useLocation();
         });
+      // Pressing the pin keeps the focus in the box: a blur there would put
+      // the last ZIP back and swap the pin for the clear button before the
+      // click lands (Bryan, 2026-10-01).
+      gpsLocationBtn && gpsLocationBtn.addEventListener("mousedown", (e) => e.preventDefault());
 
       // Initialize headline date
       updateHeadlineDate();
