@@ -239,7 +239,7 @@ function noticeLine(d) {
 }
 
 /** The next 24 hours as the chart draws them, the temperatures beside. */
-export function card(zip, place, d, logoSvg = "") {
+export function card(zip, place, d, logoSvg = "", { generic = false } = {}) {
   // The chart takes the width the temperatures leave, so they sit flush right.
   const SIDE = 190;
   const W = 1088 - SIDE - 36;
@@ -281,11 +281,13 @@ export function card(zip, place, d, logoSvg = "") {
     const t = t0 + h * H;
     return `<div style="display:flex;position:absolute;left:${x(t) - 60}px;width:120px;justify-content:center;font-size:24px;color:${C.muted}">${escapeHtml(clock(t, d.zone).replace(":00", ""))}</div>`;
   });
+  // The dotted line at now, with the sun and shade dots on it (none on the generic card).
+  const nowMarks = `<line x1="${nx}" y1="0" x2="${nx}" y2="${Hh}" stroke="${C.ink}" stroke-width="3" stroke-dasharray="8 7"/>
+    <circle cx="${nx}" cy="${y(d.sunF)}" r="10" fill="${C.sun}"/><circle cx="${nx}" cy="${y(d.shadeF)}" r="9" fill="${C.shade}"/>`;
   const svg = `<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}">${defs}${cells.join("")}
     <path d="${path("shade")}" fill="none" stroke="${C.shade}" stroke-width="6" stroke-linejoin="round"/>
     <path d="${path("sun")}" fill="none" stroke="${C.sun}" stroke-width="7" stroke-linejoin="round"/>
-    <line x1="${nx}" y1="0" x2="${nx}" y2="${Hh}" stroke="${C.ink}" stroke-width="3" stroke-dasharray="8 7"/>
-    <circle cx="${nx}" cy="${y(d.sunF)}" r="10" fill="${C.sun}"/><circle cx="${nx}" cy="${y(d.shadeF)}" r="9" fill="${C.shade}"/>
+    ${generic ? "" : nowMarks}
     ${d.sunEvents.map((e) => sunMark(x(e.t), y(e.sun))).join("")}</svg>`;
   // Each sun's label where it covers the lines least (Bryan, 2026-10-01):
   // above, below, or to either side of its sun, kept inside the chart, the
@@ -318,7 +320,7 @@ export function card(zip, place, d, logoSvg = "") {
   }
   const onShade = (bx, bw) => shaded.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, bx + bw) - Math.max(a, bx)), 0);
   const labels = d.sunEvents.map((e) => {
-    const text = `${e.kind} ${clock(e.t, d.zone)}`;
+    const text = generic ? e.kind : `${e.kind} ${clock(e.t, d.zone)}`;
     const bw = text.length * 13 + 8;
     const cx = x(e.t);
     const cy = y(e.sun);
@@ -348,16 +350,73 @@ export function card(zip, place, d, logoSvg = "") {
       <div style="display:flex;font-size:24px;font-weight:700;letter-spacing:2px;color:${color}">${label}</div>
       <div style="display:flex;font-size:88px;font-weight:800;color:${color};line-height:1">${v}°</div></div>`;
   return `<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;padding:44px 56px;background:${C.bg};font-family:Inter">
-    ${header(zip, place, d, logoSvg)}
-    ${noticeLine(d)}
+    ${generic ? genericHeader(logoSvg) : header(zip, place, d, logoSvg)}
+    ${generic ? genericNotice() : noticeLine(d)}
     <div style="display:flex;align-items:flex-end;width:100%">
       <div style="display:flex;flex-direction:column;width:${W}px">
         <div style="display:flex;position:relative">${svg}${labels.join("")}</div>
         <div style="display:flex;position:relative;height:30px;margin-top:6px">${ticks.join("")}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;width:${SIDE}px;margin-left:36px">
-        ${d.night ? side("SUN OR SHADE", d.shadeF, C.shade) : side("SUN", d.sunF, C.sun) + side("SHADE", d.shadeF, C.shade)}
+        ${generic ? legend() : d.night ? side("SUN OR SHADE", d.shadeF, C.shade) : side("SUN", d.sunF, C.sun) + side("SHADE", d.shadeF, C.shade)}
       </div>
     </div>
   </div>`;
+}
+
+// The preview for a link with no ZIP (Bryan, 2026-10-01): the same card with
+// an example day drawn and no numbers, since it stands for no place or time.
+// Rendered once to og-default.png, which the page's own tags point at.
+function genericHeader(logoSvg) {
+  const logo = logoSvg ? `<img src="data:image/svg+xml;base64,${toBase64(logoSvg)}" style="width:96px;height:96px;margin-right:26px"/>` : "";
+  return `<div style="display:flex;align-items:center;width:100%">${logo}
+    <div style="display:flex;flex-direction:column">
+      <div style="display:flex;font-size:72px;font-weight:800;color:${C.ink};line-height:1">VibeTemp</div>
+      <div style="display:flex;font-size:32px;font-weight:700;color:${C.muted};margin-top:10px">How warm it feels in the sun and the shade</div>
+    </div>
+  </div>`;
+}
+
+function genericNotice() {
+  return `<div style="display:flex;align-items:center;font-size:34px;font-weight:800;color:#15803d">
+    <div style="display:flex;width:24px;height:24px;border-radius:12px;background:${C.grass};margin-right:16px"></div>Find the best time to touch grass</div>`;
+}
+
+function legend() {
+  const row = (color, label) => `<div style="display:flex;align-items:center;margin-bottom:22px">
+      <div style="display:flex;width:44px;height:8px;border-radius:4px;background:${color};margin-right:14px"></div>
+      <div style="display:flex;font-size:30px;font-weight:800;color:${color}">${label}</div></div>`;
+  return row(C.sun, "In the sun") + row(C.shade, "In the shade");
+}
+
+/** An example day: sunrise at 7, sunset at 7, touch grass around midday. */
+export function genericData() {
+  const zone = "UTC";
+  const t0 = Date.UTC(2026, 5, 1, 6) / 1000;
+  const series = [];
+  for (let h = 0; h <= 24; h++) {
+    const hour = (6 + h) % 24;
+    const day = hour >= 7 && hour < 19;
+    const shade = 62 + 9 * Math.sin(((hour - 9) / 24) * 2 * Math.PI);
+    const light = day ? Math.sin(((hour - 7) / 12) * Math.PI) : 0;
+    const sun = shade + 9 * light;
+    const p = { t: t0 + h * H, sun, shade, day, storm: false, danger: false };
+    p.grass = isGrass(p);
+    series.push(p);
+  }
+  const at = (hh) => series.find((p) => p.t === t0 + hh * H);
+  return {
+    zone,
+    nowSec: t0 - 3 * H,
+    sunF: 0,
+    shadeF: 0,
+    night: false,
+    series,
+    sunEvents: [
+      { kind: "Sunrise", t: t0 + 1 * H, sun: at(1).sun },
+      { kind: "Sunset", t: t0 + 13 * H, sun: at(13).sun },
+    ],
+    grass: "",
+    alert: null,
+  };
 }
