@@ -369,11 +369,9 @@ export function card(zip, place, d, logoSvg = "", { generic = false } = {}) {
 // Rendered once to og-default.png, which the page's own tags point at.
 function genericHeader(logoSvg) {
   const logo = logoSvg ? `<img src="data:image/svg+xml;base64,${toBase64(logoSvg)}" style="width:96px;height:96px;margin-right:26px"/>` : "";
+  // The name centred on the logo, nothing under it (Bryan, 2026-10-01).
   return `<div style="display:flex;align-items:center;width:100%">${logo}
-    <div style="display:flex;flex-direction:column">
-      <div style="display:flex;font-size:72px;font-weight:800;color:${C.ink};line-height:1">VibeTemp</div>
-      <div style="display:flex;font-size:32px;font-weight:700;color:${C.muted};margin-top:10px">How warm it feels in the sun and the shade</div>
-    </div>
+    <div style="display:flex;font-size:72px;font-weight:800;color:${C.ink};line-height:1">VibeTemp</div>
   </div>`;
 }
 
