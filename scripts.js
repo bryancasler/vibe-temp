@@ -5722,7 +5722,9 @@
     // top like the Dogs bands (Bryan, 2026-09-30, option B). Each line's own
     // touch grass spans are one layer, so where both the sun and the shade
     // are touch grass weather the green is stronger than where only one is.
-    const TOUCH_GRASS_BAND_ALPHA = 0.175;
+    // As strong at the bottom as a band just past the line, with a trace left
+    // at the top (Bryan, 2026-10-01: 0.175 read fainter than the other bands).
+    const TOUCH_GRASS_BAND_ALPHA = 0.4;
     const touchGrassBandPlugin = {
       id: "touchGrassBand",
       beforeDatasetsDraw(chart) {
@@ -5732,14 +5734,14 @@
         if (!/^#[0-9a-f]{6}$/i.test(green)) return;
         const isDay = chart._isDayByHour || [];
         const xAt = (i) => scales.x.getPixelForValue(i);
-        const a = Math.round(TOUCH_GRASS_BAND_ALPHA * 255).toString(16).padStart(2, "0");
+        const hex = (alpha) => Math.round(alpha * 255).toString(16).padStart(2, "0");
         ctx.save();
         ctx.beginPath();
         ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
         ctx.clip();
         const g = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-        g.addColorStop(0, `${green}${a}`);
-        g.addColorStop(1, `${green}00`);
+        g.addColorStop(0, `${green}${hex(TOUCH_GRASS_BAND_ALPHA)}`);
+        g.addColorStop(1, `${green}${hex(TOUCH_GRASS_BAND_ALPHA * 0.15)}`);
         ctx.fillStyle = g;
         for (const d of chart.data.datasets.slice(0, 2)) {
           for (const [x1, x2] of touchGrassSpans(d.data, isDay, xAt)) {
