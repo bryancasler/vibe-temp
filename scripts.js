@@ -627,6 +627,55 @@
     let placeZone = browserZone;
     const zp = (d) => PlaceTime.parts(d, placeZone);
     const inZone = (opts = {}) => ({ ...opts, timeZone: placeZone });
+    // One formatter per zone and options, not one per call: the chart's axis
+    // labels format ~670 times a draw, and building a formatter each time was
+    // the page's biggest single cost (Bryan, 2026-10-02).
+    const zoneFormatters = new Map();
+    function zoneFormatter(opts = {}) {
+      const key = placeZone + "|" + JSON.stringify(opts);
+      let f = zoneFormatters.get(key);
+      if (!f) zoneFormatters.set(key, (f = new Intl.DateTimeFormat([], inZone(opts))));
+      return f;
+    }
+
+    // The x pixel of an exact time on the chart: between the two points
+    // around it, by time; the first point before them, the last after. A
+    // binary search over the points' times, cached per set of points, in
+    // place of a scan that built a Date per point on every call.
+    const labelTimesCache = new WeakMap();
+    function labelTimes(labels) {
+      let t = labelTimesCache.get(labels);
+      if (!t || t.length !== labels.length) {
+        t = Float64Array.from(labels, (l) => new Date(l).getTime());
+        labelTimesCache.set(labels, t);
+      }
+      return t;
+    }
+    function xForTime(xScale, labels, targetTime) {
+      const times = labelTimes(labels);
+      const n = times.length;
+      const target = new Date(targetTime).getTime();
+      if (!n) return xScale.getPixelForValue(0);
+      // The last point at or before the target.
+      let lo = 0;
+      let hi = n - 1;
+      let before = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] <= target) {
+          before = mid;
+          lo = mid + 1;
+        } else hi = mid - 1;
+      }
+      if (before === -1) return xScale.getPixelForValue(0);
+      if (times[before] === target) return xScale.getPixelForValue(before);
+      const after = before + 1;
+      if (after >= n) return xScale.getPixelForValue(n - 1);
+      const a = xScale.getPixelForValue(before);
+      const b = xScale.getPixelForValue(after);
+      const span = times[after] - times[before];
+      return span > 0 ? a + ((b - a) * (target - times[before])) / span : a;
+    }
 
     // The chart draws DATA_DAYS from the place's midnight today, and a view
     // shows daysAhead of them at a time, from viewStart (a point index):
@@ -2830,9 +2879,8 @@
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
       const sunVals = sunValsFF.map((v) => toUserTemp(v));
 
-      const displayLabels = labels.map((d) =>
-        d.toLocaleString([], inZone({ weekday: "short", hour: "numeric" }))
-      );
+      const axisFmt = zoneFormatter({ weekday: "short", hour: "numeric" });
+      const displayLabels = labels.map((d) => axisFmt.format(d));
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
       const touchGrassTimes = touchGrassFor(
@@ -3019,9 +3067,8 @@
       const shadeVals = shadeValsF.map((v) => toUserTemp(v));
       const sunVals = sunValsFF.map((v) => toUserTemp(v));
 
-      const displayLabels = labels.map((d) =>
-        d.toLocaleString([], inZone({ weekday: "short", hour: "numeric" }))
-      );
+      const axisFmt = zoneFormatter({ weekday: "short", hour: "numeric" });
+      const displayLabels = labels.map((d) => axisFmt.format(d));
       const nowIdx = labels.findIndex((d) => hourKey(d) === hourKey(now));
       const markers = buildSunMarkers(labels);
 
@@ -3143,51 +3190,7 @@
 
           // Helper to get exact pixel position for a Date (interpolates between hour markers)
           function getPixelForExactTime(targetTime) {
-            const target = new Date(targetTime);
-            // Find the two nearest hour indices
-            let beforeIdx = -1;
-            let afterIdx = -1;
-            let beforeTime = null;
-            let afterTime = null;
-
-            for (let i = 0; i < rawLabels.length; i++) {
-              const labelTime = new Date(rawLabels[i]);
-              if (labelTime <= target) {
-                beforeIdx = i;
-                beforeTime = labelTime;
-              }
-              if (labelTime >= target && afterIdx === -1) {
-                afterIdx = i;
-                afterTime = labelTime;
-                break;
-              }
-            }
-
-            // If exact match or at boundaries
-            if (beforeIdx === afterIdx) {
-              return scales.x.getPixelForValue(
-                beforeIdx >= 0 ? beforeIdx : afterIdx
-              );
-            }
-
-            // If before first label
-            if (beforeIdx === -1) {
-              return scales.x.getPixelForValue(0);
-            }
-
-            // If after last label
-            if (afterIdx === -1) {
-              return scales.x.getPixelForValue(rawLabels.length - 1);
-            }
-
-            // Interpolate between the two hour positions
-            const beforePixel = scales.x.getPixelForValue(beforeIdx);
-            const afterPixel = scales.x.getPixelForValue(afterIdx);
-            const timeDiff = afterTime - beforeTime;
-            const targetDiff = target - beforeTime;
-            const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
-
-            return beforePixel + (afterPixel - beforePixel) * fraction;
+            return xForTime(scales.x, rawLabels, targetTime);
           }
 
           // Get all sunrise/sunset events in the visible range
@@ -3402,41 +3405,7 @@
 
           // Helper to get exact pixel position for a Date (same as in day/night shading)
           function getPixelForExactTime(targetTime) {
-            const target = new Date(targetTime);
-            let beforeIdx = -1;
-            let afterIdx = -1;
-            let beforeTime = null;
-            let afterTime = null;
-
-            for (let i = 0; i < labels.length; i++) {
-              const labelTime = new Date(labels[i]);
-              if (labelTime <= target) {
-                beforeIdx = i;
-                beforeTime = labelTime;
-              }
-              if (labelTime >= target && afterIdx === -1) {
-                afterIdx = i;
-                afterTime = labelTime;
-                break;
-              }
-            }
-
-            if (beforeIdx === afterIdx) {
-              return scales.x.getPixelForValue(
-                beforeIdx >= 0 ? beforeIdx : afterIdx
-              );
-            }
-            if (beforeIdx === -1) return scales.x.getPixelForValue(0);
-            if (afterIdx === -1)
-              return scales.x.getPixelForValue(labels.length - 1);
-
-            const beforePixel = scales.x.getPixelForValue(beforeIdx);
-            const afterPixel = scales.x.getPixelForValue(afterIdx);
-            const timeDiff = afterTime - beforeTime;
-            const targetDiff = target - beforeTime;
-            const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
-
-            return beforePixel + (afterPixel - beforePixel) * fraction;
+            return xForTime(scales.x, labels, targetTime);
           }
 
           const xStart = getPixelForExactTime(selectionRange.startTime);
@@ -3689,51 +3658,7 @@
 
           // Helper to get exact pixel position for a Date (same as in day/night shading)
           function getPixelForExactTime(targetTime) {
-            const target = new Date(targetTime);
-            // Find the two nearest hour indices
-            let beforeIdx = -1;
-            let afterIdx = -1;
-            let beforeTime = null;
-            let afterTime = null;
-
-            for (let i = 0; i < labels.length; i++) {
-              const labelTime = new Date(labels[i]);
-              if (labelTime <= target) {
-                beforeIdx = i;
-                beforeTime = labelTime;
-              }
-              if (labelTime >= target && afterIdx === -1) {
-                afterIdx = i;
-                afterTime = labelTime;
-                break;
-              }
-            }
-
-            // If exact match or at boundaries
-            if (beforeIdx === afterIdx) {
-              return scales.x.getPixelForValue(
-                beforeIdx >= 0 ? beforeIdx : afterIdx
-              );
-            }
-
-            // If before first label
-            if (beforeIdx === -1) {
-              return scales.x.getPixelForValue(0);
-            }
-
-            // If after last label
-            if (afterIdx === -1) {
-              return scales.x.getPixelForValue(labels.length - 1);
-            }
-
-            // Interpolate between the two hour positions
-            const beforePixel = scales.x.getPixelForValue(beforeIdx);
-            const afterPixel = scales.x.getPixelForValue(afterIdx);
-            const timeDiff = afterTime - beforeTime;
-            const targetDiff = target - beforeTime;
-            const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
-
-            return beforePixel + (afterPixel - beforePixel) * fraction;
+            return xForTime(scales.x, labels, targetTime);
           }
 
           ctx.save();
@@ -4176,52 +4101,7 @@
 
           // Helper function to get pixel position for exact time (same as day/night shading)
           function getPixelForExactTime(targetTime) {
-            const target = new Date(targetTime);
-            const labels = rawLabels;
-            // Find the two nearest hour indices
-            let beforeIdx = -1;
-            let afterIdx = -1;
-            let beforeTime = null;
-            let afterTime = null;
-
-            for (let i = 0; i < labels.length; i++) {
-              const labelTime = new Date(labels[i]);
-              if (labelTime <= target) {
-                beforeIdx = i;
-                beforeTime = labelTime;
-              }
-              if (labelTime >= target && afterIdx === -1) {
-                afterIdx = i;
-                afterTime = labelTime;
-                break;
-              }
-            }
-
-            // If exact match or at boundaries
-            if (beforeIdx === afterIdx) {
-              return scales.x.getPixelForValue(
-                beforeIdx >= 0 ? beforeIdx : afterIdx
-              );
-            }
-
-            // If before first label
-            if (beforeIdx === -1) {
-              return scales.x.getPixelForValue(0);
-            }
-
-            // If after last label
-            if (afterIdx === -1) {
-              return scales.x.getPixelForValue(labels.length - 1);
-            }
-
-            // Interpolate between the two hour positions
-            const beforePixel = scales.x.getPixelForValue(beforeIdx);
-            const afterPixel = scales.x.getPixelForValue(afterIdx);
-            const timeDiff = afterTime - beforeTime;
-            const targetDiff = target - beforeTime;
-            const fraction = timeDiff > 0 ? targetDiff / timeDiff : 0;
-
-            return beforePixel + (afterPixel - beforePixel) * fraction;
+            return xForTime(scales.x, rawLabels, targetTime);
           }
 
           // Each line's points: every plotted point, plus split points at
