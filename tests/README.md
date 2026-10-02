@@ -4,6 +4,10 @@ No build step and no package.json: these run with Node 22 and Playwright.
 
 - `node --test tests/*.test.mjs`: model.js, time.js, curve.js, weather.js and
   dogs.js against reference values, most of them dcgoldens' own.
+  `inline.test.mjs` checks that index.html's inlined styles.css and
+  page-theme.js match their files and that the CSP carries the script's hash
+  (`node tools/inline.mjs` keeps them in step). GitHub runs these on every
+  push (.github/workflows/checks.yml).
 - Browser checks need the site on port 4800 (`python3 -m http.server 4800`
   from the repo root) and Playwright with Chromium. They answer every API
   from recorded data, so they run with no network:

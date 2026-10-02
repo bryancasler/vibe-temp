@@ -2759,7 +2759,9 @@ html.boot-dogs #dogPanel[hidden] {
           <div class="summary-header">
             <h2 class="summary-title">Remainder of Day</h2>
           </div>
-          <div id="remainderTimeRange" class="summary-time-range"></div>
+          <!-- A line from the start, so the summary below doesn't drop when the
+               hours fill it (Bryan, 2026-10-02). -->
+          <div id="remainderTimeRange" class="summary-time-range">&nbsp;</div>
           <div id="remainderText" class="summary-text">Generating summary...</div>
         </div>
       </section>
