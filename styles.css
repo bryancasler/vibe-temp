@@ -1150,8 +1150,8 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   color: var(--muted);
   font-size: 12px;
 }
-.tip-content small {
-  font-size: inherit;
+.site-version {
+  margin: 0;
 }
 .desktop-only {
   display: inline;

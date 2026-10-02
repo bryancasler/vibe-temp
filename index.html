@@ -1175,8 +1175,8 @@ input[type="checkbox"]:not(.shading-toggle-label input):focus-visible {
   color: var(--muted);
   font-size: 12px;
 }
-.tip-content small {
-  font-size: inherit;
+.site-version {
+  margin: 0;
 }
 .desktop-only {
   display: inline;
@@ -3226,15 +3226,11 @@ Cloud = 100
         </div>
       </section>
 
-      <!-- Tip Section -->
+      <!-- The release on screen (Bryan, 2026-10-02): the date it went out,
+           its commit number on main (always counting up) and the time, in
+           Eastern time. Stamped by tools/stamp-version.mjs. -->
       <section class="tip-section">
-        <div class="tip-content">
-          <small
-            >💡 Tip: point at or tap the graph for details. Drag it to slide
-            through the week, or double-click and drag to highlight a time
-            and share it</small
-          >
-        </div>
+        <p class="tip-content site-version" id="siteVersion">Version 2026.10.01 v160 @ 8:45pm</p>
       </section>
 
       <!-- Status & quick controls -->
