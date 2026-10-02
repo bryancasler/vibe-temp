@@ -1,9 +1,9 @@
 (() => {
-  // Chart.js, pinned. chart.umd.js is the file as published to npm (already
-  // minified); jsDelivr's .min.js is generated on request and its own header
-  // says not to use SRI with it. The hash was checked against the npm tarball.
-  const CHART_JS_URL =
-    "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.js";
+  // Chart.js 4.4.3, served from this site (Bryan, 2026-10-02: no third-party
+  // host). vendor/chart.umd.js is the file as published to npm (already
+  // minified), unchanged; the hash below was checked against the npm tarball
+  // and still guards against a changed copy.
+  const CHART_JS_URL = "vendor/chart.umd.js";
   const CHART_JS_INTEGRITY =
     "sha384-tgbB5AKnszdcfwcZtTfuhR3Ko1XZdlDfsLtkxiiAZiVkkXCkFmp+FQFh+V/UTo54";
   let CHART_READY = null;
