@@ -13,15 +13,65 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://api.zippopotam.us https://air-quality-api.open-meteo.com https://api.weather.gov; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self' 'sha256-Z8mtRSOtLJZ0qHa3iOst+8obxPbFm7+T3Mrv++FgxUE=' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://api.zippopotam.us https://air-quality-api.open-meteo.com https://api.weather.gov; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>Vibe Temp</title>
     <meta name="description" content="How warm it really feels in the sun and in the shade, hour by hour for the next day and the week, with the best time to touch grass. Enter a ZIP code or use your location." />
     <!-- Before the page paints: the theme, and the layout the scripts will
          settle on (page-theme.js), so nothing jumps when they run. -->
-    <script src="page-theme.js"></script>
+    <!-- page-theme.js, copied in so it runs with no request; its hash is in
+         the CSP above. Edit page-theme.js, then run: node tools/inline.mjs -->
+    <script data-inline="page-theme.js">
+// Runs in <head> before the page paints (Bryan, 2026-10-01: the app's own
+// scripts are deferred, so anything that changes the layout is decided here
+// first, or the page would jump when they run).
+// - The theme: the one saved in Vibe Temp ("vibe.v1.theme", "light" or
+//   "dark"), else the device's preference, else dark.
+// - On the app page, two guesses the app confirms once its scripts run:
+//   boot-default when no place is set (no ZIP or coordinates in the address,
+//   no saved ZIP), so the "Showing Washington, DC" note is drawn at once;
+//   boot-legend and boot-dogs when Dogs mode is on, so the chart's legend
+//   and the dog panel have their room; boot-summary always, for the day's
+//   summary. The space held puts the cards below the fold from the first
+//   paint, where the forecast filling in above them doesn't move them on
+//   screen.
+(function () {
+  var root = document.documentElement;
+  var get = function (k) {
+    try {
+      return localStorage.getItem(k);
+    } catch (e) {
+      return null;
+    }
+  };
+  var theme = "dark";
+  var saved = get("vibe.v1.theme");
+  if (saved === "light" || saved === "dark") {
+    theme = saved;
+  } else {
+    try {
+      if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
+    } catch (e) {}
+  }
+  try {
+    root.setAttribute("data-theme", theme);
+  } catch (e) {}
+  if (!/(^|\/)(index\.html)?$/.test(location.pathname)) return;
+  var q;
+  try {
+    q = new URLSearchParams(location.search);
+  } catch (e) {
+    return;
+  }
+  var store = q.has("demo") ? "vibe.demo." : "vibe.v1.";
+  var placed = q.get("zip") || (q.get("lat") && q.get("lon")) || get(store + "zip") || (store === "vibe.v1." && get("vibeZip"));
+  if (!placed) root.classList.add("boot-default");
+  root.classList.add("boot-summary");
+  if (get(store + "dogs") !== "false") root.classList.add("boot-legend", "boot-dogs");
+})();
+    </script>
     <!-- styles.css, copied in so the page paints without waiting for it.
-         Edit styles.css, then run: node tools/inline-css.mjs -->
+         Edit styles.css, then run: node tools/inline.mjs -->
     <style data-inline="styles.css">
 :root {
   --bg: #0b0e13;
@@ -3230,7 +3280,7 @@ Cloud = 100
            its commit number on main (always counting up) and the time, in
            Eastern time. Stamped by tools/stamp-version.mjs. -->
       <section class="tip-section">
-        <p class="tip-content site-version" id="siteVersion">Version 2026.10.01 v143 @ 8:49pm</p>
+        <p class="tip-content site-version" id="siteVersion">Version 2026.10.01 v144 @ 9:04pm</p>
       </section>
 
       <!-- Status & quick controls -->
