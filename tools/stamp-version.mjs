@@ -4,7 +4,8 @@
 // release's commit will have on main (its commit count, plus one), so it
 // always counts up however many releases go out in a day.
 // Usage, on main just before committing the release:
-//   node tools/stamp-version.mjs
+//   node tools/stamp-version.mjs && git add index.html
+// (stage it: committing without the add ships the old line).
 import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
